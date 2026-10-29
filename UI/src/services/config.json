@@ -1,0 +1,47 @@
+{
+  "logoUrl": "",
+  "host": "localhost",
+  "version": 1.1,
+  "clientId": "dmsApp",
+  "DDA_API_API_URL": "https://localhost:7002/api/",
+  "deploymentMode": "staging",
+  "PoweredBy": "Powered by Wipro",
+  "headers1": {
+    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
+  },
+  "headers2": {
+    "Content-Type": "application/json; charset=utf-8"
+  },
+  "headers3": {
+    "Content-Type": "multipart/form-data"
+  },
+  "inputFieldLengths": {
+    "name": 50,
+    "contactNumber": 10,
+    "email": 75,
+    "percent": 3,
+    "description": 200
+  },
+  "EncryptKey": "01234567890123456789012345678901",
+  "EncryptVector": "1234567890123412",
+  "_validFileExtensions": [
+    "doc",
+    "docx",
+    "pdf",
+    "eml",
+    "jpeg",
+    "jpg",
+    "png",
+    "xls",
+    "xlsx",
+    "txt",
+    "ppt",
+    "pptx",
+    "xps"
+  ],
+  "_validImageFileExtensions": [
+    "jpeg",
+    "jpg",
+    "png"
+  ]
+}

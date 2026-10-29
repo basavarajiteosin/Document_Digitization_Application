@@ -1,0 +1,521 @@
+/* ============================================================
+   Employee-wise Folder Access Report - dedicated, self-contained
+   design (distinct from the rest of the app's table-heavy modals)
+   ============================================================ */
+
+.far-container {
+  padding: 20px 24px 32px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.far-header {
+  margin-bottom: 20px;
+}
+
+.far-title {
+  margin: 0 0 4px;
+  font-weight: 700;
+  color: #262626;
+}
+
+.far-subtitle {
+  margin: 0;
+  font-size: 13px;
+  color: #777;
+}
+
+/* ---------- User selector ---------- */
+.far-user-select-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 22px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.far-domain-select {
+  max-width: 220px;
+}
+
+.far-select-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #444;
+  white-space: nowrap;
+  margin: 0;
+}
+
+.far-select {
+  flex: 1;
+  max-width: 360px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid #d8d8d8;
+  font-size: 13px;
+}
+
+/* ---------- Empty / loading states ---------- */
+.far-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 60px 20px;
+  color: #999;
+  text-align: center;
+}
+
+/* ---------- Summary strip ---------- */
+.far-summary-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  background: linear-gradient(135deg, #0f2740, #17415f);
+  border-radius: 12px;
+  padding: 18px 22px;
+  margin-bottom: 24px;
+  color: #fff;
+}
+
+.far-summary-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.far-summary-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.far-summary-username {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.far-summary-lastactive {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.far-summary-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.far-stat-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  border: 2px solid #dcdcdc;
+  border-radius: 10px;
+  padding: 6px 14px;
+  min-width: 64px;
+}
+
+.far-stat-value {
+  font-size: 17px;
+  font-weight: 800;
+  color: #262626;
+  line-height: 1.1;
+}
+
+.far-stat-label {
+  font-size: 10px;
+  color: #777;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* ---------- Section toolbar ---------- */
+.far-section-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.far-section-title {
+  margin: 0;
+  font-weight: 700;
+  color: #333;
+}
+
+.far-section-count {
+  color: #999;
+  font-weight: 500;
+}
+
+.far-search-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 6px 10px;
+  min-width: 240px;
+  color: #999;
+}
+
+.far-search-box input {
+  border: none;
+  outline: none;
+  font-size: 13px;
+  flex: 1;
+  color: #333;
+}
+
+/* ---------- Folder-wise expandable cards ---------- */
+.far-folder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.far-folder-card {
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: box-shadow 0.15s ease;
+}
+
+.far-folder-card:hover {
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.07);
+}
+
+.far-folder-card-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.far-folder-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  background: #eef5fc;
+  color: #0078d4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.far-folder-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.far-folder-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: #262626;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.far-folder-meta {
+  font-size: 11.5px;
+  color: #888;
+  margin-top: 2px;
+}
+
+.far-folder-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 220px;
+}
+
+.far-mini-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.far-folder-total {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 56px;
+}
+
+.far-folder-total-count {
+  font-size: 16px;
+  font-weight: 800;
+  color: #262626;
+}
+
+.far-folder-total-label {
+  font-size: 10px;
+  color: #999;
+}
+
+.far-folder-card-body {
+  padding: 0 16px 14px 68px;
+  border-top: 1px solid #f1f1f1;
+}
+
+.far-log-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  font-size: 12.5px;
+}
+
+.far-log-table th {
+  text-align: left;
+  color: #999;
+  font-weight: 600;
+  padding: 6px 8px;
+  border-bottom: 1px solid #eee;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.far-log-table td {
+  padding: 7px 8px;
+  border-bottom: 1px solid #f5f5f5;
+  color: #444;
+}
+
+.far-log-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* ---------- Pagination ---------- */
+.far-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.far-page-btn {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+  background: #fff;
+  font-size: 12.5px;
+  color: #444;
+  cursor: pointer;
+}
+
+.far-page-btn:hover:not(:disabled) {
+  background: #f2f6fb;
+  border-color: #0078d4;
+  color: #0078d4;
+}
+
+.far-page-btn.active {
+  background: #0078d4;
+  border-color: #0078d4;
+  color: #fff;
+  font-weight: 700;
+}
+
+.far-page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+  .far-summary-strip {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .far-folder-card-header {
+    flex-wrap: wrap;
+  }
+
+  .far-folder-badges {
+    max-width: 100%;
+  }
+
+  .far-folder-card-body {
+    padding-left: 16px;
+  }
+}
+
+/* ---------- Multi-select selector row ---------- */
+.far-user-select-row--multi {
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.far-select-col {
+  flex: 1 1 220px;
+  min-width: 220px;
+}
+
+.far-select-col--wide {
+  flex: 2 1 360px;
+}
+
+.far-select-col .far-select-label {
+  display: block;
+  margin-bottom: 6px;
+}
+
+/* ---------- Empty state (small variant used inside a user panel) ---------- */
+.far-empty-state.small {
+  padding: 24px 12px;
+}
+
+/* ---------- Per-user expansion panel list ---------- */
+.far-user-panel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.far-user-panel {
+  background: #fff;
+  border: 1px solid #e6e6e6;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.far-user-panel-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  background: #fafbfc;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.far-user-panel-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0f2740, #17415f);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.far-user-panel-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.far-user-panel-name {
+  font-weight: 700;
+  font-size: 14px;
+  color: #262626;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.far-user-panel-email {
+  font-size: 11.5px;
+  color: #888;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.far-user-panel-quickstats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.far-quickstat-pill {
+  background: #0078d4;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 12px;
+  white-space: nowrap;
+}
+
+.far-user-panel-lastactive {
+  font-size: 11px;
+  color: #999;
+  white-space: nowrap;
+}
+
+.far-user-panel-body {
+  padding: 16px 18px 18px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.far-summary-stats--compact {
+  margin-bottom: 16px;
+}
+
+@media (max-width: 640px) {
+  .far-user-select-row--multi {
+    flex-direction: column;
+  }
+
+  .far-select-col,
+  .far-select-col--wide {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .far-user-panel-header {
+    flex-wrap: wrap;
+  }
+
+  .far-user-panel-quickstats {
+    order: 3;
+    width: 100%;
+    justify-content: flex-start;
+    padding-left: 54px;
+  }
+}
