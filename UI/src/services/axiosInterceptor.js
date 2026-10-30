@@ -37,11 +37,11 @@ axios.interceptors.response.use(
     if (error?.response?.status === 401) {
       localStorage.removeItem("isUserAuthenticated");
       localStorage.removeItem("user_id");
-      localStorage.removeItem("persist:pmo_user");
+      localStorage.removeItem("persist:dda_user");
 
       // Avoid redirect loops if we're already on the login page.
       if (!window.location.pathname.endsWith("/login")) {
-        window.location.href = `${window.location.origin}/dda_qas/login`;
+        window.location.href = `${window.location.origin}/dda/login`;
       }
     }
 

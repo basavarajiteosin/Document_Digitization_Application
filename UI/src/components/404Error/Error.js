@@ -6,7 +6,7 @@ function Error() {
 
   const handleGoToLogin = () => {
 
-    localStorage.removeItem("persist:pmo_user");
+    localStorage.removeItem("persist:dda_user");
     localStorage.removeItem("isUserAuthenticated");
     localStorage.removeItem("user_id");
     localStorage.clear();

@@ -30,6 +30,7 @@ import { useSelector } from "react-redux";
 import CreatableSelect from "react-select/creatable";
 import axios from "axios";
 import FileVersionsModal from "../FileVersions/FileVersionsModal";
+import CommentsReviewModal from "../Comments/CommentsReviewModal";
 const config = require("../../services/config.json");
 
 // Static, human-readable labels for the Access Type IDs used across the app
@@ -118,6 +119,7 @@ const FolderCreation = () => {
   const [accessHistoryFolderName, setAccessHistoryFolderName] = useState("");
   const [accessHistoryLoading, setAccessHistoryLoading] = useState(false);
   const [versionFileItem, setVersionFileItem] = useState(null);
+  const [collabItem, setCollabItem] = useState(null);
 
   const gradients = [
     "linear-gradient(to bottom, #ffeb75, #ffce3c)",
@@ -2924,6 +2926,22 @@ const FolderCreation = () => {
                                 </button>
                               </MenuItem>
                             )}
+                            <MenuItem>
+                              <button
+                                className="dropdown-item"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setCollabItem({
+                                    docType: item.docType === "Document" || item.fileId ? "Document" : "Folder",
+                                    id: item.folderOrFileId,
+                                    name: item.foldeOrFileName || item.fileName || item.folderName,
+                                  });
+                                  setTimeout(() => document.activeElement.blur(), 0);
+                                }}
+                              >
+                                Comments &amp; Review
+                              </button>
+                            </MenuItem>
                           </Menu>
                         </div>
 
@@ -3746,6 +3764,9 @@ const FolderCreation = () => {
             </div>
           </div>
         </div>
+      )}
+      {collabItem && (
+        <CommentsReviewModal item={collabItem} onClose={() => setCollabItem(null)} />
       )}
       {versionFileItem && (
         <FileVersionsModal

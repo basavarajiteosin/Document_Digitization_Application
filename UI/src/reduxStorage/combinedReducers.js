@@ -42,7 +42,7 @@ const personalInfoTransform = createTransform(
 
 
 const persistConfig = {
-    key: 'pmo_user',
+    key: 'dda_user',
     version: 1,
     transforms: [personalInfoTransform, encryptor],
     storage,
