@@ -51,7 +51,7 @@ namespace DDAAPI.DbContexts
         public DbSet<OwnershipAccessHistory> OwnershipAccessHistory { get; set; }
         public DbSet<DocComment> DocComments { get; set; }
         public DbSet<DocReview> DocReviews { get; set; }
-
+        public DbSet<FileVersion> FileVersions { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<RoleAppMap>(

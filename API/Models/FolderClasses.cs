@@ -431,6 +431,9 @@ namespace DDAAPI.Models
         public bool IsHide { get; set; } = false;
         public string? HideBy { get; set; }
 
+        public int CurrentVersion { get; set; } = 1;
+        public string? VersionNote { get; set; }
+
     }
 
     public class FileDataDTO

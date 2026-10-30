@@ -2577,6 +2577,14 @@ namespace DDAAPI.Services
                     throw new Exception("File does not exist on the file system.");
                 }
 
+                var oldVersions = await _dbContext.FileVersions.Where(v => v.FileId == fileId).ToListAsync();
+                if (oldVersions.Any())
+                {
+                    _dbContext.FileVersions.RemoveRange(oldVersions);
+                    var vDir = Path.Combine(_configuration["BaseFolderPath"], "_FileVersions", fileId.ToString());
+                    if (Directory.Exists(vDir)) Directory.Delete(vDir, true);
+                }
+
                 Log.DataLog(file.CreatedBy, $"File '{file.FileName}' with ID {fileId} was successfully deleted", "File Log");
                 _dbContext.FileData.Remove(file);
                 await _dbContext.SaveChangesAsync();

@@ -29,7 +29,7 @@ import "@szhsin/react-menu/dist/index.css";
 import { useSelector } from "react-redux";
 import CreatableSelect from "react-select/creatable";
 import axios from "axios";
-
+import FileVersionsModal from "../FileVersions/FileVersionsModal";
 const config = require("../../services/config.json");
 
 // Static, human-readable labels for the Access Type IDs used across the app
@@ -117,6 +117,7 @@ const FolderCreation = () => {
   const [accessHistoryData, setAccessHistoryData] = useState([]);
   const [accessHistoryFolderName, setAccessHistoryFolderName] = useState("");
   const [accessHistoryLoading, setAccessHistoryLoading] = useState(false);
+  const [versionFileItem, setVersionFileItem] = useState(null);
 
   const gradients = [
     "linear-gradient(to bottom, #ffeb75, #ffce3c)",
@@ -2601,7 +2602,7 @@ const FolderCreation = () => {
                 </div>
               ) : (
                 <div className={`folder-container ${isGridView ? "grid-view" : "list-view"}`}>
-                                    {!isGridView && visibleFolders.length > 0 && (
+                  {!isGridView && visibleFolders.length > 0 && (
                     <div className="sp-list-header" role="row">
                       <span />
                       <button type="button" className="sp-th" onClick={() => toggleSort("name")}>
@@ -2904,6 +2905,25 @@ const FolderCreation = () => {
                                 </MenuItem>
                               </>
                             )}
+                            {(item.docType === "Document" || item.fileId) && (
+                              <MenuItem>
+                                <button
+                                  className="dropdown-item"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setVersionFileItem({
+                                      id: item.fileId || item.folderOrFileId,
+                                      name: item.fileName || item.foldeOrFileName,
+                                    });
+                                    setTimeout(() => {
+                                      document.activeElement.blur();
+                                    }, 0);
+                                  }}
+                                >
+                                  Version History
+                                </button>
+                              </MenuItem>
+                            )}
                           </Menu>
                         </div>
 
@@ -2934,7 +2954,7 @@ const FolderCreation = () => {
                     <div>
                       {activeTab === "shared"
                         ? (searchQuery ? `No items match "${searchQuery}".` : "No shared files or folders yet.")
-                       : (searchQuery ? `No items match "${searchQuery}".` : "This folder is empty. Use New folder or Upload to get started.")}
+                        : (searchQuery ? `No items match "${searchQuery}".` : "This folder is empty. Use New folder or Upload to get started.")}
                     </div>
                   )}
                 </div>
@@ -3727,7 +3747,13 @@ const FolderCreation = () => {
           </div>
         </div>
       )}
-
+      {versionFileItem && (
+        <FileVersionsModal
+          file={versionFileItem}
+          onClose={() => setVersionFileItem(null)}
+          onChanged={() => fetchFolders(currentFolderId)}
+        />
+      )}
     </>
   );
 };
