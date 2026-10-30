@@ -4,7 +4,8 @@ import Spinner from "./shared/Spinner";
 import AllMasters from "./components/AllMasters/AllMasters";
 import Error from "./components/404Error/Error";
 
-import FolderCreation from "./components/FoldersCreation/FolderCreation";
+import DashboardRoute from "./components/Search/DashboardRoute";
+import SearchDocuments from "./components/Search/SearchDocuments";
 import ExternalUserAccess from "./components/ExternalUser/ExternalAccess";
 import StorageLimitForUser from "./components/FileSizeMapping/storagelimit";
 import AllUsersFilesAndFolders from "./components/AllFiles/allfilesandfolers";
@@ -15,23 +16,19 @@ const UserCreation = lazy(() => import("./components/user-creation/UserCreation"
 const ResetPassword = lazy(() => import("./components/ResetPassword/resetpassword"));
 const EmailConfiguration = lazy(() => import("./components/EmailConfig/emailconfig"));
 
-
 const Login = lazy(() => import("./components/login/Login"));
 const ForgotPassword = lazy(() =>
   import("./components/ForgotPassword/forgotpassword")
 );
 const ProtectedRoute = lazy(() => import('./protectedRoute/ProtectedRoute'));
-const PublicRoute = lazy(() => import('./protectedRoute/PublicRoute')); // Adjust path as needed
+const PublicRoute = lazy(() => import('./protectedRoute/PublicRoute'));
 
 const AppRoutes = () => {
   return (
     <Suspense fallback={<Spinner />}>
       <Routes>
-        {/* ---------- PUBLIC ROUTES (no auth required) ---------- */}
-        {/* ---------- ROOT REDIRECT ---------- */}
         <Route exact path="/" element={<Navigate to="/login" replace />} />
 
-        {/* ---------- PUBLIC ROUTES (Accessible ONLY if NOT logged in) ---------- */}
         <Route element={<PublicRoute />}>
           <Route path="/login" element={<Login />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -39,12 +36,11 @@ const AppRoutes = () => {
 
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/externalAccess" element={<ExternalUserAccess />} />
-        {/* ---------- PROTECTED ROUTES (require a valid session) ----------
-            ProtectedRoute is a layout route: it renders <Outlet /> only when
-            isUserAuthenticated === "true" and the persisted redux store
-            (which holds the token) exists, otherwise it redirects to /login. */}
+
         <Route element={<ProtectedRoute />}>
-          <Route path="/dashboard" element={<FolderCreation />} />
+          {/* DashboardRoute shows FolderCreation normally, SearchDocuments when ?q= is present */}
+          <Route path="/dashboard" element={<DashboardRoute />} />
+          <Route path="/search" element={<SearchDocuments />} />
           <Route path="/manage-roles" element={<ManageRoles />} />
           <Route path="/create-user" element={<UserCreation />} />
           <Route path="/email-config" element={<EmailConfiguration />} />

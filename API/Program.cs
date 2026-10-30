@@ -29,6 +29,7 @@ builder.Services.AddScoped<GlobalAdminController>();
 builder.Services.AddScoped<FolderDataController>();
 builder.Services.AddScoped<IGlobalAdminService, GlobalAdminService>();
 builder.Services.AddScoped<IReportService, ReportService>();
+builder.Services.AddScoped<SearchService>();
 builder.Services.AddHttpClient();
 // Using this for MSSQL
 builder.Services.AddDbContext<AppDbContext>(item => item.UseSqlServer(configuration.GetConnectionString("myconn")));
