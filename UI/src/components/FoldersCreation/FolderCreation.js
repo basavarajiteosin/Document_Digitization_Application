@@ -22,7 +22,7 @@ import {
   FaFilePowerpoint,
   FaFileCode,
 } from "react-icons/fa";
-import { FiFolderPlus, FiFilePlus, FiUploadCloud, FiEye, FiEyeOff } from "react-icons/fi";
+import { FiFolderPlus, FiFilePlus, FiUploadCloud, FiX, FiArrowUp, FiArrowDown, FiEyeOff } from "react-icons/fi";
 import { BsThreeDots, BsThreeDotsVertical } from "react-icons/bs";
 import { Menu, MenuItem, MenuButton } from "@szhsin/react-menu";
 import "@szhsin/react-menu/dist/index.css";
@@ -42,6 +42,21 @@ const ACCESS_TYPE_LABELS = {
   2: "Read/Write",
   3: "Read/Write/Download",
 };
+
+const itemName = (it) => it.foldeOrFileName || it.fileName || it.folderName || "";
+
+const SkeletonRows = ({ grid }) => (
+  <div className={grid ? "sp-skel-grid" : "sp-skel-list"} aria-busy="true" aria-label="Loading">
+    {Array.from({ length: grid ? 10 : 8 }).map((_, i) => (
+      <div className="sp-skel-item" key={i}>
+        <span className="sp-skel sp-skel-icon" />
+        <span className="sp-skel sp-skel-line" />
+        <span className="sp-skel sp-skel-line short" />
+      </div>
+    ))}
+  </div>
+);
+
 
 const isValidEmail = (email) => {
   const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
@@ -68,6 +83,17 @@ const FolderCreation = () => {
   const [searchParams] = useSearchParams();
   const userFilesUserID = searchParams.get("userFilesUserID");
   const userName = searchParams.get("userName");
+
+  const searchQuery = (searchParams.get("q") || "").trim();
+  const [sortKey, setSortKey] = useState("name");
+  const [sortDir, setSortDir] = useState("asc");
+  const toggleSort = (key) => {
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
 
   // NEW STATE VARIABLES FOR ENHANCEMENTS
   const [showSharedAccessModal, setShowSharedAccessModal] = useState(false);
@@ -2291,6 +2317,41 @@ const FolderCreation = () => {
     setIsGridView(savedViewType === "grid");
   }, []);
 
+  // Deep links from Home: ?openFolderId=..&folderName=..[&tab=shared&accessType=..&ownerId=..] or ?action=newFolder
+  useEffect(() => {
+    const action = searchParams.get("action");
+    const openId = Number(searchParams.get("openFolderId"));
+    if (!action && !openId) return;
+
+    if (openId) {
+      const tab = searchParams.get("tab") === "shared" ? "shared" : "current";
+      const accessTypeParam = Number(searchParams.get("accessType")) || null;
+      setActiveTab(tab);
+      localStorage.setItem("activeTab", tab);
+      localStorage.setItem("accessType", accessTypeParam || "");
+      setCurrentPath([
+        {
+          folderId: openId,
+          folderName: searchParams.get("folderName") || "Folder",
+          accessType: accessTypeParam,
+          ownerId: searchParams.get("ownerId") || null,
+        },
+      ]);
+      setCurrentFolderId(openId);
+      localStorage.setItem("currentFolderId", String(openId));
+      setFolders([]);
+      fetchFolders(openId);
+    } else if (action === "newFolder") {
+      setActiveTab("current");
+      localStorage.setItem("activeTab", "current");
+      setCurrentPath([]);
+      setCurrentFolderId(0);
+      setShowModal(true);
+    }
+    navigate("/dashboard", { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // CLOSE SHARED ACCESS MODAL
   const handleCloseSharedAccessModal = () => {
     setShowSharedAccessModal(false);
@@ -2301,6 +2362,25 @@ const FolderCreation = () => {
 
   // Calculate total pages for shared access pagination
   const totalPagesSharedAccess = Math.ceil(sharedAccessTotalRecords / sharedAccessPaginationPageSize);
+
+  const visibleFolders = (() => {
+    const q = searchQuery.toLowerCase();
+    const list = q
+      ? folders.filter(
+        (it) => itemName(it).toLowerCase().includes(q) || (it.username || "").toLowerCase().includes(q)
+      )
+      : folders.slice();
+    const dir = sortDir === "asc" ? 1 : -1;
+    list.sort((a, b) => {
+      const fa = a.docType === "Folder";
+      const fb = b.docType === "Folder";
+      if (fa !== fb) return fa ? -1 : 1; // folders first, like SharePoint
+      if (sortKey === "size") return ((a.size || 0) - (b.size || 0)) * dir;
+      if (sortKey === "modified") return (new Date(a.createdOn) - new Date(b.createdOn)) * dir;
+      return itemName(a).localeCompare(itemName(b), undefined, { numeric: true, sensitivity: "base" }) * dir;
+    });
+    return list;
+  })();
 
   return (
     <>
@@ -2358,13 +2438,13 @@ const FolderCreation = () => {
                   <>
                     <button className="dms-folder-button" onClick={() => setShowModal(true)}>
                       <FiFolderPlus className="icon" />
-                      <span>Folder</span>
+                      <span>New folder</span>
                     </button>
 
                     {currentFolderId !== 0 && (
                       <button className="dms-file-button" onClick={() => setShowFileModal(true)}>
                         <FiFilePlus className="icon" />
-                        <span>File</span>
+                        <span>Upload</span>
                       </button>
                     )}
                   </>
@@ -2446,6 +2526,49 @@ const FolderCreation = () => {
                     </li>
                   ))}
                 </ol>
+                <div className="sp-pathbar-tools">
+                  {searchQuery && (
+                    <span className="sp-chip" title={searchQuery}>
+                      Search: {searchQuery}
+                      <button
+                        type="button"
+                        aria-label="Clear search"
+                        onClick={() =>
+                          navigate(
+                            userFilesUserID
+                              ? `/dashboard?userFilesUserID=${userFilesUserID}&userName=${encodeURIComponent(userName || "")}`
+                              : "/dashboard"
+                          )
+                        }
+                      >
+                        <FiX size={14} />
+                      </button>
+                    </span>
+                  )}
+                  <span className="sp-count">
+                    {visibleFolders.length} item{visibleFolders.length !== 1 ? "s" : ""}
+                  </span>
+                  <label className="sp-sort">
+                    <span className="sr-only-sp">Sort by</span>
+                    <select
+                      className="custom-select custom-select-sm"
+                      value={sortKey}
+                      onChange={(e) => setSortKey(e.target.value)}
+                    >
+                      <option value="name">Name</option>
+                      <option value="modified">{activeTab === "shared" ? "Shared on" : "Created on"}</option>
+                      <option value="size">Size</option>
+                    </select>
+                    <button
+                      type="button"
+                      className="sp-sortdir"
+                      aria-label={sortDir === "asc" ? "Ascending" : "Descending"}
+                      onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+                    >
+                      {sortDir === "asc" ? <FiArrowUp size={14} /> : <FiArrowDown size={14} />}
+                    </button>
+                  </label>
+                </div>
                 {activeTab === "assigned" && (roleName === "Administrator" || roleName === "Global Admin") && (
                   <div className="ms-auto">
                     <select
@@ -2474,12 +2597,27 @@ const FolderCreation = () => {
                     <div className="folder-tab"></div>
                     <div className="spinner-circle"></div>
                   </div>
-                  <div className="loader-text">Loading folders...</div>
+                  <SkeletonRows grid={isGridView} />
                 </div>
               ) : (
                 <div className={`folder-container ${isGridView ? "grid-view" : "list-view"}`}>
-                  {folders && folders.length > 0 ? (
-                    folders.map((item) => (
+                                    {!isGridView && visibleFolders.length > 0 && (
+                    <div className="sp-list-header" role="row">
+                      <span />
+                      <button type="button" className="sp-th" onClick={() => toggleSort("name")}>
+                        Name{" "}
+                        {sortKey === "name" && (sortDir === "asc" ? <FiArrowUp size={12} /> : <FiArrowDown size={12} />)}
+                      </button>
+                      <span className="sp-th sp-th-by">{activeTab === "shared" ? "Shared by" : "Created by"}</span>
+                      <button type="button" className="sp-th" onClick={() => toggleSort("modified")}>
+                        {activeTab === "shared" ? "Shared on" : "Created on"}{" "}
+                        {sortKey === "modified" && (sortDir === "asc" ? <FiArrowUp size={12} /> : <FiArrowDown size={12} />)}
+                      </button>
+                      <span />
+                    </div>
+                  )}
+                  {visibleFolders.length > 0 ? (
+                    visibleFolders.map((item) => (
                       <div
                         key={
                           activeTab === "shared"
@@ -2608,7 +2746,7 @@ const FolderCreation = () => {
                           {item.fileId || item.docType === "Document"
                             ? item.fileName || item.foldeOrFileName
                             : isGridView
-                              ? truncateText(item.foldeOrFileName || item.folderName, 8)
+                              ? truncateText(item.foldeOrFileName || item.folderName, 16)
                               : item.foldeOrFileName || item.folderName}
 
                           <div
@@ -2795,8 +2933,8 @@ const FolderCreation = () => {
                   ) : (
                     <div>
                       {activeTab === "shared"
-                        ? "No shared files or folders yet."
-                        : "No files or folders. Upload or create to get started."}
+                        ? (searchQuery ? `No items match "${searchQuery}".` : "No shared files or folders yet.")
+                       : (searchQuery ? `No items match "${searchQuery}".` : "This folder is empty. Use New folder or Upload to get started.")}
                     </div>
                   )}
                 </div>

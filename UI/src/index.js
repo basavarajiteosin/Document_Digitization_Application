@@ -3,14 +3,12 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import "./index.css";
 import "./styles/sp-theme.css";
+import "./styles/sp-library.css";
+import "./styles/sp-pages.css";
 import App from "./App";
 import reportWebVitals from "./reportWebVitals";
-// Registers axios request/response interceptors (global auth token + 401 handling)
-// once, before any component in the app makes an API call.
 import "./services/axiosInterceptor";
 
-// Activates the SharePoint-style design system (see styles/sp-theme.css).
-// Remove this line to fall back to the previous look.
 document.body.classList.add("sp-theme");
 
 const root = ReactDOM.createRoot(document.getElementById("root"));

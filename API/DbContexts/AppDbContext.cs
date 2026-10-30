@@ -49,6 +49,8 @@ namespace DDAAPI.DbContexts
         public DbSet<FolderAccessLog> FolderAccessLog { get; set; }
         public DbSet<FolderVersion> FolderVersion { get; set; }
         public DbSet<OwnershipAccessHistory> OwnershipAccessHistory { get; set; }
+        public DbSet<DocComment> DocComments { get; set; }
+        public DbSet<DocReview> DocReviews { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -81,6 +83,22 @@ namespace DDAAPI.DbContexts
                 build.HasIndex(t => new { t.FolderOrFileId, t.DocType });
             });
 
+            modelBuilder.Entity<DocComment>(entity =>
+            {
+                entity.ToTable("DocComments", "dbo");
+                entity.HasKey(e => e.CommentId);
+
+                entity.HasOne<DocComment>()
+                      .WithMany()
+                      .HasForeignKey(e => e.ParentCommentId)
+                      .OnDelete(DeleteBehavior.NoAction);
+            });
+
+            modelBuilder.Entity<DocReview>(entity =>
+            {
+                entity.ToTable("DocReviews", "dbo");
+                entity.HasKey(e => e.ReviewId);
+            });     
         }
     }
 }

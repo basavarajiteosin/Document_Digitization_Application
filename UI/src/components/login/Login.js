@@ -867,6 +867,7 @@ const Login = () => {
             <div className="form-container sign-up-container">
               <form action="#">
                 <div className="mb-3">
+                  <a href="#" className="sp-mobile-only" onClick={(e) => { e.preventDefault(); handleSignIn(); }}>‹ Back to sign in</a>
                   <h3>Forgot Password</h3>
                   <h6 className="text-h6">
                     Enter your email for get the reset password link
@@ -1018,6 +1019,7 @@ const Login = () => {
                         Continue with Microsoft
                       </button>
                     )}
+                    <a href="#" className="sp-mobile-only" onClick={(e) => { e.preventDefault(); handleSignUp(); }}>Create an account</a>
 
                     <Link onClick={handleForgotPassword}>
                       Forgot Password

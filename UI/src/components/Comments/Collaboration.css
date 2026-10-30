@@ -1,0 +1,16 @@
+.cr-tabs{display:flex;gap:8px;margin-bottom:12px;border-bottom:1px solid #e5e5e5}
+.cr-tab{border:0;background:transparent;padding:8px 14px;font-weight:600;color:#666;cursor:pointer;border-bottom:2px solid transparent}
+.cr-tab.active{color:#0078d4;border-bottom-color:#0078d4}
+.cr-body{max-height:60vh;overflow-y:auto;padding-right:4px}
+.cr-comment{border:1px solid #eee;border-radius:6px;padding:10px 12px;margin-bottom:10px;background:#fff}
+.cr-comment.resolved{background:#f4faf4;border-color:#cfe8cf}
+.cr-reply{margin:8px 0 0 24px;border-left:3px solid #e1e1e1;padding-left:10px}
+.cr-meta{font-size:12px;color:#777;margin-bottom:4px}
+.cr-text{white-space:pre-wrap;word-break:break-word}
+.cr-actions{margin-top:6px;display:flex;gap:12px;flex-wrap:wrap}
+.cr-link{border:0;background:transparent;padding:0;color:#0078d4;font-size:12px;cursor:pointer}
+.cr-link:hover{text-decoration:underline}
+.cr-link.danger{color:#d13438}
+.cr-review{border:1px solid #eee;border-radius:6px;padding:10px 12px;margin-bottom:10px}
+.cr-empty{text-align:center;color:#888;padding:24px 0}
+.cr-form{margin-top:12px}

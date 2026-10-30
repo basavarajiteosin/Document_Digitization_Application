@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useSelector } from "react-redux";
 import axios from "axios";
 import { toast } from "react-toastify";
@@ -76,6 +76,13 @@ const Header = () => {
 
   const personalInfo = useSelector((state) => state.personalInformationReducer);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // keep the search box in sync with ?q= (clears when you leave a search)
+  // useEffect(() => {
+  //   setSearchText(new URLSearchParams(location.search).get("q") || "");
+  // }, [location.search]);
+  
   const {
     uploadQueue,
     setShowUploadPanel,
@@ -265,7 +272,7 @@ const Header = () => {
           <button
             type="button"
             className="sp-brand"
-            onClick={() => navigate("/dashboard")}
+            onClick={() => navigate("/home")}
             aria-label="Go to documents"
           >
             <img src={wiproLogoWhite} alt="Wipro" />
@@ -477,13 +484,12 @@ const Header = () => {
                 </label>
                 <input
                   type="password"
-                  className={`change-password-input form-control form-control-sm ${
-                    highlightField === "newPassword" &&
-                    ((passwordError && newPassword === "") ||
-                      (passwordError && passwordError.includes("Passwords do not match")))
+                  className={`change-password-input form-control form-control-sm ${highlightField === "newPassword" &&
+                      ((passwordError && newPassword === "") ||
+                        (passwordError && passwordError.includes("Passwords do not match")))
                       ? "is-invalid"
                       : ""
-                  }`}
+                    }`}
                   id="newPassword"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}

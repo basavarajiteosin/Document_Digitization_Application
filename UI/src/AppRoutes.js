@@ -3,13 +3,14 @@ import { Route, Routes, Navigate } from "react-router-dom";
 import Spinner from "./shared/Spinner";
 import AllMasters from "./components/AllMasters/AllMasters";
 import Error from "./components/404Error/Error";
-
+import Home from "./pages/Home";
 import DashboardRoute from "./components/Search/DashboardRoute";
 import SearchDocuments from "./components/Search/SearchDocuments";
 import ExternalUserAccess from "./components/ExternalUser/ExternalAccess";
 import StorageLimitForUser from "./components/FileSizeMapping/storagelimit";
 import AllUsersFilesAndFolders from "./components/AllFiles/allfilesandfolers";
 import Reports from "./components/Reports/reports";
+import MyReviews from "./components/Comments/MyReviews";
 import FolderAccessReport from "./components/Reports/FolderAccessReport";
 const ManageRoles = lazy(() => import("./components/manage-roles/ManageRoles"));
 const UserCreation = lazy(() => import("./components/user-creation/UserCreation"));
@@ -39,6 +40,7 @@ const AppRoutes = () => {
 
         <Route element={<ProtectedRoute />}>
           {/* DashboardRoute shows FolderCreation normally, SearchDocuments when ?q= is present */}
+           <Route path="/home" element={<Home />} />
           <Route path="/dashboard" element={<DashboardRoute />} />
           <Route path="/search" element={<SearchDocuments />} />
           <Route path="/manage-roles" element={<ManageRoles />} />
@@ -49,6 +51,7 @@ const AppRoutes = () => {
           <Route path="/all-files" element={<AllUsersFilesAndFolders />} />
           <Route path="/folder-access-report" element={<FolderAccessReport />} />
           <Route path="/reports" element={<Reports />} />
+          <Route path="/my-reviews" element={<MyReviews />} />
         </Route>
 
         <Route path="/404" element={<Error />} />
