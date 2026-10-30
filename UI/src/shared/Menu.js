@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -6,19 +5,40 @@ import {
   setActiveComponentName,
   setUserPersonalInformation,
 } from "../reduxStorage/personalInformation";
-import bmsLogoWipro from "../assets/images/wiprosecondary_logo.png";
-import { RiMailSettingsFill } from "react-icons/ri";
 import { FaUsersGear } from "react-icons/fa6";
-import { FaThLarge, FaCogs, FaFolder, FaThList } from "react-icons/fa";
-import { TbDatabaseCog } from "react-icons/tb";
+import { FaThLarge, FaCogs } from "react-icons/fa";
 import { FaFolderOpen } from "react-icons/fa6";
 import { FaMailBulk } from "react-icons/fa";
 import { MdStorage } from "react-icons/md";
-
 import { HiOutlineDocumentReport } from "react-icons/hi";
 import { PiHardDrivesDuotone } from "react-icons/pi";
 import { LuFolderOpen } from "react-icons/lu";
 
+const iconMapping = {
+  "Create Folder": FaFolderOpen,
+  "User Creation": FaUsersGear,
+  "Manage Roles": FaCogs,
+  "All Masters": MdStorage,
+  EmailConfiguration: FaMailBulk,
+  Reports: HiOutlineDocumentReport,
+  "Folder Access Report": HiOutlineDocumentReport,
+  "Storage Settings": PiHardDrivesDuotone,
+  "User All Files": LuFolderOpen,
+};
+
+/* On phones/tablets AdminLTE shows the sidebar as an overlay; close it after navigating. */
+const closeSidebarOnSmallScreens = () => {
+  if (window.innerWidth >= 992) return;
+  try {
+    if (window.$ && window.$.fn && window.$.fn.PushMenu) {
+      window.$('[data-widget="pushmenu"]').PushMenu("collapse");
+      return;
+    }
+  } catch (e) {
+    /* fall through to class removal */
+  }
+  document.body.classList.remove("sidebar-open");
+};
 
 const Menu = () => {
   const dispatch = useDispatch();
@@ -41,7 +61,6 @@ const Menu = () => {
       return false;
     }
 
-    // Otherwise, check if the current path matches
     return location.pathname === path;
   };
 
@@ -54,44 +73,28 @@ const Menu = () => {
     );
   }, [personalInfo.clientId, personalInfo.menuItemNames, dispatch]);
 
-  const headerLogoClickHandler = () => {
-    navigate("/dashboard");
-  };
-
-  const iconMapping = {
-    "Create Folder": FaFolderOpen,
-    "User Creation": FaUsersGear,
-    "Manage Roles": FaCogs,
-    "All Masters": MdStorage,
-    "EmailConfiguration": FaMailBulk,
-    "Reports": HiOutlineDocumentReport,
-    "Storage Settings": PiHardDrivesDuotone,
-    "User All Files": LuFolderOpen,
-  };
-
-
-  const handleMenuItemClick = (route, appName) => {
+  const handleMenuItemClick = (appName) => {
     dispatch(setActiveComponentName(appName));
-    navigate(route);
+    closeSidebarOnSmallScreens();
+  };
+
+  const goHome = () => {
+    navigate("/dashboard");
+    closeSidebarOnSmallScreens();
   };
 
   return (
-    <aside className="main-sidebar sidebar-light-blue elevation-1">
-      <a
-        href="#"
-        className="brand-link d-flex flex-row"
-        onClick={headerLogoClickHandler}
-      >
-        <img
-          src={bmsLogoWipro}
-          alt="Iteos Logo"
-          className="img-fluid"
-          style={{ height: "40px", width: "100px" }}
-        />
-      </a>
+    <aside className="main-sidebar sidebar-light-blue sp-sidenav elevation-1">
+      <button type="button" className="sp-site" onClick={goHome} aria-label="Go to documents">
+        <span className="sp-site-tile">D</span>
+        <span className="sp-site-text">
+          <strong>Document Digitization</strong>
+          <small>{personalInfo.userRole}</small>
+        </span>
+      </button>
 
       <div className="sidebar">
-        <nav className="mt-2">
+        <nav className="mt-2" aria-label="Main navigation">
           <ul
             className="nav nav-pills nav-sidebar flex-column"
             data-widget="treeview"
@@ -100,34 +103,26 @@ const Menu = () => {
           >
             {allRoutesList.length > 0
               ? allRoutesList.map((routesObj, index) => {
-                const IconComponent = iconMapping[routesObj.appName] || FaThLarge;
-                return (
-                  <li
-                    key={"route_" + (index + 1)}
-                    className={
-                      isPathActive(routesObj.appRoute, routesObj.appName)
-                        ? "nav-item active"
-                        : "nav-item"
-                    }
-                  >
-                    <Link
-                      className={
-                        isPathActive(routesObj.appRoute, routesObj.appName)
-                          ? "nav-link active"
-                          : "nav-link"
-                      }
-                      to={routesObj.appRoute}
-                      onClick={() =>
-                        handleMenuItemClick(routesObj.appRoute, routesObj.appName)
-                      }
+                  const IconComponent = iconMapping[routesObj.appName] || FaThLarge;
+                  const active = isPathActive(routesObj.appRoute, routesObj.appName);
+                  return (
+                    <li
+                      key={"route_" + (index + 1)}
+                      className={active ? "nav-item active" : "nav-item"}
                     >
-                      <IconComponent className="nav-icon text-sm" />
-                      <p className="text-sm">{routesObj.appName}</p>
-                    </Link>
-                  </li>
-                );
-              })
-              : ""}
+                      <Link
+                        className={active ? "nav-link active" : "nav-link"}
+                        to={routesObj.appRoute}
+                        aria-current={active ? "page" : undefined}
+                        onClick={() => handleMenuItemClick(routesObj.appName)}
+                      >
+                        <IconComponent className="nav-icon" />
+                        <p>{routesObj.appName}</p>
+                      </Link>
+                    </li>
+                  );
+                })
+              : null}
           </ul>
         </nav>
       </div>

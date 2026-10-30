@@ -1,20 +1,66 @@
 import React, { useState, useRef, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 import axios from "axios";
 import { toast } from "react-toastify";
-import { useUserContext } from "../components/UserContext/UserContext";
 import "react-toastify/dist/ReactToastify.css";
-import { RiMenuFoldFill, RiMenuUnfoldFill } from "react-icons/ri";
-import { RiMenuFill } from "react-icons/ri";
-import { GrSettingsOption } from "react-icons/gr";
-import { GiExpander } from "react-icons/gi";
-import { ImKey2 } from "react-icons/im";
-import { HiKey } from "react-icons/hi2";
 import { BiMenuAltLeft } from "react-icons/bi";
+import { HiKey } from "react-icons/hi2";
+import {
+  FiSearch,
+  FiBell,
+  FiX,
+  FiLogOut,
+  FiCheckCircle,
+  FiAlertCircle,
+  FiUploadCloud,
+} from "react-icons/fi";
+import { useUpload } from "../Customhook/UploadContext";
+import wiproLogoWhite from "../assets/images/wiprologowhite.png";
+
 const config = require("../services/config.json");
 const passwordRegex =
   /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+
+const safeParse = (value) => {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+};
+
+/* Wraps a trigger button + its panel; closes on outside click or Escape. */
+const DropdownWrap = ({ open, setOpen, button, children }) => {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDown = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open, setOpen]);
+
+  return (
+    <div className="sp-dd" ref={ref}>
+      {button}
+      {open && (
+        <div className="sp-dd-panel" role="menu">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const Header = () => {
   const [showModal, setShowModal] = useState(false);
@@ -23,31 +69,23 @@ const Header = () => {
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [highlightField, setHighlightField] = useState(null);
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [searchText, setSearchText] = useState("");
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+
   const personalInfo = useSelector((state) => state.personalInformationReducer);
-
-  // const { isChangePasswordRequired } = useUserContext();
-  // console.log(isChangePasswordRequired, "isChangePassword");
   const navigate = useNavigate();
-  const location = useLocation();
+  const {
+    uploadQueue,
+    setShowUploadPanel,
+    setIsUploadPanelMinimized,
+    clearCompletedUploads,
+  } = useUpload();
 
-  const routeToComponentMap = {
-    "/dashboard": "Dashboard",
-    "/create-user": "User Creation",
-    "/manage-roles": "Manage Roles",
-    "/reports": "Reports",
-    "/folder-access-report": "Folder Access Report",
-    "/email-config": "Email Configuration",
-    "/create-entity": "Create Entity",
-    "/form-builder": "Form Builder",
-    "/directors-creation": "Directors Creation",
-    "/all-masters": "All Masters",
-    "/field-masters": "Field Master",
-    "/entities-data": "Entities Data",
-    "/attchment-masters": "Attachment Masters",
-  };
-
-  const isChangePasswordRequired = JSON.parse(localStorage.getItem('isChangePasswordRequired'));
+  const isChangePasswordRequired = safeParse(
+    localStorage.getItem("isChangePasswordRequired")
+  );
 
   useEffect(() => {
     if (isChangePasswordRequired === "Yes") {
@@ -57,18 +95,12 @@ const Header = () => {
     }
   }, [isChangePasswordRequired]);
 
-  const getComponentNameFromPath = (path) => {
-    return routeToComponentMap[path] || "Unknown";
-  };
-
-  const componentName = getComponentNameFromPath(location.pathname);
-
   const currentPasswordRef = useRef(null);
   const newPasswordRef = useRef(null);
   const confirmNewPasswordRef = useRef(null);
 
+  /* ---------------- change password (unchanged logic) ---------------- */
   const handleChangePassword = () => {
-
     if (!currentPassword) {
       toast.error("Please enter your current password.");
       currentPasswordRef.current?.classList.add("is-invalid");
@@ -105,18 +137,14 @@ const Header = () => {
       confirmNewPasswordRef.current?.classList.remove("is-invalid");
     }
 
-    // Password validation
     if (!passwordRegex.test(newPassword)) {
       const passwordValidationMessage =
         "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character (@, $, !, %, *, ?, &).";
 
       toast.error(passwordValidationMessage);
-
       setPasswordError(passwordValidationMessage);
-
       newPasswordRef.current?.classList.add("is-invalid");
       newPasswordRef.current?.focus();
-
       return;
     } else {
       newPasswordRef.current?.classList.remove("is-invalid");
@@ -143,9 +171,9 @@ const Header = () => {
           toast.success("Password changed successfully!");
           const lastChangedPassword = response.data.data.lastChangedPassword;
           if (lastChangedPassword > 0) {
-            localStorage.setItem('isChangePasswordRequired', JSON.stringify("No"));
+            localStorage.setItem("isChangePasswordRequired", JSON.stringify("No"));
           } else {
-            localStorage.setItem('isChangePasswordRequired', JSON.stringify("Yes"));
+            localStorage.setItem("isChangePasswordRequired", JSON.stringify("Yes"));
           }
           setShowModal(false);
           setCurrentPassword("");
@@ -182,169 +210,234 @@ const Header = () => {
       });
   };
 
-
+  /* ---------------- logout (unchanged behaviour) ---------------- */
   const handleLogout = () => {
-    setIsLoggingOut(true);
-
-    // Clear local storage
     localStorage.removeItem("persist:pmo_user");
     localStorage.removeItem("isUserAuthenticated");
     localStorage.removeItem("user_id");
     localStorage.clear();
 
-    // Navigate to home page
     navigate("/");
-
-    // Notify user
     toast.success("User logged out");
-
-    setIsLoggingOut(false);
-  };
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-
-  const toggleMenu = () => {
-    // Toggle the pushmenu state
-    setIsMenuOpen(!isMenuOpen);
-
-    // Trigger the pushmenu widget if necessary
-    if (window.$ && window.$.fn.pushmenu) {
-      window.$('body').toggleClass('sidebar-collapse');
-    }
   };
 
-  useEffect(() => {
-    // Listen for the menu collapse event if necessary (optional)
-    const handleMenuToggle = () => setIsMenuOpen(!document.body.classList.contains('sidebar-collapse'));
+  /* ---------------- search ---------------- */
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    const term = searchText.trim();
+    navigate(term ? `/dashboard?q=${encodeURIComponent(term)}` : "/dashboard");
+    setMobileSearchOpen(false);
+  };
 
-    window.addEventListener('menu-toggle', handleMenuToggle);
+  const clearSearch = () => {
+    setSearchText("");
+    navigate("/dashboard");
+  };
 
-    return () => {
-      window.removeEventListener('menu-toggle', handleMenuToggle);
-    };
-  }, []);
+  /* ---------------- notifications = real upload-queue status ---------------- */
+  const uploadingCount = uploadQueue.filter((f) => f.status === "uploading").length;
+  const failedCount = uploadQueue.filter((f) => f.status === "failed").length;
+  const badgeCount = uploadingCount + failedCount;
+  const recentUploads = uploadQueue.slice(-8).reverse();
+
+  const openUploadPanel = () => {
+    setShowUploadPanel(true);
+    setIsUploadPanelMinimized(false);
+    setNotifOpen(false);
+  };
+
+  const fullName = `${personalInfo.firstName || ""} ${personalInfo.lastName || ""}`.trim();
+  const initial = (personalInfo.firstName || "?").charAt(0).toUpperCase();
 
   return (
     <>
-      <nav className="main-header navbar navbar-expand">
-        <ul className="navbar-nav">
-          <li className="nav-item d-flex">
-            <a
-              className="nav-link "
-              data-widget="pushmenu"
-              href="#"
-              role="button"
-            >
-              {/* <i className="fas fa-bars"></i> */}
-              <BiMenuAltLeft style={{ width: "28px", height: "28px", fontWeight: "bold" }} />
-            </a>
-            {/* <h5 className="nav-link" style={{color:"#fff",paddingLeft:"0px"}}>
-              {componentName}
-            </h5> */}
-          </li>
-        </ul>
+      <nav className="main-header navbar navbar-expand sp-suitebar" aria-label="Top navigation">
+        <div className="sp-suite-left">
+          <a
+            className="sp-iconbtn"
+            data-widget="pushmenu"
+            href="#"
+            role="button"
+            aria-label="Toggle navigation"
+          >
+            <BiMenuAltLeft size={24} />
+          </a>
+          <button
+            type="button"
+            className="sp-brand"
+            onClick={() => navigate("/dashboard")}
+            aria-label="Go to documents"
+          >
+            <img src={wiproLogoWhite} alt="Wipro" />
+            <span className="sp-brand-text">Document Digitization</span>
+          </button>
+        </div>
 
-        <ul className="navbar-nav ml-auto">
-          {/* <li className="nav-item">
-            <a
-              className="nav-link"
-              data-widget="fullscreen"
-              href="#"
-              role="button"
+        <form
+          className={`sp-search ${mobileSearchOpen ? "is-open" : ""} ${searchText ? "has-text" : ""}`}
+          onSubmit={handleSearchSubmit}
+          role="search"
+        >
+          <span className="sp-search-icon">
+            <FiSearch size={16} />
+          </span>
+          <input
+            type="search"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            placeholder="Search files and folders"
+            aria-label="Search files and folders"
+          />
+          {searchText && (
+            <button
+              type="button"
+              className="sp-search-clear"
+              onClick={clearSearch}
+              aria-label="Clear search"
             >
-              <i className="fas fa-expand-arrows-alt"></i>
-            </a>
-          </li> */}
-          <li className="nav-item">
-            <a
-              className="nav-link"
-              href="#"
-              role="button"
-              onClick={() => setShowModal(true)}
-            >
+              <FiX size={16} />
+            </button>
+          )}
+        </form>
 
-              <HiKey style={{ width: "22px", height: "22px", fontWeight: "bold" }} />
-            </a>
-          </li>
-          {/* <li className="nav-item dropdown show">
-            <a
-              className="nav-link"
-              data-toggle="dropdown"
-              href="#"
-              aria-expanded="true"
-            >
-             <GrSettingsOption style={{width:"22px",height:"22px",fontWeight:"bold"}} />
-            </a>
-            <div
-              className="dropdown-menu dropdown-menu-sm dropdown-menu-right"
-              style={{ left: "inherit", right: "0px" }}
-            >
-              <a
-                href="#"
-                style={{ cursor: "pointer" }}
-                className="dropdown-item"
-                onClick={handleLogout}
+        <div className="sp-suite-right">
+          <button
+            type="button"
+            className="sp-iconbtn sp-search-toggle"
+            onClick={() => setMobileSearchOpen((v) => !v)}
+            aria-label="Search"
+          >
+            {mobileSearchOpen ? <FiX size={20} /> : <FiSearch size={20} />}
+          </button>
+
+          {/* Notifications */}
+          <DropdownWrap
+            open={notifOpen}
+            setOpen={setNotifOpen}
+            button={
+              <button
+                type="button"
+                className="sp-iconbtn"
+                aria-label="Notifications"
+                aria-expanded={notifOpen}
+                onClick={() => {
+                  setNotifOpen((v) => !v);
+                  setProfileOpen(false);
+                }}
               >
-                <i className="fas fa-sign-out-alt mr-2"></i> Logout
-              </a>
-            </div>
-          </li> */}
-          <li className="nav-item dropdown show">
-            {/* <a
-    className="nav-link"
-    data-toggle="dropdown"
-    href="#"
-    aria-expanded="true"
-  >
-    <GrSettingsOption style={{ width: "22px", height: "22px", fontWeight: "bold" }} />
-  </a> */}
-            <div
-              className="nav-link"
-              data-toggle="dropdown"
-              // href="#"
-              aria-expanded="true"
-            >
-              {/* Display First Letter of First Name */}
-              <div className="personal-info" >
-                {personalInfo.firstName.charAt(0).toUpperCase()}
+                <FiBell size={20} />
+                {badgeCount > 0 && <span className="sp-badge">{badgeCount}</span>}
+              </button>
+            }
+          >
+            <div className="sp-dd-head">Notifications</div>
+            {recentUploads.length === 0 ? (
+              <div className="sp-dd-empty">You&apos;re all caught up.</div>
+            ) : (
+              <div className="sp-dd-list">
+                {recentUploads.map((file) => (
+                  <div className="sp-notif-item" key={file.id}>
+                    <span
+                      className={
+                        file.status === "completed"
+                          ? "sp-ok"
+                          : file.status === "failed"
+                            ? "sp-err"
+                            : ""
+                      }
+                    >
+                      {file.status === "completed" ? (
+                        <FiCheckCircle size={18} />
+                      ) : file.status === "failed" ? (
+                        <FiAlertCircle size={18} />
+                      ) : (
+                        <FiUploadCloud size={18} />
+                      )}
+                    </span>
+                    <div className="sp-notif-body">
+                      <div className="sp-notif-name" title={file.name}>
+                        {file.name}
+                      </div>
+                      <div className="sp-notif-sub">
+                        {file.status === "completed"
+                          ? "Upload complete"
+                          : file.status === "failed"
+                            ? "Upload failed"
+                            : `Uploading… ${Math.round(file.progress)}%`}
+                      </div>
+                      {file.status === "uploading" && (
+                        <div className="sp-progress">
+                          <span style={{ width: `${file.progress}%` }} />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
-            </div>
-            <div
-              className="dropdown-menu dropdown-menu-sm dropdown-menu-right"
-              style={{ left: "inherit", right: "0px" }}
-            >
-              {/* User Information */}
-              <div className="info p-2 text-center">
-                <span className="">
-                  {personalInfo.firstName} {personalInfo.lastName}
-                </span>
-                <span
-
-
-                  className="personal-role"
+            )}
+            {uploadQueue.length > 0 && (
+              <div className="sp-dd-foot">
+                <button type="button" className="sp-link-btn" onClick={openUploadPanel}>
+                  View upload panel
+                </button>
+                <button
+                  type="button"
+                  className="sp-link-btn"
+                  onClick={clearCompletedUploads}
+                  disabled={uploadingCount > 0 && uploadQueue.length === uploadingCount}
                 >
-                  ({personalInfo.userRole})
-                </span>
+                  Clear completed
+                </button>
               </div>
+            )}
+          </DropdownWrap>
 
-              {/* Divider */}
-              <div className="dropdown-divider"></div>
-
-              {/* Logout Option */}
-              <a
-                href="#"
-                style={{ cursor: "pointer" }}
-                className="dropdown-item"
-                onClick={handleLogout}
+          {/* Profile */}
+          <DropdownWrap
+            open={profileOpen}
+            setOpen={setProfileOpen}
+            button={
+              <button
+                type="button"
+                className="sp-iconbtn"
+                aria-label="Account"
+                aria-expanded={profileOpen}
+                title={fullName}
+                onClick={() => {
+                  setProfileOpen((v) => !v);
+                  setNotifOpen(false);
+                }}
               >
-                <i className="fas fa-sign-out-alt mr-2"></i> Logout
-              </a>
+                <span className="sp-avatar">{initial}</span>
+              </button>
+            }
+          >
+            <div className="sp-profile-card">
+              <span className="sp-avatar sp-avatar--lg">{initial}</span>
+              <div>
+                <div className="sp-profile-name">{fullName || "User"}</div>
+                <div className="sp-profile-sub">{personalInfo.userRole}</div>
+                <div className="sp-profile-sub">{personalInfo.emailAddress}</div>
+              </div>
             </div>
-          </li>
-
-        </ul>
+            <button
+              type="button"
+              className="sp-menu-item"
+              onClick={() => {
+                setProfileOpen(false);
+                setShowModal(true);
+              }}
+            >
+              <HiKey size={18} /> Change password
+            </button>
+            <button type="button" className="sp-menu-item" onClick={handleLogout}>
+              <FiLogOut size={18} /> Sign out
+            </button>
+          </DropdownWrap>
+        </div>
       </nav>
 
-
+      {/* Change password modal: markup unchanged so existing custom.css still applies */}
       <div
         className={`change-password-modal modal ${showModal ? "modal-open" : ""}`}
         style={{ display: showModal ? "block" : "none" }}
@@ -364,10 +457,7 @@ const Header = () => {
             </div>
             <div className="change-password-modal-body modal-body">
               <div className="form-group">
-                <label
-                  htmlFor="currentPassword"
-                  className="change-password-label text-primary"
-                >
+                <label htmlFor="current-password" className="change-password-label text-primary">
                   Current Password<sup className="required-asterisk">*</sup>
                 </label>
                 <input
@@ -382,20 +472,18 @@ const Header = () => {
               </div>
 
               <div className="form-group">
-                <label
-                  htmlFor="newPassword"
-                  className="change-password-label text-primary"
-                >
+                <label htmlFor="newPassword" className="change-password-label text-primary">
                   New Password<sup className="required-asterisk">*</sup>
                 </label>
                 <input
                   type="password"
-                  className={`change-password-input form-control form-control-sm ${highlightField === "newPassword" &&
+                  className={`change-password-input form-control form-control-sm ${
+                    highlightField === "newPassword" &&
                     ((passwordError && newPassword === "") ||
                       (passwordError && passwordError.includes("Passwords do not match")))
-                    ? "is-invalid"
-                    : ""
-                    }`}
+                      ? "is-invalid"
+                      : ""
+                  }`}
                   id="newPassword"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
@@ -405,10 +493,7 @@ const Header = () => {
               </div>
 
               <div className="form-group">
-                <label
-                  htmlFor="confirmNewPassword"
-                  className="change-password-label text-primary"
-                >
+                <label htmlFor="confirmNewPassword" className="change-password-label text-primary">
                   Confirm New Password<sup className="required-asterisk">*</sup>
                 </label>
                 <input
