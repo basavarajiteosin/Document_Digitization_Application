@@ -34,12 +34,16 @@ axios.interceptors.request.use(
 axios.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error?.response?.status === 401) {
+    const res = error?.response;
+    // A JWT-bearer challenge (expired/invalid token) has an empty body.
+    // Our own 401s carry { success:false, message } and must not log the user out.
+    const isTokenChallenge = res?.status === 401 && !(res?.data && res.data.message);
+
+    if (isTokenChallenge) {
       localStorage.removeItem("isUserAuthenticated");
       localStorage.removeItem("user_id");
       localStorage.removeItem("persist:dda_user");
 
-      // Avoid redirect loops if we're already on the login page.
       if (!window.location.pathname.endsWith("/login")) {
         window.location.href = `${window.location.origin}/dda/login`;
       }
@@ -48,5 +52,4 @@ axios.interceptors.response.use(
     return Promise.reject(error);
   }
 );
-
 export default axios;

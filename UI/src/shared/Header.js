@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useSelector } from "react-redux";
 import axios from "axios";
+import { getRecents, addRecent, removeRecent, clearRecents } from "../common/recentSearches";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { BiMenuAltLeft } from "react-icons/bi";
@@ -14,6 +15,7 @@ import {
   FiCheckCircle,
   FiAlertCircle,
   FiUploadCloud,
+  FiClock,
 } from "react-icons/fi";
 import { useUpload } from "../Customhook/UploadContext";
 import wiproLogoWhite from "../assets/images/wiprologowhite.png";
@@ -73,10 +75,28 @@ const Header = () => {
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [sugOpen, setSugOpen] = useState(false);
+  const [recents, setRecents] = useState([]);
+  const [activeIdx, setActiveIdx] = useState(-1);
+  const searchRef = useRef(null);
 
   const personalInfo = useSelector((state) => state.personalInformationReducer);
   const navigate = useNavigate();
   const location = useLocation();
+
+    const searchUserId = personalInfo.userID;
+
+  useEffect(() => {
+    setRecents(getRecents(searchUserId));
+  }, [searchUserId]);
+
+  useEffect(() => {
+    const onDown = (e) => {
+      if (searchRef.current && !searchRef.current.contains(e.target)) setSugOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, []);
 
   // keep the search box in sync with ?q= (clears when you leave a search)
   // useEffect(() => {
@@ -229,16 +249,42 @@ const Header = () => {
   };
 
   /* ---------------- search ---------------- */
+  const runSearch = (raw) => {
+    const term = (raw || "").trim();
+    if (term) setRecents(addRecent(searchUserId, term));
+    setSearchText(term);
+    setSugOpen(false);
+    setActiveIdx(-1);
+    setMobileSearchOpen(false);
+    navigate(term ? `/dashboard?q=${encodeURIComponent(term)}` : "/dashboard");
+  };
+
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    const term = searchText.trim();
-    navigate(term ? `/dashboard?q=${encodeURIComponent(term)}` : "/dashboard");
-    setMobileSearchOpen(false);
+    runSearch(activeIdx >= 0 && suggestions[activeIdx] ? suggestions[activeIdx] : searchText);
   };
 
   const clearSearch = () => {
     setSearchText("");
+    setActiveIdx(-1);
     navigate("/dashboard");
+  };
+
+  const suggestions = recents.filter(
+    (r) => !searchText.trim() || r.toLowerCase().includes(searchText.trim().toLowerCase())
+  );
+
+  const onSearchKeyDown = (e) => {
+    if (e.key === "Escape") { setSugOpen(false); return; }
+    if (!suggestions.length) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSugOpen(true);
+      setActiveIdx((i) => (i + 1) % suggestions.length);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIdx((i) => (i <= 0 ? suggestions.length - 1 : i - 1));
+    }
   };
 
   /* ---------------- notifications = real upload-queue status ---------------- */
@@ -280,7 +326,8 @@ const Header = () => {
           </button>
         </div>
 
-        <form
+                <form
+          ref={searchRef}
           className={`sp-search ${mobileSearchOpen ? "is-open" : ""} ${searchText ? "has-text" : ""}`}
           onSubmit={handleSearchSubmit}
           role="search"
@@ -291,9 +338,12 @@ const Header = () => {
           <input
             type="search"
             value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
+            onChange={(e) => { setSearchText(e.target.value); setActiveIdx(-1); setSugOpen(true); }}
+            onFocus={() => setSugOpen(true)}
+            onKeyDown={onSearchKeyDown}
             placeholder="Search files and folders"
             aria-label="Search files and folders"
+            autoComplete="off"
           />
           {searchText && (
             <button
@@ -304,6 +354,41 @@ const Header = () => {
             >
               <FiX size={16} />
             </button>
+          )}
+          {sugOpen && suggestions.length > 0 && (
+            <div className="sp-sug" role="listbox" aria-label="Recent searches">
+              <div className="sp-sug-head">
+                <span>Recent searches</span>
+                <button
+                  type="button"
+                  className="sp-sug-clearall"
+                  onClick={() => { setRecents(clearRecents(searchUserId)); setSugOpen(false); }}
+                >
+                  Clear all
+                </button>
+              </div>
+              {suggestions.map((r, i) => (
+                <div
+                  key={r}
+                  role="option"
+                  aria-selected={i === activeIdx}
+                  className={`sp-sug-item ${i === activeIdx ? "active" : ""}`}
+                  onMouseEnter={() => setActiveIdx(i)}
+                  onClick={() => runSearch(r)}
+                >
+                  <FiClock size={14} />
+                  <span className="sp-sug-text">{r}</span>
+                  <button
+                    type="button"
+                    className="sp-sug-del"
+                    aria-label={`Remove ${r}`}
+                    onClick={(e) => { e.stopPropagation(); setRecents(removeRecent(searchUserId, r)); }}
+                  >
+                    <FiX size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
           )}
         </form>
 

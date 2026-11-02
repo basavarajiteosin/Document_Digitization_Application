@@ -98,7 +98,7 @@ namespace DDAAPI.Services
                         var token = new JwtSecurityToken(
                             issuer: issuer,
                             audience: audience,
-                            expires: DateTime.Now.AddMinutes(24),
+                            expires: DateTime.Now.AddMinutes(124),
                             signingCredentials: signingCredentials,
                             claims: claims
                         );
@@ -715,7 +715,7 @@ namespace DDAAPI.Services
                     var token = new JwtSecurityToken(
                         issuer: issuer,
                         audience: audience,
-                        expires: DateTime.Now.AddMinutes(24),
+                        expires: DateTime.Now.AddMinutes(124),
                         signingCredentials: signingCredentials,
                         claims: claims
                     );

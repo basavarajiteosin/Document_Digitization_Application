@@ -3,6 +3,8 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import { toast } from "react-toastify";
 import FileVersionsModal from "../FileVersions/FileVersionsModal";
+import { useSelector } from "react-redux";
+import { getRecents, addRecent, clearRecents } from "../../common/recentSearches";
 import "./search.css";
 
 const config = require("../../services/config.json");
@@ -69,13 +71,7 @@ const parseTerms = (q) => {
   return out.slice(0, 6);
 };
 
-const RECENT_KEY = "dda.recentSearches";
-const readRecents = () => {
-  try { return JSON.parse(localStorage.getItem(RECENT_KEY) || "[]").slice(0, 6); } catch (e) { return []; }
-};
-const writeRecents = (list) => {
-  try { localStorage.setItem(RECENT_KEY, JSON.stringify(list)); } catch (e) { /* storage optional */ }
-};
+
 const TIPS = [
   ['"purchase order"', "Exact phrase"],
   ["tag:finance", "Has tag"],
@@ -101,21 +97,24 @@ const SearchDocuments = () => {
   const [savingTags, setSavingTags] = useState(false);
   const requestSeq = useRef(0);
   const [focused, setFocused] = useState(false);
-  const [recents, setRecents] = useState(readRecents);
   const barRef = useRef(null);
-
+  const searchUserId = useSelector((s) => s.personalInformationReducer.userID);
+  const [recents, setRecents] = useState(() => getRecents(searchUserId));
+  const remember = (q) => {
+    if (!q) return;
+    setRecents(addRecent(searchUserId, q));
+  };
   useEffect(() => {
     const close = (e) => barRef.current && !barRef.current.contains(e.target) && setFocused(false);
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
   }, []);
 
-  const remember = (q) => {
-    if (!q) return;
-    const next = [q, ...recents.filter((r) => r !== q)].slice(0, 6);
-    setRecents(next);
-    writeRecents(next);
-  };
+
+
+  useEffect(() => {
+    if (urlQuery) setRecents(addRecent(searchUserId, urlQuery));
+  }, [urlQuery, searchUserId]);
 
   useEffect(() => {
     setQuery(urlQuery);
@@ -327,9 +326,7 @@ const SearchDocuments = () => {
                 autoFocus
               />
               {query && (
-                <button type="button" className="sps-clear" aria-label="Clear" onClick={() => setQuery("")}>
-                  <i className="fas fa-times" />
-                </button>
+                <button type="button" className="sps-clear" onClick={() => setRecents(clearRecents(searchUserId))}>Clear</button>
               )}
             </div>
             {focused && (
@@ -338,7 +335,7 @@ const SearchDocuments = () => {
                   <>
                     <div className="sps-sg-h">
                       Recent
-                      <button type="button" className="sps-clear" onClick={() => { setRecents([]); writeRecents([]); }}>Clear</button>
+                      <button type="button" className="sps-clear" onClick={() => { setRecents([]); }}>Clear</button>
                     </div>
                     {recents.map((r) => (
                       <button key={r} type="button" className="sps-sg-i" role="option" onClick={() => runQuery(r)}>
