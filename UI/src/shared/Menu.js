@@ -1,31 +1,42 @@
 import React, { useEffect, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { setActiveComponentName } from "../reduxStorage/personalInformation";
 import {
-  setActiveComponentName,
-  setUserPersonalInformation,
-} from "../reduxStorage/personalInformation";
-import { FaUsersGear } from "react-icons/fa6";
-import { FaThLarge, FaCogs, FaHome } from "react-icons/fa";
-import { FaFolderOpen } from "react-icons/fa6";
-import { FaMailBulk } from "react-icons/fa";
-import { MdStorage } from "react-icons/md";
-import { HiOutlineDocumentReport } from "react-icons/hi";
-import { PiHardDrivesDuotone } from "react-icons/pi";
-import { LuFolderOpen } from "react-icons/lu";
+  FiHome, FiGrid, FiUsers, FiShield, FiMail, FiDatabase, FiHardDrive, FiFileText,
+  FiFolder, FiMessageSquare, FiChevronDown, FiSettings, FiLayers, FiPenTool, FiBarChart2,
+} from "react-icons/fi";
 
-const iconMapping = {
-  "Create Folder": FaFolderOpen,
-  "User Creation": FaUsersGear,
-  "Manage Roles": FaCogs,
-  "All Masters": MdStorage,
-  "EmailConfiguration": FaMailBulk,
-  "Reports": HiOutlineDocumentReport,
-  "My Reviews": PiHardDrivesDuotone,
-  "Folder Access Report": HiOutlineDocumentReport,
-  "Storage Settings": PiHardDrivesDuotone,
-  "User All Files": LuFolderOpen,
+const ICONS = {
+  "/home": FiHome,
+  "/dashboard": FiFolder,
+  "/my-reviews": FiMessageSquare,
+  "/all-files": FiFileText,
+  "/reports": FiBarChart2,
+  "/folder-access-report": FiShield,
+  "/create-user": FiUsers,
+  "/manage-roles": FiShield,
+  "/email-config": FiMail,
+  "/all-masters": FiDatabase,
+  "/storage-settings": FiHardDrive,
 };
+
+const HOME_ITEM = { appName: "Home", appRoute: "/home" };
+
+// Section = small hint heading. collapsible = parent menu with child menus.
+const GROUPS = [
+  { key: "overview", title: "Overview", routes: ["/home", "/dashboard"] },
+  { key: "work", title: "Work", routes: ["/my-reviews", "/all-files"] },
+  { key: "insights", title: "Insights", routes: ["/reports", "/folder-access-report"] },
+  {
+    key: "config", title: "App Configuration", collapsible: true, icon: FiSettings,
+    routes: ["/create-user", "/manage-roles", "/email-config"],
+  },
+  {
+    key: "masters", title: "Masters", collapsible: true, icon: FiLayers,
+    routes: ["/all-masters", "/storage-settings"],
+  },
+];
 
 const closeSidebarOnSmallScreens = () => {
   if (window.innerWidth >= 992) return;
@@ -34,101 +45,112 @@ const closeSidebarOnSmallScreens = () => {
       window.$('[data-widget="pushmenu"]').PushMenu("collapse");
       return;
     }
-  } catch (e) {
-    /* fall through */
-  }
+  } catch (e) { /* fall through */ }
   document.body.classList.remove("sidebar-open");
 };
 
 const Menu = () => {
   const dispatch = useDispatch();
-  const personalInfo = useSelector((state) => state.personalInformationReducer);
-  const [allRoutesList, setAllRoutesList] = useState([]);
   const navigate = useNavigate();
   const location = useLocation();
+  const personalInfo = useSelector((s) => s.personalInformationReducer);
+  const [items, setItems] = useState([]);
+  const [open, setOpen] = useState({});
 
   useEffect(() => {
-    setAllRoutesList(personalInfo.menuItemNames);
+    setItems(personalInfo.menuItemNames || []);
   }, [personalInfo.menuItemNames]);
 
-  const isPathActive = (path, appName) => {
-    const searchParams = new URLSearchParams(location.search);
-    const userFilesUserID = searchParams.get("userFilesUserID");
-    const userName = searchParams.get("userName");
-    if (appName === "Create Folder" && userFilesUserID && userName) return false;
+  const isActive = (path, appName) => {
+    const sp = new URLSearchParams(location.search);
+    if (appName === "Create Folder" && sp.get("userFilesUserID") && sp.get("userName")) return false;
     return location.pathname === path;
   };
 
-  useEffect(() => {
-    dispatch(
-      setUserPersonalInformation({
-        clientId: personalInfo.clientId,
-        menuItemNames: personalInfo.menuItemNames,
-      })
-    );
-  }, [personalInfo.clientId, personalInfo.menuItemNames, dispatch]);
+  const all = [HOME_ITEM, ...items.filter((m) => m.appRoute !== "/home")];
+  const byRoute = Object.fromEntries(all.map((m) => [m.appRoute, m]));
+  const placed = new Set(GROUPS.flatMap((g) => g.routes));
+  const leftovers = all.filter((m) => !placed.has(m.appRoute));
 
-  const handleMenuItemClick = (appName) => {
+  const sections = [
+    ...GROUPS.map((g) => ({ ...g, list: g.routes.map((r) => byRoute[r]).filter(Boolean) })),
+    { key: "more", title: "More", list: leftovers },
+  ].filter((g) => g.list.length > 0);
+
+  // auto-open the parent menu that contains the current page
+  useEffect(() => {
+    sections.forEach((g) => {
+      if (g.collapsible && g.list.some((m) => m.appRoute === location.pathname)) {
+        setOpen((p) => (p[g.key] ? p : { ...p, [g.key]: true }));
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname, items]);
+
+  const onNav = (appName) => {
     dispatch(setActiveComponentName(appName));
     closeSidebarOnSmallScreens();
   };
 
-  const goHome = () => {
-    navigate("/home");
-    closeSidebarOnSmallScreens();
+  const renderLink = (m) => {
+    const Icon = ICONS[m.appRoute] || FiGrid;
+    const active = isActive(m.appRoute, m.appName);
+    return (
+      <Link
+        key={m.appRoute}
+        to={m.appRoute}
+        className={`sf-link ${active ? "active" : ""}`}
+        aria-current={active ? "page" : undefined}
+        onClick={() => onNav(m.appName)}
+      >
+        <Icon className="sf-ico" />
+        <span>{m.appName}</span>
+      </Link>
+    );
   };
 
-  const homeActive = location.pathname === "/home";
-
   return (
-    <aside className="main-sidebar sidebar-light-blue sp-sidenav elevation-1">
-      <button type="button" className="sp-site" onClick={goHome} aria-label="Go to home">
-        <span className="sp-site-tile">D</span>
-        <span className="sp-site-text">
-          <strong>Document Digitization</strong>
-          <small>{personalInfo.userRole}</small>
+    <aside className="main-sidebar sf-side elevation-0" aria-label="Main navigation">
+      <button type="button" className="sf-brand" onClick={() => { navigate("/home"); closeSidebarOnSmallScreens(); }}>
+        <span className="sf-brand-tile"><FiPenTool size={20} /></span>
+        <span>
+          <span className="sf-brand-name">Document Digitization</span>
+          <span className="sf-brand-sub">{personalInfo.userRole || "Workspace"}</span>
         </span>
       </button>
 
-      <div className="sidebar">
-        <nav className="mt-2" aria-label="Main navigation">
-          <ul
-            className="nav nav-pills nav-sidebar flex-column"
-            data-widget="treeview"
-            role="menu"
-            data-accordion="false"
-          >
-            <li className={homeActive ? "nav-item active" : "nav-item"}>
-              <Link
-                className={homeActive ? "nav-link active" : "nav-link"}
-                to="/home"
-                aria-current={homeActive ? "page" : undefined}
-                onClick={() => handleMenuItemClick("Home")}
-              >
-                <FaHome className="nav-icon" />
-                <p>Home</p>
-              </Link>
-            </li>
-            {allRoutesList.length > 0
-              ? allRoutesList.map((routesObj, index) => {
-                const IconComponent = iconMapping[routesObj.appName] || FaThLarge;
-                const active = isPathActive(routesObj.appRoute, routesObj.appName);
-                return (
-                  <li key={"route_" + (index + 1)} className={active ? "nav-item active" : "nav-item"}>
-                    <Link
-                      className={active ? "nav-link active" : "nav-link"}
-                      to={routesObj.appRoute}
-                      aria-current={active ? "page" : undefined}
-                      onClick={() => handleMenuItemClick(routesObj.appName)}
-                    >
-                      <IconComponent className="nav-icon" />
-                      <p>{routesObj.appName}</p>
-                    </Link>
-                  </li>
-                );
-              })
-              : null}
-          </ul>
+      <div className="sf-scroll">
+        <nav>
+          {sections.map((g) => {
+            if (!g.collapsible) {
+              return (
+                <div key={g.key}>
+                  <div className="sf-hint">{g.title}</div>
+                  {g.list.map(renderLink)}
+                </div>
+              );
+            }
+            const GIcon = g.icon;
+            const isOpen = !!open[g.key];
+            const hasActive = g.list.some((m) => m.appRoute === location.pathname);
+            return (
+              <div key={g.key} className="sf-group">
+                <button
+                  type="button"
+                  className={`sf-link sf-group-btn ${hasActive ? "has-active" : ""}`}
+                  aria-expanded={isOpen}
+                  onClick={() => setOpen((p) => ({ ...p, [g.key]: !p[g.key] }))}
+                >
+                  <GIcon className="sf-ico" />
+                  <span>{g.title}</span>
+                  <FiChevronDown className={`sf-chev ${isOpen ? "open" : ""}`} />
+                </button>
+                <div className={`sf-collapse ${isOpen ? "open" : ""}`}>
+                  <div className="sf-children">{g.list.map(renderLink)}</div>
+                </div>
+              </div>
+            );
+          })}
         </nav>
       </div>
     </aside>

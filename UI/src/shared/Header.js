@@ -7,6 +7,7 @@ import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { BiMenuAltLeft } from "react-icons/bi";
 import { HiKey } from "react-icons/hi2";
+import { FiChevronDown } from "react-icons/fi";
 import {
   FiSearch,
   FiBell,
@@ -64,6 +65,21 @@ const DropdownWrap = ({ open, setOpen, button, children }) => {
   );
 };
 
+const PAGE_TITLES = {
+  "/home": "Home",
+  "/dashboard": "Documents",
+  "/search": "Search",
+  "/my-reviews": "My Reviews",
+  "/all-files": "User All Files",
+  "/reports": "Reports",
+  "/folder-access-report": "Folder Access Report",
+  "/create-user": "User Creation",
+  "/manage-roles": "Manage Roles",
+  "/email-config": "Email Configuration",
+  "/all-masters": "All Masters",
+  "/storage-settings": "Storage Settings",
+};
+
 const Header = () => {
   const [showModal, setShowModal] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -84,7 +100,7 @@ const Header = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-    const searchUserId = personalInfo.userID;
+  const searchUserId = personalInfo.userID;
 
   useEffect(() => {
     setRecents(getRecents(searchUserId));
@@ -102,7 +118,7 @@ const Header = () => {
   // useEffect(() => {
   //   setSearchText(new URLSearchParams(location.search).get("q") || "");
   // }, [location.search]);
-  
+
   const {
     uploadQueue,
     setShowUploadPanel,
@@ -288,7 +304,7 @@ const Header = () => {
   };
 
   /* ---------------- notifications = real upload-queue status ---------------- */
-   const uploadingCount = uploadQueue.filter((f) => f.status === "uploading" || f.status === "queued").length;
+  const uploadingCount = uploadQueue.filter((f) => f.status === "uploading" || f.status === "queued").length;
   const failedCount = uploadQueue.filter((f) => f.status === "failed").length;
   const badgeCount = uploadingCount + failedCount;
   const recentUploads = uploadQueue.slice(-8).reverse();
@@ -300,33 +316,30 @@ const Header = () => {
   };
 
   const fullName = `${personalInfo.firstName || ""} ${personalInfo.lastName || ""}`.trim();
+  const pageTitle =
+    new URLSearchParams(location.search).get("q") !== null && location.pathname === "/dashboard"
+      ? "Search results"
+      : (personalInfo.menuItemNames || []).find((m) => m.appRoute === location.pathname)?.appName ||
+      PAGE_TITLES[location.pathname] ||
+      "Workspace";
   const initial = (personalInfo.firstName || "?").charAt(0).toUpperCase();
 
   return (
     <>
       <nav className="main-header navbar navbar-expand sp-suitebar" aria-label="Top navigation">
         <div className="sp-suite-left">
-          <a
-            className="sp-iconbtn"
-            data-widget="pushmenu"
-            href="#"
-            role="button"
-            aria-label="Toggle navigation"
-          >
-            <BiMenuAltLeft size={24} />
+          <a className="sp-iconbtn sf-burger" data-widget="pushmenu" href="#" role="button" aria-label="Toggle navigation">
+            <BiMenuAltLeft size={22} />
           </a>
-          <button
-            type="button"
-            className="sp-brand"
-            onClick={() => navigate("/home")}
-            aria-label="Go to documents"
-          >
-            <img src={wiproLogoWhite} alt="Wipro" />
-            <span className="sp-brand-text">Document Digitization</span>
-          </button>
+          <div className="sf-crumb">
+            <span className="sf-crumb-hint">Workspace</span>
+            <span className="sf-crumb-path">
+              Document operations <i>/</i> <strong>{pageTitle}</strong>
+            </span>
+          </div>
         </div>
 
-                <form
+        <form
           ref={searchRef}
           className={`sp-search ${mobileSearchOpen ? "is-open" : ""} ${searchText ? "has-text" : ""}`}
           onSubmit={handleSearchSubmit}
@@ -456,10 +469,10 @@ const Header = () => {
                           : file.status === "failed"
                             ? "Upload failed"
                             : file.status === "cancelled"
-                            ? "Cancelled"
-                            : file.status === "queued"
-                              ? "Waiting…"
-                              : `Uploading… ${Math.round(file.progress)}%`}
+                              ? "Cancelled"
+                              : file.status === "queued"
+                                ? "Waiting…"
+                                : `Uploading… ${Math.round(file.progress)}%`}
                       </div>
                       {file.status === "uploading" && (
                         <div className="sp-progress">
@@ -495,16 +508,17 @@ const Header = () => {
             button={
               <button
                 type="button"
-                className="sp-iconbtn"
+                className="sf-user"
                 aria-label="Account"
                 aria-expanded={profileOpen}
-                title={fullName}
-                onClick={() => {
-                  setProfileOpen((v) => !v);
-                  setNotifOpen(false);
-                }}
+                onClick={() => { setProfileOpen((v) => !v); setNotifOpen(false); }}
               >
                 <span className="sp-avatar">{initial}</span>
+                <span className="sf-user-txt">
+                  <b>{fullName || "User"}</b>
+                  <small>{personalInfo.userRole}</small>
+                </span>
+                <FiChevronDown size={14} />
               </button>
             }
           >
@@ -530,11 +544,14 @@ const Header = () => {
               <FiLogOut size={18} /> Sign out
             </button>
           </DropdownWrap>
+          <button type="button" className="sf-signout" onClick={handleLogout}>
+            <FiLogOut size={16} /> <span>Sign Out</span>
+          </button>
         </div>
       </nav>
 
       {/* Change password modal: markup unchanged so existing custom.css still applies */}
-           {showModal && (
+      {showModal && (
         <div className="sp-dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="cp-title">
           <div className="sp-dialog">
             <div className="sp-dialog-head">

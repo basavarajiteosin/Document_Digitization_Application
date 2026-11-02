@@ -1,3 +1,4 @@
+// Login.js
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
@@ -51,8 +52,6 @@ const initializeMSAL = async () => {
     });
 
     await instance.initialize();
-
-    // Resolve any pending redirect response before starting a new interaction.
     await instance.handleRedirectPromise();
 
     msalInstance = instance;
@@ -87,10 +86,9 @@ const Login = () => {
   const [userForgotConfirmEmail, setUserForgotConfirmEmail] = useState("");
   const [isLoaderActive, setIsLoaderActive] = useState(false);
   const [showThankYou, setShowThankYou] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const { setIsChangePasswordRequired } = useUserContext();
-
-  const currentPageOrigin = window.location.origin;
 
   const handleForgotPassword = () => {
     setUserEmail("");
@@ -108,7 +106,6 @@ const Login = () => {
   const [otpCode, setOtpCode] = useState("");
 
   const dispatchAndNavigate = (data) => {
-    // Save the application's backend JWT.
     tokenStorage.save(data.token);
 
     localStorage.setItem(
@@ -139,12 +136,9 @@ const Login = () => {
       })
     );
 
-    const allowedRoutes =
-      data.menuItemNames?.map((m) => m.appRoute) || [];
-
+    const allowedRoutes = data.menuItemNames?.map((m) => m.appRoute) || [];
     let dest = location.state?.from?.pathname;
 
-    // Only allow redirect to a permitted route.
     if (!dest || !allowedRoutes.includes(dest)) {
       dest = data.menuItemNames?.[0]?.appRoute || "/dashboard";
     }
@@ -198,7 +192,6 @@ const Login = () => {
 
         const responseData = response.data.data;
 
-        // If OTP is sent, show the OTP input.
         if (responseData.message === "OTP Sent") {
           setIsOTPSent(true);
           toast.info("OTP has been sent. Please enter the OTP to proceed.");
@@ -234,13 +227,11 @@ const Login = () => {
               clientId: "",
               designation: responseData.designation,
               division: responseData.division,
-              isChangePasswordRequired:
-                responseData.isChangePasswordRequired,
+              isChangePasswordRequired: responseData.isChangePasswordRequired,
             })
           );
 
-          const firstRoute =
-            responseData.menuItemNames?.[0]?.appRoute || "/dashboard";
+          const firstRoute = responseData.menuItemNames?.[0]?.appRoute || "/dashboard";
 
           setTimeout(() => {
             setIsLoaderActive(false);
@@ -261,12 +252,7 @@ const Login = () => {
     setMsLoading(true);
 
     try {
-      console.info("[Microsoft Auth] Initializing MSAL");
-
       const msal = await initializeMSAL();
-
-      console.info("[Microsoft Auth] Starting Microsoft popup sign-in");
-
       const loginResponse = await msal.loginPopup({
         scopes: ["openid", "profile", "email"],
       });
@@ -274,10 +260,6 @@ const Login = () => {
       if (!loginResponse?.idToken) {
         throw new Error("Microsoft sign-in returned no ID token.");
       }
-
-      console.info(
-        "[Microsoft Auth] Microsoft sign-in succeeded; calling backend"
-      );
 
       const response = await axios.post(
         `${config.DDA_API_API_URL}AuthController/microsoft-token`,
@@ -292,72 +274,43 @@ const Login = () => {
 
       const body = response?.data;
 
-      if (
-        !body ||
-        body.success === "error" ||
-        body.success === false
-      ) {
-        throw new Error(
-          body?.message || "The API rejected Microsoft authentication."
-        );
+      if (!body || body.success === "error" || body.success === false) {
+        throw new Error(body?.message || "The API rejected Microsoft authentication.");
       }
 
       const data = body.data ?? body;
 
-      // The API must return the application's own backend JWT.
       if (!data?.token) {
-        console.error(
-          "[Microsoft Auth] API response did not include data.token",
-          body
-        );
-
         throw new Error(
-          "Microsoft sign-in succeeded, but the API did not return the application's JWT token. Check the .NET microsoft-token endpoint."
+          "Microsoft sign-in succeeded, but the API did not return the application's JWT token."
         );
       }
 
       dispatchAndNavigate(data);
-
-      toast.success(
-        `Welcome${data.firstName ? `, ${data.firstName}` : ""}!`
-      );
+      toast.success(`Welcome${data.firstName ? `, ${data.firstName}` : ""}!`);
     } catch (error) {
-      console.error("[Microsoft Auth] Authentication failed", {
-        name: error?.name,
-        message: error?.message,
-        errorCode: error?.errorCode,
-        subError: error?.subError,
-        status: error?.response?.status,
-        apiResponse: error?.response?.data,
-        stack: error?.stack,
-      });
-
       const code = error?.errorCode;
-
       let message =
         error?.response?.data?.message ||
         error?.errorMessage ||
         error?.message ||
         "Unknown authentication error.";
 
-      if (
-        code === "user_cancelled" ||
-        code === "user_cancelled_error"
-      ) {
+      if (code === "user_cancelled" || code === "user_cancelled_error") {
         message = "Microsoft sign-in was cancelled.";
       } else if (code === "popup_window_error") {
-        message =
-          "The Microsoft sign-in popup was blocked. Allow popups and try again.";
+        message = "The Microsoft sign-in popup was blocked. Allow popups and try again.";
       } else if (code === "interaction_in_progress") {
-        message =
-          "A Microsoft sign-in operation is already in progress. Please wait and try again.";
+        message = "A Microsoft sign-in operation is already in progress. Please wait.";
       }
 
       toast.error(`Microsoft authentication failed: ${message}`);
     } finally {
       setMsLoading(false);
     }
-  }; const handleVerifyOTP = () => {
+  };
+
+  const handleVerifyOTP = () => {
     const email = localStorage.getItem("email");
     const userId = localStorage.getItem("userId");
 
@@ -375,19 +328,14 @@ const Login = () => {
         userId,
       })
       .then((response) => {
-        if (
-          response.status === 200 &&
-          response.data.success === "success"
-        ) {
+        if (response.status === 200 && response.data.success === "success") {
           const responseData = response.data.data;
-
           toast.success("OTP verified successfully!");
 
           localStorage.setItem(
             "isChangePasswordRequired",
             JSON.stringify(responseData.isChangePasswordRequired)
           );
-
           localStorage.setItem("user_id", responseData.userID);
           localStorage.setItem("isUserAuthenticated", "true");
 
@@ -409,13 +357,11 @@ const Login = () => {
               clientId: "",
               designation: responseData.designation,
               division: responseData.division,
-              isChangePasswordRequired:
-                responseData.isChangePasswordRequired,
+              isChangePasswordRequired: responseData.isChangePasswordRequired,
             })
           );
 
-          const firstRoute =
-            responseData.menuItemNames?.[0]?.appRoute || "/dashboard";
+          const firstRoute = responseData.menuItemNames?.[0]?.appRoute || "/dashboard";
 
           setTimeout(() => {
             setIsLoaderActive(false);
@@ -433,31 +379,15 @@ const Login = () => {
       });
   };
 
-  const onEnterKeyPress = (e, actionType) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-
-      if (actionType === "signIn") {
-        handleSignInAccount();
-      } else if (actionType === "verifyOTP") {
-        handleVerifyOTP();
-      }
-    }
-  };
-
   const handleForgotPasswordSubmit = (e) => {
     if (removeExtraSpaces(userForgotEmail)) {
       if (removeExtraSpaces(userForgotConfirmEmail)) {
-        if (
-          removeExtraSpaces(userForgotConfirmEmail) ==
-          removeExtraSpaces(userForgotEmail)
-        ) {
+        if (removeExtraSpaces(userForgotConfirmEmail) === removeExtraSpaces(userForgotEmail)) {
           setIsLoaderActive(true);
 
           axios
             .post(
-              config.DDA_API_API_URL +
-              "AuthMasterController/SendResetLinkToMail",
+              config.DDA_API_API_URL + "AuthMasterController/SendResetLinkToMail",
               {
                 emailAddress: userForgotEmail,
                 employeeId: "",
@@ -468,8 +398,8 @@ const Login = () => {
               }
             )
             .then((response) => {
-              if (response.status == 200) {
-                if (response.data.success == "success") {
+              if (response.status === 200) {
+                if (response.data.success === "success") {
                   toast.success(response.data.message);
                   setUserForgotEmail("");
                   setUserForgotConfirmEmail("");
@@ -481,34 +411,12 @@ const Login = () => {
                   setIsLoaderActive(false);
                   toast.error(response.data.message);
                 }
-              } else if (response.data.status.status == 500) {
+              } else {
                 setIsLoaderActive(false);
                 toast.error("Invalid username or password");
               }
             })
             .catch((error) => {
-              const status = error.response?.status;
-
-              if (status == 400) {
-                toast.error("Bad request");
-              } else if (status == 401) {
-                toast.error("You are not authorized person");
-              } else if (status == 403) {
-                toast.error("Forbidden");
-              } else if (status == 404) {
-                toast.error("Not found");
-              } else if (status == 500) {
-                toast.error("Internal server error");
-              } else if (status == 502) {
-                toast.error("Bad gateway");
-              } else if (status == 503) {
-                toast.error("Service unavailable");
-              } else if (status == 504) {
-                toast.error("Gateway timeout");
-              } else {
-                console.error("Forgot password request failed:", error);
-              }
-
               setIsLoaderActive(false);
             });
         } else {
@@ -546,21 +454,13 @@ const Login = () => {
 
     if (name === "contactNumber") {
       const numericValue = value.replace(/\D/g, "");
-
       if (numericValue.length > 11) {
         toast.error("Phone number cannot exceed 11 digits.");
         return;
       }
-
-      setFormData((prev) => ({
-        ...prev,
-        [name]: numericValue,
-      }));
+      setFormData((prev) => ({ ...prev, [name]: numericValue }));
     } else if (name === "countryCode") {
-      const selectedCountry = countryCodes.find(
-        (country) => country.name === value
-      );
-
+      const selectedCountry = countryCodes.find((country) => country.name === value);
       if (selectedCountry) {
         setFormData((prev) => ({
           ...prev,
@@ -569,10 +469,7 @@ const Login = () => {
         }));
       }
     } else {
-      setFormData((prev) => ({
-        ...prev,
-        [name]: value,
-      }));
+      setFormData((prev) => ({ ...prev, [name]: value }));
     }
   };
 
@@ -589,19 +486,12 @@ const Login = () => {
   const [emailDomains, setEmailDomains] = useState([]);
 
   const fetchEmailDomains = async () => {
-    window.initDestroyDataTableFuncation();
-
     try {
       const response = await axios.get(
         `${config.DDA_API_API_URL}FieldMaster/GetAllEmailDomains`,
         { headers: config.headers2 }
       );
-
       setEmailDomains(response.data.data);
-
-      setTimeout(() => {
-        window.initDataTableFuncation();
-      }, 1000);
     } catch (error) {
       console.error("Error fetching email domains:", error);
     }
@@ -613,21 +503,16 @@ const Login = () => {
 
   const isEmailDomainValid = (email) => {
     if (!email || !email.includes("@")) return false;
-
     const emailDomain = email.split("@")[1];
-
     return emailDomains.some(
-      (domain) =>
-        domain.domain.toLowerCase() === emailDomain.toLowerCase()
+      (domain) => domain.domain.toLowerCase() === emailDomain.toLowerCase()
     );
   };
 
   const handleRegisterSubmit = (e) => {
     e.preventDefault();
 
-    const formattedContactNumber =
-      `${formData.countryCode}-${formData.contactNumber}`;
-
+    const formattedContactNumber = `${formData.countryCode}-${formData.contactNumber}`;
     const {
       employeeId,
       firstName,
@@ -643,72 +528,51 @@ const Login = () => {
     if (!employeeId) {
       toast.error("Please enter your Employee ID.");
       inputUserNameRef.current?.focus();
-      inputUserNameRef.current?.classList.add("is-invalid");
       return;
     }
-
     if (!firstName) {
       toast.error("Please enter your First Name.");
       inputFirstNameRef.current?.focus();
-      inputFirstNameRef.current?.classList.add("is-invalid");
       return;
     }
-
     if (!lastName) {
       toast.error("Please enter your Last Name.");
       inputLastNameRef.current?.focus();
-      inputLastNameRef.current?.classList.add("is-invalid");
       return;
     }
-
     if (!contactNumber) {
       toast.error("Please enter contact number.");
       inputContactNumberRef.current?.focus();
-      inputContactNumberRef.current?.classList.add("is-invalid");
       return;
     }
-
     if (!removeExtraSpaces(email)) {
       toast.error("Please enter email.");
       inputEmailRef.current?.focus();
-      inputEmailRef.current?.classList.add("is-invalid");
       return;
     }
-
     if (!isEmailDomainValid(email)) {
       toast.error("Please enter a valid email.");
       inputEmailRef.current?.focus();
-      inputEmailRef.current?.classList.add("is-invalid");
       return;
     }
-
     if (!isValidPassword(password)) {
-      toast.error(
-        "Password must be at least 12 characters long, contain letters, numbers, and special characters."
-      );
+      toast.error("Password must be at least 12 characters long, contain letters, numbers, and special characters.");
       inputPasswordRef.current?.focus();
-      inputPasswordRef.current?.classList.add("is-invalid");
       return;
     }
-
     if (password !== confirmPassword) {
       toast.error("The password and confirm password do not match.");
       inputConfirmPasswordRef.current?.focus();
-      inputConfirmPasswordRef.current?.classList.add("is-invalid");
       return;
     }
-
     if (!division) {
       toast.error("Please enter your Division.");
       inputDivisionRef.current?.focus();
-      inputDivisionRef.current?.classList.add("is-invalid");
       return;
     }
-
     if (!designation) {
       toast.error("Please enter your Designation.");
       inputDesignationRef.current?.focus();
-      inputDesignationRef.current?.classList.add("is-invalid");
       return;
     }
 
@@ -744,13 +608,9 @@ const Login = () => {
         }
       )
       .then((response) => {
-        if (
-          response.status === 200 &&
-          response.data.success === "success"
-        ) {
+        if (response.status === 200 && response.data.success === "success") {
           toast.success(response.data.message);
           handleClear();
-
           setShowThankYou(true);
 
           setTimeout(() => {
@@ -760,51 +620,17 @@ const Login = () => {
         } else {
           toast.error(response.data.message);
         }
-
         setIsLoaderActive(false);
       })
       .catch((error) => {
-        if (error.response) {
-          const status = error.response.status;
-
-          switch (status) {
-            case 400:
-              toast.error("Bad request");
-              break;
-            case 401:
-              toast.error("You are not authorized");
-              break;
-            case 403:
-              toast.error("Forbidden");
-              break;
-            case 404:
-              toast.error("Not found");
-              break;
-            case 500:
-              toast.error("Internal server error");
-              break;
-            case 502:
-              toast.error("Bad gateway");
-              break;
-            case 503:
-              toast.error("Service unavailable");
-              break;
-            case 504:
-              toast.error("Gateway timeout");
-              break;
-            default:
-              toast.error("An unknown error occurred");
-          }
-        } else {
-          console.error("Registration failed:", error);
-        }
-
+        toast.error("Registration failed");
         setIsLoaderActive(false);
       });
-  }; const handleBackToLogin = () => {
+  };
+
+  const handleBackToLogin = () => {
     setIsOTPSent(false);
     setOtpCode("");
-
     localStorage.removeItem("email");
     localStorage.removeItem("userId");
   };
@@ -828,32 +654,31 @@ const Login = () => {
 
   useEffect(() => {
     axios
-      .get(
-        config.DDA_API_API_URL + "FieldMaster/GetAllDivisionMasters",
-        {
-          headers: config.headers2,
-        }
-      )
+      .get(config.DDA_API_API_URL + "FieldMaster/GetAllDivisionMasters", {
+        headers: config.headers2,
+      })
       .then((response) => {
         if (response.data.success) {
           const sortedDivisions = response.data.data.sort((a, b) =>
             a.description.localeCompare(b.description)
           );
-
           setDivisions(sortedDivisions);
         }
       })
       .catch((error) => {
-        console.error(
-          "There was an error fetching the divisions!",
-          error
-        );
+        console.error("Error fetching divisions!", error);
       });
   }, []);
 
   const view = isRegistering
-    ? (showThankYou ? "thanks" : "register")
-    : forgotPasswordClick ? "forgot" : isOTPSent ? "otp" : "signin";
+    ? showThankYou
+      ? "thanks"
+      : "register"
+    : forgotPasswordClick
+    ? "forgot"
+    : isOTPSent
+    ? "otp"
+    : "signin";
 
   const field = (id, label, control, hint) => (
     <div className="auth-field">
@@ -864,146 +689,303 @@ const Login = () => {
   );
 
   const regText = (name, label, type, ref) =>
-    field(name, label,
-      <input id={name} name={name} type={type} className="form-control" ref={ref}
-        value={formData[name]} onChange={handleRegisterChange} autoComplete="off" />);
+    field(
+      name,
+      label,
+      <input
+        id={name}
+        name={name}
+        type={type}
+        className="form-control"
+        ref={ref}
+        value={formData[name]}
+        onChange={handleRegisterChange}
+        autoComplete="off"
+      />
+    );
 
   return (
-    <div className="auth-page">
-      <main className={`auth-card ${view === "register" ? "auth-card--wide" : ""}`}>
-        <img className="auth-logo" src={bmsLogoWipro} alt="Wipro" />
-
-        {view === "signin" && (
-          <>
-            <h1 className="auth-title">Sign in</h1>
-            <p className="auth-sub">Use your Wipro account to continue.</p>
-
-            <form noValidate onSubmit={(e) => { e.preventDefault(); handleSignInAccount(); }}>
-              {field("signin-email", "Email or Employee ID",
-                <input id="signin-email" type="text" className="form-control" autoComplete="username"
-                  ref={inputUserEmailReference} value={userEmail} onChange={(e) => setUserEmail(e.target.value)} />)}
-              {field("signin-password", "Password",
-                <input id="signin-password" type="password" className="form-control" autoComplete="current-password"
-                  ref={inputUserPasswordReference} value={userPassword} onChange={(e) => setUserPassword(e.target.value)} />)}
-              <div className="auth-row">
-                <button type="button" className="auth-link" onClick={handleForgotPassword}>Forgot password?</button>
-              </div>
-              <button type="submit" className="auth-btn auth-btn--primary" disabled={isLoaderActive}>
-                {isLoaderActive ? "Please wait…" : "Sign in"}
-              </button>
-            </form>
-
-            <div className="auth-divider"><span>or</span></div>
-
-            <button type="button" className="auth-btn auth-btn--ms" onClick={handleMicrosoftSignIn} disabled={msLoading}>
-              <svg width="18" height="18" viewBox="0 0 23 23" aria-hidden="true">
-                <path d="M0 0H10.9091V10.9091H0V0Z" fill="#F25022" />
-                <path d="M12.0909 0H23V10.9091H12.0909V0Z" fill="#7FBA00" />
-                <path d="M0 12.0909H10.9091V23H0V12.0909Z" fill="#00A4EF" />
-                <path d="M12.0909 12.0909H23V23H12.0909V12.0909Z" fill="#FFB900" />
-              </svg>
-              {msLoading ? "Signing in…" : "Continue with Microsoft"}
-            </button>
-
-            <p className="auth-foot">
-              New here? <button type="button" className="auth-link" onClick={handleSignUp}>Create an account</button>
-            </p>
-          </>
-        )}
-
-        {view === "otp" && (
-          <>
-            <h1 className="auth-title">Verify your identity</h1>
-            <p className="auth-sub">Enter the code we sent to your email.</p>
-            <form noValidate onSubmit={(e) => { e.preventDefault(); handleVerifyOTP(); }}>
-              {field("otp", "Verification code",
-                <input id="otp" type="text" inputMode="numeric" autoComplete="one-time-code" className="form-control"
-                  value={otpCode} onChange={(e) => setOtpCode(e.target.value)} />)}
-              <button type="submit" className="auth-btn auth-btn--primary" disabled={isLoaderActive}>
-                {isLoaderActive ? "Please wait…" : "Verify"}
-              </button>
-            </form>
-            <p className="auth-foot"><button type="button" className="auth-link" onClick={handleBackToLogin}>Back to sign in</button></p>
-          </>
-        )}
-
-        {view === "forgot" && (
-          <>
-            <h1 className="auth-title">Reset your password</h1>
-            <p className="auth-sub">We will email you a reset link.</p>
-            <form noValidate onSubmit={(e) => { e.preventDefault(); handleForgotPasswordSubmit(e); }}>
-              {field("fp-email", "Email",
-                <input id="fp-email" type="email" className="form-control" value={userForgotEmail}
-                  onChange={(e) => setUserForgotEmail(e.target.value)} />)}
-              {field("fp-confirm", "Confirm email",
-                <input id="fp-confirm" type="email" className="form-control" value={userForgotConfirmEmail}
-                  onChange={(e) => setUserForgotConfirmEmail(e.target.value)} />)}
-              <button type="submit" className="auth-btn auth-btn--primary" disabled={isLoaderActive}>
-                {isLoaderActive ? "Please wait…" : "Send reset link"}
-              </button>
-            </form>
-            <p className="auth-foot"><button type="button" className="auth-link" onClick={handleSignIn}>Back to sign in</button></p>
-          </>
-        )}
-
-        {view === "register" && (
-          <>
-            <h1 className="auth-title">Create your account</h1>
-            <p className="auth-sub">An administrator will activate it after review.</p>
-            <form noValidate onSubmit={handleRegisterSubmit}>
-              <div className="auth-grid">
-                {regText("employeeId", "Employee ID", "text", inputUserNameRef)}
-                {regText("designation", "Designation", "text", inputDesignationRef)}
-                {regText("firstName", "First name", "text", inputFirstNameRef)}
-                {regText("lastName", "Last name", "text", inputLastNameRef)}
-                <div className="auth-span-2">{regText("email", "Email", "email", inputEmailRef)}</div>
-                <div className="auth-span-2">
-                  {field("contactNumber", "Contact number",
-                    <div className="auth-phone">
-                      <select name="countryCode" className="form-control" onChange={handleRegisterChange}
-                        value={countryCodes.find((c) => c.code === formData.countryCode)?.name || ""}>
-                        <option value="" disabled hidden>Country</option>
-                        {countryCodes.map((c, i) => (<option key={`${c.code}-${i}`} value={c.name}>{c.name}</option>))}
-                      </select>
-                      <input type="text" className="form-control" value={formData.countryCode} disabled aria-label="Country code" />
-                      <input id="contactNumber" name="contactNumber" type="text" className="form-control" ref={inputContactNumberRef}
-                        value={formData.contactNumber} onChange={handleRegisterChange} disabled={!formData.countryCode} />
-                    </div>)}
-                </div>
-                <div className="auth-span-2">
-                  {field("division", "Division",
-                    <select id="division" name="division" className="form-control" ref={inputDivisionRef}
-                      value={formData.division} onChange={handleRegisterChange}>
-                      <option value="" disabled hidden>Select division</option>
-                      {divisions.map((d) => (<option key={d.divisionId} value={d.description}>{d.description}</option>))}
-                    </select>)}
-                </div>
-                {regText("password", "Password", "password", inputPasswordRef)}
-                {regText("confirmPassword", "Confirm password", "password", inputConfirmPasswordRef)}
-              </div>
-              <div className="auth-hint">Password: at least 9 characters with letters, numbers and a special character.</div>
-              <button type="submit" className="auth-btn auth-btn--primary" disabled={isLoaderActive}>
-                {isLoaderActive ? "Please wait…" : "Create account"}
-              </button>
-            </form>
-            <p className="auth-foot">Already have an account? <button type="button" className="auth-link" onClick={() => setIsRegistering(false)}>Sign in</button></p>
-          </>
-        )}
-
-        {view === "thanks" && (
-          <>
-            <h1 className="auth-title">Thank you for signing up</h1>
-            <div className="auth-thanks">
-              <p>You have registered successfully. The admin will contact you soon.</p>
-              <p>Need help? <a href="mailto:dmsadminsupport@wipro.com">dmsadminsupport@wipro.com</a></p>
+    <div className="auth-split-layout">
+      {/* Left Hero / Branding Panel */}
+      <div className="auth-hero-pane">
+        <div className="auth-hero-content">
+          <div className="auth-brand-badge">
+            <span className="auth-brand-icon">📁</span> Document Digitization Application
+          </div>
+          <h1 className="auth-hero-title">
+            Enterprise documents. <br />
+            <span>Securely digitized & governed.</span>
+          </h1>
+          <p className="auth-hero-desc">
+            Role-based access, advanced metadata search, real-time collaboration, and version control across departments and projects.
+          </p>
+          <div className="auth-hero-card-preview">
+            <div className="auth-preview-header">
+              <span>Department Onboarding Archive</span>
+              <span className="auth-preview-pill">SECURE REPOSITORY</span>
             </div>
-            <button type="button" className="auth-btn auth-btn--primary" onClick={() => { setShowThankYou(false); setIsRegistering(false); }}>
-              Back to sign in
-            </button>
-          </>
-        )}
-      </main>
-      <div className="auth-copy">© Wipro · Document Digitization</div>
+            <div className="auth-preview-steps">
+              <div>✓ SSO & Independent Storage</div>
+              <div>⚡ Co-authoring & Comments</div>
+              <div>○ Project-wise Sharing</div>
+            </div>
+          </div>
+        </div>
+        <div className="auth-hero-footer">
+          <span>🔒 Role-based governance</span>
+          <span>🛡️ Metadata search</span>
+          <span>⚡ Version control</span>
+        </div>
+      </div>
+
+      {/* Right Form Container Panel */}
+      <div className="auth-form-pane">
+        <main className={`auth-card ${view === "register" ? "auth-card--wide" : ""}`}>
+          <div className="auth-card-top-tag">SECURE WORKSPACE</div>
+
+          {view === "signin" && (
+            <>
+              <h2 className="auth-title">Welcome back</h2>
+              <p className="auth-sub">Enter your credentials to continue to Document Digitization.</p>
+
+              <form noValidate onSubmit={(e) => { e.preventDefault(); handleSignInAccount(); }}>
+                {field(
+                  "signin-email",
+                  "Email address or Employee ID",
+                  <div className="auth-input-wrapper">
+                    <span className="auth-input-icon">✉</span>
+                    <input
+                      id="signin-email"
+                      type="text"
+                      className="form-control auth-input-padded"
+                      autoComplete="username"
+                      ref={inputUserEmailReference}
+                      value={userEmail}
+                      onChange={(e) => setUserEmail(e.target.value)}
+                      placeholder="Enter email or ID"
+                    />
+                  </div>
+                )}
+
+                {field(
+                  "signin-password",
+                  "Password",
+                  <div className="auth-input-wrapper">
+                    <span className="auth-input-icon">🔒</span>
+                    <input
+                      id="signin-password"
+                      type={showPassword ? "text" : "password"}
+                      className="form-control auth-input-padded auth-input-padded-right"
+                      autoComplete="current-password"
+                      ref={inputUserPasswordReference}
+                      value={userPassword}
+                      onChange={(e) => setUserPassword(e.target.value)}
+                      placeholder="••••••••••••"
+                    />
+                    <button
+                      type="button"
+                      className="auth-pwd-toggle"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? "Hide" : "Show"}
+                    </button>
+                  </div>
+                )}
+
+                <div className="auth-row">
+                  <button type="button" className="auth-link" onClick={handleForgotPassword}>
+                    Forgot password?
+                  </button>
+                </div>
+
+                <div className="auth-security-notice">
+                  🛡️ Session protected with independent SSO and role-based token validation.
+                </div>
+
+                <button type="submit" className="auth-btn auth-btn--primary" disabled={isLoaderActive}>
+                  {isLoaderActive ? "Please wait…" : "Sign in to workspace"} →
+                </button>
+              </form>
+
+              <div className="auth-divider"><span>or</span></div>
+
+              <button type="button" className="auth-btn auth-btn--ms" onClick={handleMicrosoftSignIn} disabled={msLoading}>
+                <svg width="16" height="16" viewBox="0 0 23 23" aria-hidden="true">
+                  <path d="M0 0H10.9091V10.9091H0V0Z" fill="#F25022" />
+                  <path d="M12.0909 0H23V10.9091H12.0909V0Z" fill="#7FBA00" />
+                  <path d="M0 12.0909H10.9091V23H0V12.0909Z" fill="#00A4EF" />
+                  <path d="M12.0909 12.0909H23V23H12.0909V12.0909Z" fill="#FFB900" />
+                </svg>
+                {msLoading ? "Signing in…" : "Continue with Microsoft"}
+              </button>
+
+              <p className="auth-foot">
+                New here? <button type="button" className="auth-link" onClick={handleSignUp}>Create an account</button>
+              </p>
+            </>
+          )}
+
+          {view === "otp" && (
+            <>
+              <h2 className="auth-title">Verify your identity</h2>
+              <p className="auth-sub">Enter the code sent to your email.</p>
+              <form noValidate onSubmit={(e) => { e.preventDefault(); handleVerifyOTP(); }}>
+                {field(
+                  "otp",
+                  "Verification code",
+                  <input
+                    id="otp"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    className="form-control"
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value)}
+                  />
+                )}
+                <button type="submit" className="auth-btn auth-btn--primary" disabled={isLoaderActive}>
+                  {isLoaderActive ? "Please wait…" : "Verify code"}
+                </button>
+              </form>
+              <p className="auth-foot">
+                <button type="button" className="auth-link" onClick={handleBackToLogin}>Back to sign in</button>
+              </p>
+            </>
+          )}
+
+          {view === "forgot" && (
+            <>
+              <h2 className="auth-title">Reset your password</h2>
+              <p className="auth-sub">We will email you a secure reset link.</p>
+              <form noValidate onSubmit={(e) => { e.preventDefault(); handleForgotPasswordSubmit(e); }}>
+                {field(
+                  "fp-email",
+                  "Email address",
+                  <input
+                    id="fp-email"
+                    type="email"
+                    className="form-control"
+                    value={userForgotEmail}
+                    onChange={(e) => setUserForgotEmail(e.target.value)}
+                  />
+                )}
+                {field(
+                  "fp-confirm",
+                  "Confirm email",
+                  <input
+                    id="fp-confirm"
+                    type="email"
+                    className="form-control"
+                    value={userForgotConfirmEmail}
+                    onChange={(e) => setUserForgotConfirmEmail(e.target.value)}
+                  />
+                )}
+                <button type="submit" className="auth-btn auth-btn--primary" disabled={isLoaderActive}>
+                  {isLoaderActive ? "Please wait…" : "Send reset link"}
+                </button>
+              </form>
+              <p className="auth-foot">
+                <button type="button" className="auth-link" onClick={handleSignIn}>Back to sign in</button>
+              </p>
+            </>
+          )}
+
+          {view === "register" && (
+            <>
+              <h2 className="auth-title">Create your account</h2>
+              <p className="auth-sub">An administrator will review and activate your access.</p>
+              <form noValidate onSubmit={handleRegisterSubmit}>
+                <div className="auth-grid">
+                  {regText("employeeId", "Employee ID", "text", inputUserNameRef)}
+                  {regText("designation", "Designation", "text", inputDesignationRef)}
+                  {regText("firstName", "First name", "text", inputFirstNameRef)}
+                  {regText("lastName", "Last name", "text", inputLastNameRef)}
+                  <div className="auth-span-2">{regText("email", "Work Email", "email", inputEmailRef)}</div>
+                  <div className="auth-span-2">
+                    {field(
+                      "contactNumber",
+                      "Contact number",
+                      <div className="auth-phone">
+                        <select
+                          name="countryCode"
+                          className="form-control"
+                          onChange={handleRegisterChange}
+                          value={countryCodes.find((c) => c.code === formData.countryCode)?.name || ""}
+                        >
+                          <option value="" disabled hidden>Country</option>
+                          {countryCodes.map((c, i) => (
+                            <option key={`${c.code}-${i}`} value={c.name}>{c.name}</option>
+                          ))}
+                        </select>
+                        <input type="text" className="form-control" value={formData.countryCode} disabled aria-label="Country code" />
+                        <input
+                          id="contactNumber"
+                          name="contactNumber"
+                          type="text"
+                          className="form-control"
+                          ref={inputContactNumberRef}
+                          value={formData.contactNumber}
+                          onChange={handleRegisterChange}
+                          disabled={!formData.countryCode}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  <div className="auth-span-2">
+                    {field(
+                      "division",
+                      "Division",
+                      <select
+                        id="division"
+                        name="division"
+                        className="form-control"
+                        ref={inputDivisionRef}
+                        value={formData.division}
+                        onChange={handleRegisterChange}
+                      >
+                        <option value="" disabled hidden>Select division</option>
+                        {divisions.map((d) => (
+                          <option key={d.divisionId} value={d.description}>{d.description}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                  {regText("password", "Password", "password", inputPasswordRef)}
+                  {regText("confirmPassword", "Confirm password", "password", inputConfirmPasswordRef)}
+                </div>
+                <div className="auth-hint">Password: 12+ chars with letters, numbers, and special chars.</div>
+                <button type="submit" className="auth-btn auth-btn--primary" disabled={isLoaderActive}>
+                  {isLoaderActive ? "Please wait…" : "Submit registration"}
+                </button>
+              </form>
+              <p className="auth-foot">
+                Already have an account? <button type="button" className="auth-link" onClick={() => setIsRegistering(false)}>Sign in</button>
+              </p>
+            </>
+          )}
+
+          {view === "thanks" && (
+            <>
+              <h2 className="auth-title">Registration submitted</h2>
+              <div className="auth-thanks">
+                <p>Your registration is complete. An admin will review and contact you soon.</p>
+                <p>Support: <a href="mailto:dmsadminsupport@wipro.com">dmsadminsupport@wipro.com</a></p>
+              </div>
+              <button
+                type="button"
+                className="auth-btn auth-btn--primary"
+                onClick={() => { setShowThankYou(false); setIsRegistering(false); }}
+              >
+                Back to sign in
+              </button>
+            </>
+          )}
+
+          <div className="auth-card-footer-info">
+            Document Digitization Application · Secure Enterprise Workspace
+          </div>
+        </main>
+      </div>
     </div>
   );
 };
