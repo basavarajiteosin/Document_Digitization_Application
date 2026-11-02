@@ -49,5 +49,13 @@ namespace DDAAPI.Controllers
             catch (KeyNotFoundException ex) { return NotFound(new { success = false, message = ex.Message }); }
             catch (Exception ex) { return BadRequest(new { success = false, message = ex.Message }); }
         }
+
+        [HttpPost("CheckOut/{fileId}")]
+        public Task<IActionResult> CheckOut(int fileId) =>
+    Run(() => _svc.CheckOutAsync(Emp, fileId), "File checked out");
+
+        [HttpPost("Release/{fileId}")]
+        public Task<IActionResult> Release(int fileId) =>
+            Run(() => _svc.ReleaseAsync(Emp, fileId), "Check-out released");
     }
 }

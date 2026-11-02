@@ -18,9 +18,6 @@ const ResetPassword = lazy(() => import("./components/ResetPassword/resetpasswor
 const EmailConfiguration = lazy(() => import("./components/EmailConfig/emailconfig"));
 
 const Login = lazy(() => import("./components/login/Login"));
-const ForgotPassword = lazy(() =>
-  import("./components/ForgotPassword/forgotpassword")
-);
 const ProtectedRoute = lazy(() => import('./protectedRoute/ProtectedRoute'));
 const PublicRoute = lazy(() => import('./protectedRoute/PublicRoute'));
 
@@ -32,7 +29,6 @@ const AppRoutes = () => {
 
         <Route element={<PublicRoute />}>
           <Route path="/login" element={<Login />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
         </Route>
 
         <Route path="/reset-password" element={<ResetPassword />} />

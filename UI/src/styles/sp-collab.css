@@ -1,0 +1,168 @@
+/* =====================================================================
+   SharePoint-style styles for: File Versions, Projects, Assign dialog.
+   Uses the variables from sp-theme.css. Scoped to body.sp-theme.
+   ===================================================================== */
+
+/* ---------- Dialog (Fluent style) ---------- */
+body.sp-theme .sp-dlg-overlay {
+  position: fixed; inset: 0; z-index: 1060; padding: 16px;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex; align-items: center; justify-content: center;
+}
+body.sp-theme .sp-dlg {
+  width: 780px; max-width: 100%; max-height: 92vh;
+  display: flex; flex-direction: column;
+  background: var(--sp-surface); border-radius: var(--sp-radius);
+  box-shadow: var(--sp-shadow-lg); animation: sp-pop 0.12s ease-out;
+}
+body.sp-theme .sp-dlg--sm { width: 520px; }
+body.sp-theme .sp-dlg-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  padding: 18px 20px 10px;
+}
+body.sp-theme .sp-dlg-title { margin: 0; font-size: 20px; font-weight: 600; color: var(--sp-text); }
+body.sp-theme .sp-dlg-sub {
+  display: flex; align-items: center; gap: 6px; margin-top: 2px;
+  font-size: 13px; color: var(--sp-text-2); word-break: break-all;
+}
+body.sp-theme .sp-dlg-body { padding: 6px 20px 16px; overflow-y: auto; }
+body.sp-theme .sp-dlg-foot {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 12px 20px; border-top: 1px solid var(--sp-border);
+}
+body.sp-theme .sp-dlg-headright { display: flex; align-items: center; gap: 8px; flex: none; }
+
+/* ---------- Icon button ---------- */
+body.sp-theme .sp-icon-btn {
+  width: 32px; height: 32px; padding: 0; border: 0; border-radius: 2px; background: transparent;
+  color: var(--sp-text-2); display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+}
+body.sp-theme .sp-icon-btn:hover:not(:disabled) { background: var(--sp-hover); color: var(--sp-primary); }
+body.sp-theme .sp-icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+body.sp-theme .sp-icon-btn.danger:hover:not(:disabled) { color: var(--sp-danger); background: #fdf3f4; }
+
+/* ---------- Command button (icon + label, like OneDrive command bar) ---------- */
+body.sp-theme .sp-cmd {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px;
+  border: 0; border-radius: 2px; background: transparent; color: var(--sp-text);
+  font-size: 14px; cursor: pointer; white-space: nowrap;
+}
+body.sp-theme .sp-cmd svg { color: var(--sp-primary); }
+body.sp-theme .sp-cmd:hover:not(:disabled) { background: var(--sp-hover); }
+body.sp-theme .sp-cmd:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ---------- Message bar (info / warning / success) ---------- */
+body.sp-theme .sp-msgbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 8px 12px; margin-bottom: 12px; border-radius: 2px;
+  background: var(--sp-bg); border: 1px solid var(--sp-border); font-size: 13px;
+}
+body.sp-theme .sp-msgbar--warn { background: #fff4ce; border-color: #f3e2a5; }
+body.sp-theme .sp-msgbar--info { background: var(--sp-selected); border-color: #c7e0f4; }
+body.sp-theme .sp-msgbar-text { display: flex; align-items: center; gap: 8px; min-width: 0; }
+body.sp-theme .sp-msgbar-actions { display: flex; gap: 4px; }
+
+/* ---------- Avatars + facepile ---------- */
+body.sp-theme .sp-avatar-sm {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 28px; height: 28px; border-radius: 50%; color: #fff; font-size: 11px; font-weight: 600;
+  border: 2px solid var(--sp-surface);
+}
+body.sp-theme .sp-avatar-sm--lg { width: 36px; height: 36px; font-size: 13px; }
+body.sp-theme .sp-facepile { display: inline-flex; align-items: center; }
+body.sp-theme .sp-facepile .sp-avatar-sm + .sp-avatar-sm { margin-left: -8px; }
+body.sp-theme .sp-facepile-more { background: var(--sp-hover); color: var(--sp-text-2); }
+body.sp-theme .sp-presence-label { font-size: 12px; color: var(--sp-text-2); }
+
+/* ---------- Drop zone ---------- */
+body.sp-theme .sp-drop {
+  display: flex; flex-direction: column; gap: 8px; padding: 14px; margin-bottom: 14px;
+  border: 1px dashed var(--sp-primary); border-radius: var(--sp-radius); background: var(--sp-surface);
+}
+body.sp-theme .sp-drop.dragging { background: var(--sp-selected); }
+body.sp-theme .sp-drop-pick {
+  display: flex; align-items: center; gap: 10px; cursor: pointer; color: var(--sp-text); font-size: 14px;
+}
+body.sp-theme .sp-drop-pick svg { color: var(--sp-primary); flex: none; }
+body.sp-theme .sp-drop-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+body.sp-theme .sp-drop-row .form-control { flex: 1 1 220px; }
+body.sp-theme .sp-hint { font-size: 12px; color: var(--sp-text-2); }
+
+/* ---------- Version list ---------- */
+body.sp-theme .sp-vlist { border: 1px solid var(--sp-border); border-radius: var(--sp-radius); overflow: hidden; }
+body.sp-theme .sp-vrow {
+  display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; align-items: center; column-gap: 12px;
+  padding: 10px 12px; border-bottom: 1px solid var(--sp-border); background: var(--sp-surface);
+  border-left: 3px solid transparent;
+}
+body.sp-theme .sp-vrow:last-child { border-bottom: 0; }
+body.sp-theme .sp-vrow:hover { background: var(--sp-hover); }
+body.sp-theme .sp-vrow.current { background: var(--sp-selected); border-left-color: var(--sp-primary); }
+body.sp-theme .sp-vbadge { font-weight: 600; font-size: 14px; color: var(--sp-text); }
+body.sp-theme .sp-vmain { min-width: 0; }
+body.sp-theme .sp-vtop { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; flex-wrap: wrap; }
+body.sp-theme .sp-vsub { font-size: 12px; color: var(--sp-text-2); }
+body.sp-theme .sp-vnote { font-size: 13px; color: var(--sp-text); margin-top: 2px; }
+body.sp-theme .sp-vactions { display: flex; gap: 2px; }
+
+/* ---------- Projects: form panel + cards ---------- */
+body.sp-theme .sp-pj-form {
+  background: var(--sp-surface); border: 1px solid var(--sp-border); border-radius: var(--sp-radius);
+  box-shadow: var(--sp-shadow); padding: 16px; margin-bottom: 16px;
+}
+body.sp-theme .sp-pj-formtitle { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
+body.sp-theme .sp-pj-count { font-size: 13px; color: var(--sp-text-2); margin: 4px 0 10px; }
+body.sp-theme .sp-pj-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
+body.sp-theme .sp-pj-card {
+  background: var(--sp-surface); border: 1px solid var(--sp-border); border-radius: var(--sp-radius);
+  padding: 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0;
+}
+body.sp-theme .sp-pj-card:hover { border-color: var(--sp-border-strong); box-shadow: var(--sp-shadow); }
+body.sp-theme .sp-pj-card.inactive { opacity: 0.75; }
+body.sp-theme .sp-pj-head { display: flex; align-items: center; gap: 12px; }
+body.sp-theme .sp-pj-tile {
+  flex: 0 0 40px; width: 40px; height: 40px; border-radius: var(--sp-radius);
+  background: var(--sp-primary); color: #fff; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+body.sp-theme .sp-pj-name { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.sp-theme .sp-pj-meta { font-size: 12px; color: var(--sp-text-2); }
+body.sp-theme .sp-pj-desc { font-size: 13px; color: var(--sp-text-2); }
+body.sp-theme .sp-pj-section { font-size: 12px; font-weight: 600; color: var(--sp-text-2); margin-bottom: 4px; }
+body.sp-theme .sp-pj-members { display: flex; align-items: center; gap: 8px; }
+body.sp-theme .sp-pj-items { display: flex; flex-wrap: wrap; gap: 6px; }
+body.sp-theme .sp-itemchip {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
+  padding: 3px 4px 3px 8px; border-radius: 12px; font-size: 12px;
+  background: var(--sp-selected); color: var(--sp-text);
+}
+body.sp-theme .sp-itemchip svg { color: var(--sp-primary); flex: none; }
+body.sp-theme .sp-itemchip .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
+body.sp-theme .sp-itemchip .acc { color: var(--sp-text-2); }
+body.sp-theme .sp-itemchip button {
+  border: 0; background: transparent; display: inline-flex; padding: 2px; border-radius: 50%;
+  color: var(--sp-text-2); cursor: pointer;
+}
+body.sp-theme .sp-itemchip button:hover { background: rgba(0, 120, 212, 0.15); color: var(--sp-danger); }
+body.sp-theme .sp-empty { padding: 40px 16px; text-align: center; color: var(--sp-text-2); font-size: 14px; }
+
+/* ---------- Choice group (access type) ---------- */
+body.sp-theme .sp-choices { display: grid; gap: 8px; }
+body.sp-theme .sp-choice {
+  display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; margin: 0; cursor: pointer;
+  border: 1px solid var(--sp-border-strong); border-radius: var(--sp-radius); font-weight: 400;
+}
+body.sp-theme .sp-choice:hover { background: var(--sp-hover); }
+body.sp-theme .sp-choice.selected { border-color: var(--sp-primary); background: var(--sp-selected); box-shadow: 0 0 0 1px var(--sp-primary); }
+body.sp-theme .sp-choice input { margin-top: 3px; }
+body.sp-theme .sp-choice strong { display: block; font-weight: 600; font-size: 14px; }
+body.sp-theme .sp-choice span { font-size: 12px; color: var(--sp-text-2); }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 575.98px) {
+  body.sp-theme .sp-dlg-overlay { padding: 0; align-items: flex-end; }
+  body.sp-theme .sp-dlg, body.sp-theme .sp-dlg--sm { width: 100%; max-height: 96vh; border-radius: 8px 8px 0 0; }
+  body.sp-theme .sp-vrow { grid-template-columns: 44px minmax(0, 1fr); }
+  body.sp-theme .sp-vactions { grid-column: 2; }
+  body.sp-theme .sp-pj-grid { grid-template-columns: 1fr; }
+}

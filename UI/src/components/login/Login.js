@@ -3,7 +3,6 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import axios from "axios";
 import { tokenStorage } from '../../axiosInstance/setupAxiosInterceptors';
-import PleaseWaitButton from "../../shared/PleaseWaitButton";
 import { removeExtraSpaces } from "../../common/textOperations";
 import { useDispatch } from "react-redux";
 import { PublicClientApplication } from "@azure/msal-browser";
@@ -852,524 +851,160 @@ const Login = () => {
       });
   }, []);
 
+  const view = isRegistering
+    ? (showThankYou ? "thanks" : "register")
+    : forgotPasswordClick ? "forgot" : isOTPSent ? "otp" : "signin";
+
+  const field = (id, label, control, hint) => (
+    <div className="auth-field">
+      <label htmlFor={id}>{label}</label>
+      {control}
+      {hint && <div className="auth-hint">{hint}</div>}
+    </div>
+  );
+
+  const regText = (name, label, type, ref) =>
+    field(name, label,
+      <input id={name} name={name} type={type} className="form-control" ref={ref}
+        value={formData[name]} onChange={handleRegisterChange} autoComplete="off" />);
+
   return (
-    <>
-      {!isRegistering ? (
-        <div className="loginPage">
-          <div
-            className={
-              forgotPasswordClick
-                ? "container right-panel-active"
-                : "container"
-            }
-            id="container"
-          >
-            <div className="form-container sign-up-container">
-              <form action="#">
-                <div className="mb-3">
-                  <a href="#" className="sp-mobile-only" onClick={(e) => { e.preventDefault(); handleSignIn(); }}>‹ Back to sign in</a>
-                  <h3>Forgot Password</h3>
-                  <h6 className="text-h6">
-                    Enter your email for get the reset password link
-                  </h6>
-                </div>
+    <div className="auth-page">
+      <main className={`auth-card ${view === "register" ? "auth-card--wide" : ""}`}>
+        <img className="auth-logo" src={bmsLogoWipro} alt="Wipro" />
 
-                <div className="form-group form-floating">
-                  <input
-                    type="email"
-                    value={userForgotEmail}
-                    onChange={(e) =>
-                      setUserForgotEmail(e.target.value)
-                    }
-                    placeholder=""
-                    className="form-control form-control-md"
-                  />
-                  <label htmlFor="email">Enter Email</label>
-                </div>
+        {view === "signin" && (
+          <>
+            <h1 className="auth-title">Sign in</h1>
+            <p className="auth-sub">Use your Wipro account to continue.</p>
 
-                <div className="form-group form-floating">
-                  <input
-                    type="email"
-                    value={userForgotConfirmEmail}
-                    onChange={(e) =>
-                      setUserForgotConfirmEmail(e.target.value)
-                    }
-                    placeholder=""
-                    className="form-control form-control-md"
-                  />
-                  <label htmlFor="userNConfirmYourEmail">
-                    Confirm Your Email
-                  </label>
-                </div>
-
-                {isLoaderActive ? (
-                  <PleaseWaitButton className="btn-sm font-weight-medium auth-form-btn" />
-                ) : (
-                  <button
-                    type="button"
-                    onClick={(e) => handleForgotPasswordSubmit(e)}
-                  >
-                    Submit
-                  </button>
-                )}
-              </form>
-            </div>
-
-            <div className="form-container sign-in-container">
-              <form action="#">
-                {!isOTPSent ? (
-                  <>
-                    <div className="mb-3 mt-4">
-                      <h3>Sign in</h3>
-                      <h6 className="">
-                        Please enter your email and password
-                      </h6>
-                    </div>
-
-                    <div className="form-group form-floating">
-                      <input
-                        type="email"
-                        ref={inputUserEmailReference}
-                        value={userEmail}
-                        onChange={(e) => setUserEmail(e.target.value)}
-                        onKeyDown={(e) =>
-                          onEnterKeyPress(e, "signIn")
-                        }
-                        placeholder=""
-                        className="form-control form-control-md"
-                      />
-                      <label htmlFor="email">
-                        Enter Email/Employee Id
-                      </label>
-                    </div>
-
-                    <div className="form-group form-floating">
-                      <input
-                        type="password"
-                        ref={inputUserPasswordReference}
-                        value={userPassword}
-                        onChange={(e) =>
-                          setUserPassword(e.target.value)
-                        }
-                        onKeyDown={(e) =>
-                          onEnterKeyPress(e, "signIn")
-                        }
-                        placeholder=""
-                        className="form-control form-control-md"
-                      />
-                      <label htmlFor="password">Enter Password</label>
-                    </div>
-
-                    {isLoaderActive ? (
-                      <button
-                        type="button"
-                        className="please-wait"
-                      >
-                        Please Wait....
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={handleSignInAccount}
-                      >
-                        Sign In
-                      </button>
-                    )}
-
-                    <div className="lc-divider">
-                      <span>or</span>
-                    </div>
-
-                    {/* Microsoft Sign In Button */}
-                    {msLoading ? (
-                      <PleaseWaitButton />
-                    ) : (
-                      <button
-                        type="button"
-                        className="lc-btn lc-btn-microsoft"
-                        onClick={handleMicrosoftSignIn}
-                        disabled={msLoading}
-                      >
-                        <svg
-                          width="20"
-                          height="20"
-                          viewBox="0 0 23 23"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                          style={{ marginRight: 8 }}
-                        >
-                          <path
-                            d="M0 0H10.9091V10.9091H0V0Z"
-                            fill="#F25022"
-                          />
-                          <path
-                            d="M12.0909 0H23V10.9091H12.0909V0Z"
-                            fill="#7FBA00"
-                          />
-                          <path
-                            d="M0 12.0909H10.9091V23H0V12.0909Z"
-                            fill="#00A4EF"
-                          />
-                          <path
-                            d="M12.0909 12.0909H23V23H12.0909V12.0909Z"
-                            fill="#FFB900"
-                          />
-                        </svg>
-
-                        Continue with Microsoft
-                      </button>
-                    )}
-                    <a href="#" className="sp-mobile-only" onClick={(e) => { e.preventDefault(); handleSignUp(); }}>Create an account</a>
-
-                    <Link onClick={handleForgotPassword}>
-                      Forgot Password
-                    </Link>
-                  </>
-                ) : (
-                  <>
-                    <div className="mb-3 mt-4">
-                      <h3>Verify OTP</h3>
-                      <h6 className="">
-                        Enter the OTP sent to your email/ID
-                      </h6>
-                    </div>
-
-                    <div className="form-group form-floating">
-                      <input
-                        type="text"
-                        value={otpCode}
-                        onChange={(e) => setOtpCode(e.target.value)}
-                        onKeyDown={(e) =>
-                          onEnterKeyPress(e, "verifyOTP")
-                        }
-                        placeholder="Enter OTP"
-                        className="form-control form-control-md"
-                      />
-                      <label htmlFor="otp">Enter OTP</label>
-                    </div>
-
-                    {isLoaderActive ? (
-                      <PleaseWaitButton className="btn-sm font-weight-medium auth-form-btn" />
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={handleVerifyOTP}
-                      >
-                        Verify OTP
-                      </button>
-                    )}
-
-                    <div className="mt-2">
-                      <Link onClick={handleBackToLogin}>
-                        Back to Sign In
-                      </Link>
-                    </div>
-                  </>
-                )}
-              </form>
-            </div>
-
-            <div className="overlay-container">
-              <div className="overlay">
-                <div className="overlay-panel overlay-left">
-                  <img
-                    src={bmswhiteLogoWipro}
-                    alt="BMS"
-                    className="logo"
-                    style={{ height: "80px", width: "80px" }}
-                  />
-
-                  <h3>Sign In</h3>
-                  <p>Already have an account? Sign in</p>
-
-                  <button
-                    className="ghost"
-                    id="signIn"
-                    onClick={handleSignIn}
-                  >
-                    Sign In
-                  </button>
-                </div>
-
-                <div className="overlay-panel overlay-right">
-                  <img
-                    src={bmswhiteLogoWipro}
-                    alt="BMS"
-                    className="logo"
-                    style={{ height: "80px", width: "80px" }}
-                  />
-
-                  <h3>Welcome to Login</h3>
-                  <p>Don't have an account? Sign up</p>
-
-                  <button
-                    className="ghost"
-                    id="signUp"
-                    onClick={handleSignUp}
-                  >
-                    Sign Up
-                  </button>
-                </div>
+            <form noValidate onSubmit={(e) => { e.preventDefault(); handleSignInAccount(); }}>
+              {field("signin-email", "Email or Employee ID",
+                <input id="signin-email" type="text" className="form-control" autoComplete="username"
+                  ref={inputUserEmailReference} value={userEmail} onChange={(e) => setUserEmail(e.target.value)} />)}
+              {field("signin-password", "Password",
+                <input id="signin-password" type="password" className="form-control" autoComplete="current-password"
+                  ref={inputUserPasswordReference} value={userPassword} onChange={(e) => setUserPassword(e.target.value)} />)}
+              <div className="auth-row">
+                <button type="button" className="auth-link" onClick={handleForgotPassword}>Forgot password?</button>
               </div>
-            </div>
-          </div>
-        </div>
-      ) : (
-        !showThankYou ? (
-          <div className="registerPage">
-            <div className="register-container">
-              <div className="logo-container">
-                <img
-                  src={bmsLogoWipro}
-                  style={{ width: "70px", height: "60px" }}
-                  alt="BMS"
-                  className="logo"
-                />
-              </div>
+              <button type="submit" className="auth-btn auth-btn--primary" disabled={isLoaderActive}>
+                {isLoaderActive ? "Please wait…" : "Sign in"}
+              </button>
+            </form>
 
-              <h3>Sign Up</h3>
+            <div className="auth-divider"><span>or</span></div>
 
-              <form onSubmit={handleRegisterSubmit}>
-                <div className="row">
-                  <div className="form-group col-md-4 form-floating">
-                    <input
-                      type="text"
-                      name="employeeId"
-                      value={formData.employeeId}
-                      onChange={handleRegisterChange}
-                      id="employeeId"
-                      placeholder=" "
-                      className="form-control form-control-md"
-                      ref={inputUserNameRef}
-                    />
-                    <label htmlFor="employeeId">
-                      Enter Employee ID
-                    </label>
-                  </div>
+            <button type="button" className="auth-btn auth-btn--ms" onClick={handleMicrosoftSignIn} disabled={msLoading}>
+              <svg width="18" height="18" viewBox="0 0 23 23" aria-hidden="true">
+                <path d="M0 0H10.9091V10.9091H0V0Z" fill="#F25022" />
+                <path d="M12.0909 0H23V10.9091H12.0909V0Z" fill="#7FBA00" />
+                <path d="M0 12.0909H10.9091V23H0V12.0909Z" fill="#00A4EF" />
+                <path d="M12.0909 12.0909H23V23H12.0909V12.0909Z" fill="#FFB900" />
+              </svg>
+              {msLoading ? "Signing in…" : "Continue with Microsoft"}
+            </button>
 
-                  <div className="form-group col-md-4 form-floating">
-                    <input
-                      type="text"
-                      name="firstName"
-                      value={formData.firstName}
-                      onChange={handleRegisterChange}
-                      id="firstName"
-                      placeholder=" "
-                      className="form-control form-control-md"
-                      ref={inputFirstNameRef}
-                    />
-                    <label htmlFor="firstName">Enter First Name</label>
-                  </div>
+            <p className="auth-foot">
+              New here? <button type="button" className="auth-link" onClick={handleSignUp}>Create an account</button>
+            </p>
+          </>
+        )}
 
-                  <div className="form-group col-md-4 form-floating">
-                    <input
-                      type="text"
-                      name="lastName"
-                      value={formData.lastName}
-                      onChange={handleRegisterChange}
-                      id="lastName"
-                      placeholder=" "
-                      className="form-control form-control-md"
-                      ref={inputLastNameRef}
-                    />
-                    <label htmlFor="lastName">Enter Last Name</label>
-                  </div>                  <div className="form-group col-md-6 form-floating">
-                    <div className="input-group">
-                      <select
-                        name="countryCode"
-                        onChange={handleRegisterChange}
-                        className="form-control form-control-md text-xs contact-number-dropdown1"
-                        value={
-                          countryCodes.find(
-                            (country) =>
-                              country.code === formData.countryCode
-                          )?.name || ""
-                        }
-                      >
-                        <option value="" disabled hidden>
-                          Country
-                        </option>
+        {view === "otp" && (
+          <>
+            <h1 className="auth-title">Verify your identity</h1>
+            <p className="auth-sub">Enter the code we sent to your email.</p>
+            <form noValidate onSubmit={(e) => { e.preventDefault(); handleVerifyOTP(); }}>
+              {field("otp", "Verification code",
+                <input id="otp" type="text" inputMode="numeric" autoComplete="one-time-code" className="form-control"
+                  value={otpCode} onChange={(e) => setOtpCode(e.target.value)} />)}
+              <button type="submit" className="auth-btn auth-btn--primary" disabled={isLoaderActive}>
+                {isLoaderActive ? "Please wait…" : "Verify"}
+              </button>
+            </form>
+            <p className="auth-foot"><button type="button" className="auth-link" onClick={handleBackToLogin}>Back to sign in</button></p>
+          </>
+        )}
 
-                        {countryCodes.map((country) => (
-                          <option
-                            key={country.code}
-                            value={country.name}
-                          >
-                            {country.name}
-                          </option>
-                        ))}
+        {view === "forgot" && (
+          <>
+            <h1 className="auth-title">Reset your password</h1>
+            <p className="auth-sub">We will email you a reset link.</p>
+            <form noValidate onSubmit={(e) => { e.preventDefault(); handleForgotPasswordSubmit(e); }}>
+              {field("fp-email", "Email",
+                <input id="fp-email" type="email" className="form-control" value={userForgotEmail}
+                  onChange={(e) => setUserForgotEmail(e.target.value)} />)}
+              {field("fp-confirm", "Confirm email",
+                <input id="fp-confirm" type="email" className="form-control" value={userForgotConfirmEmail}
+                  onChange={(e) => setUserForgotConfirmEmail(e.target.value)} />)}
+              <button type="submit" className="auth-btn auth-btn--primary" disabled={isLoaderActive}>
+                {isLoaderActive ? "Please wait…" : "Send reset link"}
+              </button>
+            </form>
+            <p className="auth-foot"><button type="button" className="auth-link" onClick={handleSignIn}>Back to sign in</button></p>
+          </>
+        )}
+
+        {view === "register" && (
+          <>
+            <h1 className="auth-title">Create your account</h1>
+            <p className="auth-sub">An administrator will activate it after review.</p>
+            <form noValidate onSubmit={handleRegisterSubmit}>
+              <div className="auth-grid">
+                {regText("employeeId", "Employee ID", "text", inputUserNameRef)}
+                {regText("designation", "Designation", "text", inputDesignationRef)}
+                {regText("firstName", "First name", "text", inputFirstNameRef)}
+                {regText("lastName", "Last name", "text", inputLastNameRef)}
+                <div className="auth-span-2">{regText("email", "Email", "email", inputEmailRef)}</div>
+                <div className="auth-span-2">
+                  {field("contactNumber", "Contact number",
+                    <div className="auth-phone">
+                      <select name="countryCode" className="form-control" onChange={handleRegisterChange}
+                        value={countryCodes.find((c) => c.code === formData.countryCode)?.name || ""}>
+                        <option value="" disabled hidden>Country</option>
+                        {countryCodes.map((c, i) => (<option key={`${c.code}-${i}`} value={c.name}>{c.name}</option>))}
                       </select>
-
-                      <input
-                        type="text"
-                        className="form-control form-control-md contact-number1"
-                        value={formData.countryCode}
-                        disabled
-                      />
-
-                      <input
-                        type="text"
-                        name="contactNumber"
-                        value={formData.contactNumber}
-                        onChange={handleRegisterChange}
-                        id="contactNumber"
-                        placeholder="Enter Contact Number"
-                        className="form-control form-control-md contact-number-input1"
-                        ref={inputContactNumberRef}
-                        disabled={!formData.countryCode}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="form-group col-md-3 form-floating">
-                    <input
-                      type="text"
-                      name="email"
-                      value={formData.email}
-                      onChange={handleRegisterChange}
-                      id="email"
-                      placeholder=" "
-                      className="form-control form-control-md"
-                      ref={inputEmailRef}
-                    />
-                    <label htmlFor="email">Enter Email</label>
-                  </div>
-
-                  <div className="form-group col-md-3 form-floating">
-                    <input
-                      type="password"
-                      name="password"
-                      value={formData.password}
-                      onChange={handleRegisterChange}
-                      id="password"
-                      placeholder=" "
-                      className="form-control form-control-md"
-                      ref={inputPasswordRef}
-                    />
-                    <label htmlFor="password">Enter Password</label>
-                  </div>
-
-                  <div className="form-group col-md-4 form-floating">
-                    <input
-                      type="password"
-                      name="confirmPassword"
-                      value={formData.confirmPassword}
-                      onChange={handleRegisterChange}
-                      id="confirmPassword"
-                      placeholder=" "
-                      className="form-control form-control-md"
-                      ref={inputConfirmPasswordRef}
-                    />
-                    <label htmlFor="confirmPassword">
-                      Confirm Password
-                    </label>
-                  </div>
-
-                  <div className="form-group col-md-4">
-                    <select
-                      name="division"
-                      value={formData.division}
-                      onChange={handleRegisterChange}
-                      id="division"
-                      className="form-control form-control-option form-control-md"
-                      ref={inputDivisionRef}
-                    >
-                      <option value="" disabled hidden>
-                        Select Division
-                      </option>
-
-                      {divisions.map((division) => (
-                        <option
-                          key={division.divisionId}
-                          value={division.description}
-                        >
-                          {division.description}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="form-group col-md-4 form-floating">
-                    <input
-                      type="text"
-                      name="designation"
-                      value={formData.designation}
-                      onChange={handleRegisterChange}
-                      id="designation"
-                      placeholder=" "
-                      className="form-control form-control-md"
-                      ref={inputDesignationRef}
-                    />
-                    <label htmlFor="designation">
-                      Designation
-                    </label>
-                  </div>
+                      <input type="text" className="form-control" value={formData.countryCode} disabled aria-label="Country code" />
+                      <input id="contactNumber" name="contactNumber" type="text" className="form-control" ref={inputContactNumberRef}
+                        value={formData.contactNumber} onChange={handleRegisterChange} disabled={!formData.countryCode} />
+                    </div>)}
                 </div>
-
-                <div className="d-flex justify-content-center">
-                  {isLoaderActive ? (
-                    <PleaseWaitButton className="btn-sm font-weight-medium auth-form-btn" />
-                  ) : (
-                    <button
-                      className="register-button"
-                      type="submit"
-                    >
-                      Sign Up
-                    </button>
-                  )}
+                <div className="auth-span-2">
+                  {field("division", "Division",
+                    <select id="division" name="division" className="form-control" ref={inputDivisionRef}
+                      value={formData.division} onChange={handleRegisterChange}>
+                      <option value="" disabled hidden>Select division</option>
+                      {divisions.map((d) => (<option key={d.divisionId} value={d.description}>{d.description}</option>))}
+                    </select>)}
                 </div>
-              </form>
-
-              <div className="login-link">
-                <span>Already have an Account? </span>
-
-                <a
-                  className="text-primary"
-                  style={{ cursor: "pointer" }}
-                  onClick={() => setIsRegistering(false)}
-                >
-                  Login
-                </a>
+                {regText("password", "Password", "password", inputPasswordRef)}
+                {regText("confirmPassword", "Confirm password", "password", inputConfirmPasswordRef)}
               </div>
+              <div className="auth-hint">Password: at least 9 characters with letters, numbers and a special character.</div>
+              <button type="submit" className="auth-btn auth-btn--primary" disabled={isLoaderActive}>
+                {isLoaderActive ? "Please wait…" : "Create account"}
+              </button>
+            </form>
+            <p className="auth-foot">Already have an account? <button type="button" className="auth-link" onClick={() => setIsRegistering(false)}>Sign in</button></p>
+          </>
+        )}
+
+        {view === "thanks" && (
+          <>
+            <h1 className="auth-title">Thank you for signing up</h1>
+            <div className="auth-thanks">
+              <p>You have registered successfully. The admin will contact you soon.</p>
+              <p>Need help? <a href="mailto:dmsadminsupport@wipro.com">dmsadminsupport@wipro.com</a></p>
             </div>
-          </div>
-        ) : (
-          <div className="registerPage">
-            <div className="register-container">
-              <div className="logo-container">
-                <img
-                  src={bmsLogoWipro}
-                  style={{ width: "70px", height: "60px" }}
-                  alt="BMS"
-                  className="logo"
-                />
-              </div>
-
-              <h3>Sign Up</h3>
-
-              <div className="thank-you-page">
-                <p>Thank you for signing up!</p>
-                <p>You have successfully registered.</p>
-                <p>
-                  The Admin will reach out to you soon for sign in.
-                </p>
-              </div>
-
-              <div className="login-link">
-                <span>Please Contact Admin By </span>
-
-                <a
-                  href="mailto:dmsadminsupport@wipro.com"
-                  style={{ color: "blue" }}
-                >
-                  dmsadminsupport@wipro.com
-                </a>
-              </div>
-            </div>
-          </div>
-        )
-      )}
-    </>
+            <button type="button" className="auth-btn auth-btn--primary" onClick={() => { setShowThankYou(false); setIsRegistering(false); }}>
+              Back to sign in
+            </button>
+          </>
+        )}
+      </main>
+      <div className="auth-copy">© Wipro · Document Digitization</div>
+    </div>
   );
 };
 

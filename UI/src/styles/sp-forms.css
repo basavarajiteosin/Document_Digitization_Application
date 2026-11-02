@@ -1,0 +1,52 @@
+/* page forms */
+body.sp-theme .card-body .form-group { margin-bottom: 16px; }
+body.sp-theme .card-body .form-group > label { font-size: 13px; margin-bottom: 4px; }
+body.sp-theme .form-control-sm, body.sp-theme .form-control-md { height: 32px; font-size: 14px; padding: 4px 10px; }
+body.sp-theme textarea.form-control { height: auto; }
+body.sp-theme sup { color: var(--sp-danger) !important; }
+body.sp-theme .btn-xs, body.sp-theme .btn-sm { padding: 4px 14px; font-size: 14px; line-height: 1.4; }
+body.sp-theme .card-footer::after { content: ""; display: table; clear: both; }
+body.sp-theme .card-footer .btn { min-width: 96px; height: 32px; }
+body.sp-theme .card-footer .btn.float-right { margin-left: 8px; }
+body.sp-theme .main-sidebar .sidebar { overflow-y: auto; }
+.field-icon-password { float: right; margin: -26px 10px 0 0; position: relative; z-index: 2; cursor: pointer; color: var(--sp-text-2); }
+table.dataTable.table-sm > thead > tr > th:not(.sorting_disabled) { padding-right: 5px; }
+
+/* react-select (roles, cohort) */
+body.sp-theme .roles-custom-select [class$="-control"], body.sp-theme .cohort-user-select [class$="-control"] {
+  min-height: 32px; border-color: #8a8886; border-radius: 2px; box-shadow: none; }
+body.sp-theme .roles-custom-select [class$="-control"]:hover, body.sp-theme .cohort-user-select [class$="-control"]:hover { border-color: var(--sp-text); }
+body.sp-theme .roles-custom-select [class$="-control"]:focus-within, body.sp-theme .cohort-user-select [class$="-control"]:focus-within {
+  border-color: var(--sp-primary); box-shadow: 0 0 0 1px var(--sp-primary); }
+body.sp-theme .form-control-md { height: 32px; }
+
+/* email editor */
+body.sp-theme .note-editor.note-frame { border: 1px solid var(--sp-border-strong); border-radius: 2px; }
+body.sp-theme .note-toolbar { background: var(--sp-bg); }
+
+/* change-password dialog */
+.sp-dialog-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; z-index: 2000; padding: 16px; }
+.sp-dialog { width: 100%; max-width: 440px; max-height: 92vh; overflow-y: auto; background: var(--sp-surface); border-radius: 4px; box-shadow: var(--sp-shadow-lg); }
+.sp-dialog-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--sp-border); }
+.sp-dialog-head h2 { margin: 0; font-size: 18px; }
+.sp-dialog-x { border: 0; background: transparent; font-size: 22px; line-height: 1; width: 32px; height: 32px; border-radius: 2px; cursor: pointer; }
+.sp-dialog-x:hover:not(:disabled) { background: var(--sp-hover); }
+.sp-dialog-x:disabled { opacity: .3; cursor: not-allowed; }
+.sp-dialog-body { padding: 20px; }
+.sp-dialog-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--sp-border); }
+.sp-note { background: var(--sp-selected); color: var(--sp-primary-press); padding: 8px 12px; border-radius: 2px; font-size: 13px; margin-bottom: 14px; }
+.sp-error { background: #fdf3f4; color: var(--sp-danger); padding: 8px 12px; border-radius: 2px; font-size: 13px; }
+.sp-rules { font-size: 12px; color: var(--sp-text-2); padding-left: 18px; margin: 0 0 10px; }
+
+/* bootstrap confirm modal (user / role / cohort delete) */
+body.sp-theme .modal { background: rgba(0,0,0,.4); }
+body.sp-theme .confirmCommonModal .modal-dialog { max-width: 420px; margin-top: 15vh; }
+body.sp-theme .confirmCommonModal .modal-content { padding: 0; }
+body.sp-theme .confirmCommonModal .modal-header { display: flex; align-items: center; padding: 16px 20px; position: static; }
+body.sp-theme .confirmCommonModal .icon-box { position: static; width: 32px; height: 32px; margin: 0 12px 0 0; padding: 0; box-shadow: none;
+  background: var(--sp-selected); color: var(--sp-primary); display: flex; align-items: center; justify-content: center; flex: none; }
+body.sp-theme .confirmCommonModal .icon-box i { position: static; font-size: 16px; }
+body.sp-theme .confirmCommonModal h5.modal-title { margin: 0; text-align: left; font-size: 18px; }
+body.sp-theme .confirmCommonModal .modal-body { padding: 16px 20px; }
+body.sp-theme .confirmCommonModal .modal-body p { text-align: left; margin: 0; }
+body.sp-theme .confirmCommonModal .modal-footer { display: flex; justify-content: flex-end; gap: 8px; }

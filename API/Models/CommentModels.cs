@@ -87,4 +87,12 @@ namespace DDAAPI.Models
         public bool CanDecide { get; set; }
         public bool CanCancel { get; set; }
     }
+
+    public class ParticipantDTO
+    {
+        public string UserId { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string Role { get; set; } = "Shared"; // Owner | Shared
+    }
 }

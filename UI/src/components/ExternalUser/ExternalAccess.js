@@ -794,7 +794,7 @@ const ExternalUserAccess = () => {
   const [showFileModal, setShowFileModal] = useState(false);
   const [files, setFiles] = useState([]);
   const [allowedExtensions, setAllowedExtensions] = useState([]);
-  const { addUploadItems, updateUploadItem } = useUpload();
+  const { enqueueUploads } = useUpload();
 
   useEffect(() => {
     const fetchAllowedExtensions = async () => {
@@ -843,104 +843,62 @@ const ExternalUserAccess = () => {
     setFiles(validFiles); // Ensure validFiles is always an array
   };
 
-  // Uploads a single file to the existing CreateFiles API (unchanged endpoint/
-  // payload) - each file gets its own progress entry in the shared, app-level
-  // upload panel instead of one combined progress bar.
-  const uploadSingleFileInBackground = async (queueItem, folderIdAtUploadTime) => {
-    const formData = new FormData();
-    formData.append("Files", queueItem.file);
-    formData.append("FolderId", folderIdAtUploadTime);
-    formData.append("CreatedBy", personalInfo.userID);
-
-    try {
-      const response = await axios.post(
-        `${config.DDA_API_API_URL}FolderData/CreateFiles`,
-        formData,
-        {
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
-          onUploadProgress: (progressEvent) => {
-            const total = progressEvent.total || 1;
-            const loaded = progressEvent.loaded;
-            const percent = Math.min((loaded / total) * 100, 100);
-
-            updateUploadItem(queueItem.id, { progress: percent });
-          },
-        }
-      );
-
-      if (response.data.success) {
-        updateUploadItem(queueItem.id, { progress: 100, status: "completed" });
-        return { success: true };
-      } else {
-        updateUploadItem(queueItem.id, { status: "failed" });
-        return { success: false };
-      }
-    } catch (error) {
-      updateUploadItem(queueItem.id, { status: "failed" });
-      return { success: false };
-    }
-  };
-
   // Kicks off background, non-blocking uploads - the external user can keep
   // browsing shared folders/files while these run. Progress shows in the same
   // small floating panel used across the app (see App.js / UploadStatusPanel).
-  const handleFileUpload = async () => {
-    if (files.length === 0) {
-      return;
-    }
-
+    const handleFileUpload = () => {
+    if (files.length === 0) return;
     setShowFileModal(false);
 
     const folderIdAtUploadTime = currentFolderId;
+    const createdBy = personalInfo.userID;
+    const destination = currentPath.length > 0 ? currentPath[currentPath.length - 1].folderName : "Shared with me";
     const filesToUpload = files;
     setFiles([]);
 
-    const newQueueItems = filesToUpload.map((file) => ({
-      id: `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-      file,
-      name: file.name,
-      size: file.size,
-      progress: 0,
-      status: "uploading",
-      folderId: folderIdAtUploadTime,
-    }));
-
-    addUploadItems(newQueueItems);
-
-    const CONCURRENCY = 3;
-    let cursor = 0;
-    const results = [];
-
-    const runNext = async () => {
-      if (cursor >= newQueueItems.length) return;
-      const item = newQueueItems[cursor++];
-      const result = await uploadSingleFileInBackground(item, folderIdAtUploadTime);
-      results.push(result);
-      await runNext();
+    const uploader = async (item, { signal, onProgress }) => {
+      const formData = new FormData();
+      formData.append("Files", item.file);
+      formData.append("FolderId", folderIdAtUploadTime);
+      formData.append("CreatedBy", createdBy);
+      try {
+        const response = await axios.post(`${config.DDA_API_API_URL}FolderData/CreateFiles`, formData, {
+          signal,
+          headers: { "Content-Type": "multipart/form-data" },
+          onUploadProgress: (e) => onProgress(e.loaded, e.total || item.size),
+        });
+        return response.data.success
+          ? { success: true }
+          : { success: false, message: response.data.message };
+      } catch (error) {
+        if (axios.isCancel(error)) return { success: false, cancelled: true };
+        return { success: false, message: error.response?.data?.message || "Upload failed" };
+      }
     };
 
-    const workerCount = Math.min(CONCURRENCY, newQueueItems.length);
-    await Promise.all(Array.from({ length: workerCount }, runNext));
-
-    const successCount = results.filter((r) => r.success).length;
-    const failedCount = results.length - successCount;
-
-    if (successCount > 0) {
-      toast.success(
-        failedCount > 0
-          ? `${successCount} file(s) uploaded successfully, ${failedCount} failed`
-          : "Files uploaded successfully"
-      );
-    }
-    if (failedCount > 0 && successCount === 0) {
-      toast.error("Failed to upload files");
-    }
-
-    if (folderIdAtUploadTime === currentFolderId) {
-      fetchFolders(currentFolderId);
-    }
+    enqueueUploads(
+      filesToUpload.map((file) => ({
+        id: `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+        file,
+        name: file.name,
+        size: file.size,
+        folderId: folderIdAtUploadTime,
+        destination,
+      })),
+      uploader,
+      {
+        onAllDone: (results) => {
+          const ok = results.filter((r) => r.success).length;
+          const failed = results.filter((r) => !r.success && !r.cancelled).length;
+          if (ok > 0) {
+            toast.success(failed > 0 ? `${ok} file(s) uploaded, ${failed} failed` : "Files uploaded successfully");
+          } else if (failed > 0) {
+            toast.error("Failed to upload files");
+          }
+          fetchFolders(folderIdAtUploadTime);
+        },
+      }
+    );
   };
 
   const fileInputRef = useRef(null);

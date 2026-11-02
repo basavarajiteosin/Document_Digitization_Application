@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "react-toastify";
-import CommentsReviewModal, { statusBadge, statusLabel } from "./CommentsReviewModal";
+import { FiFolder, FiFile } from "react-icons/fi";
+import CommentsReviewModal, { Avatar, StatusPill } from "./CommentsReviewModal";
+import "./Collaboration.css";
 
 const config = require("../../services/config.json");
 
@@ -15,16 +17,12 @@ const MyReviews = () => {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await axios.get(`${config.DDA_API_API_URL}Comments/MyReviews`, {
-        params: { scope, status },
-      });
+      const res = await axios.get(`${config.DDA_API_API_URL}Comments/MyReviews`, { params: { scope, status } });
       if (res.data.success) setRows(res.data.data || []);
       else toast.error(res.data.message || "Failed to load reviews");
     } catch (e) {
       toast.error(e.response?.data?.message || "Failed to load reviews");
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }, [scope, status]);
 
   useEffect(() => { load(); }, [load]);
@@ -32,75 +30,56 @@ const MyReviews = () => {
   return (
     <section className="content scroll-content">
       <div className="container-fluid">
-        <div className="card card-primary card-outline">
-          <div className="card-header">
-            <h3 className="card-title text-sm">My Reviews</h3>
-          </div>
-          <div className="card-body text-sm">
-            <div className="d-flex mb-3 align-items-center">
-              <button className={`btn btn-sm mr-2 ${scope === "assigned" ? "btn-primary" : "btn-outline-primary"}`} onClick={() => setScope("assigned")}>
-                Assigned to me
-              </button>
-              <button className={`btn btn-sm mr-3 ${scope === "requested" ? "btn-primary" : "btn-outline-primary"}`} onClick={() => setScope("requested")}>
-                Requested by me
-              </button>
-              <select className="custom-select custom-select-sm" style={{ maxWidth: 200 }} value={status} onChange={(e) => setStatus(e.target.value)}>
-                <option value="All">All statuses</option>
-                <option value="Pending">Pending</option>
-                <option value="Approved">Approved</option>
-                <option value="ChangesRequested">Changes requested</option>
-                <option value="Cancelled">Cancelled</option>
-              </select>
-            </div>
+        <div className="sp-hero"><div><h2>My reviews</h2><p>Review requests assigned to you or sent by you</p></div></div>
 
-            <div style={{ overflowX: "auto" }}>
-              <table className="table table-bordered table-sm">
-                <thead>
-                  <tr>
-                    <th>Item</th><th>Type</th>
-                    <th>{scope === "assigned" ? "Requested by" : "Reviewer"}</th>
-                    <th>Status</th><th>Requested on</th><th>Message</th><th style={{ width: "8%" }}>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading ? (
-                    <tr><td colSpan="7" className="text-center">Loading...</td></tr>
-                  ) : rows.length === 0 ? (
-                    <tr><td colSpan="7" className="text-center">No reviews found.</td></tr>
-                  ) : (
-                    rows.map((r) => (
-                      <tr key={r.reviewId}>
-                        <td>{r.itemName}</td>
-                        <td>{r.docType}</td>
-                        <td>{scope === "assigned" ? r.requestedByName : r.reviewerName}</td>
-                        <td><span className={statusBadge(r.status)}>{statusLabel(r.status)}</span></td>
-                        <td>{new Date(r.requestedOn).toLocaleString()}</td>
-                        <td>{r.requestMessage || "-"}</td>
-                        <td className="text-center">
-                          <button
-                            className="btn btn-xs btn-outline-primary"
-                            disabled={r.itemName === "(deleted item)"}
-                            onClick={() => setOpenItem({ docType: r.docType, id: r.folderOrFileId, name: r.itemName })}
-                          >
-                            Open
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+        <div className="sp-mr-bar">
+          <div className="sp-mr-pivot">
+            <button className={scope === "assigned" ? "active" : ""} onClick={() => setScope("assigned")}>Assigned to me</button>
+            <button className={scope === "requested" ? "active" : ""} onClick={() => setScope("requested")}>Requested by me</button>
           </div>
+          <select className="custom-select custom-select-sm" style={{ maxWidth: 200, marginLeft: "auto" }} value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="All">All statuses</option>
+            <option value="Pending">Pending</option>
+            <option value="Approved">Approved</option>
+            <option value="ChangesRequested">Changes requested</option>
+            <option value="Cancelled">Cancelled</option>
+          </select>
+        </div>
+
+        <div className="sp-mr-list">
+          <div className="sp-mr-row head">
+            <span>Name</span><span>Status</span><span>{scope === "assigned" ? "Requested by" : "Reviewer"}</span>
+            <span>Requested on</span><span>Message</span><span />
+          </div>
+          {loading ? (
+            <div className="sp-cr-empty">Loading...</div>
+          ) : rows.length === 0 ? (
+            <div className="sp-cr-empty">No reviews found.</div>
+          ) : rows.map((r) => {
+            const who = scope === "assigned" ? r.requestedByName : r.reviewerName;
+            const gone = r.itemName === "(deleted item)";
+            return (
+              <div className="sp-mr-row" key={r.reviewId}>
+                <span className="sp-mr-name">
+                  {r.docType === "Folder" ? <FiFolder size={18} color="#c19c00" /> : <FiFile size={18} color="#0078d4" />}
+                  <span title={r.itemName}>{r.itemName}</span>
+                </span>
+                <span><StatusPill status={r.status} /></span>
+                <span style={{ display: "flex", alignItems: "center", gap: 8 }}><Avatar name={who} />{who}</span>
+                <span>{new Date(r.requestedOn).toLocaleString()}</span>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.requestMessage || ""}>{r.requestMessage || "-"}</span>
+                <span>
+                  <button className="sp-btn" disabled={gone}
+                    onClick={() => setOpenItem({ docType: r.docType, id: r.folderOrFileId, name: r.itemName })}>Open</button>
+                </span>
+              </div>
+            );
+          })}
         </div>
       </div>
 
       {openItem && (
-        <CommentsReviewModal
-          item={openItem}
-          initialTab="reviews"
-          onClose={() => { setOpenItem(null); load(); }}
-        />
+        <CommentsReviewModal item={openItem} initialTab="reviews" onClose={() => { setOpenItem(null); load(); }} />
       )}
     </section>
   );

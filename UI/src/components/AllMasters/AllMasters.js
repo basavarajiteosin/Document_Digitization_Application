@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import Division from "./EachMaster.js/division";
 import EmailDomain from "./EachMaster.js/emaildomain";
-
+import ProjectMaster from "./EachMaster.js/ProjectMaster";
 import AccessType from "./EachMaster.js/AccessType";
 import ActionMaster from "./EachMaster.js/ActionMaster";
 import DocumentExtention from "./EachMaster.js/DocumentExtension";
@@ -28,6 +28,8 @@ function AllMasters() {
         return <div><DocumentExtention /></div>;
       case "CohortMapping":
         return <div><CohortMapping /></div>;
+      case "Projects":
+        return <div><ProjectMaster /></div>;
       default:
         return null;
     }
@@ -87,6 +89,13 @@ function AllMasters() {
                         onClick={() => setActiveTab("CohortMapping")}
                       >
                         Cohort Mapping
+                      </button>
+                      <button
+                        className={`btn tabs-btn btn-sm ml-2 ${activeTab === "Projects" ? "btn-primary" : "btn-outline-primary"
+                          }`}
+                        onClick={() => setActiveTab("Projects")}
+                      >
+                        Projects
                       </button>
                     </div>
                   </div>

@@ -242,7 +242,7 @@ const Header = () => {
   };
 
   /* ---------------- notifications = real upload-queue status ---------------- */
-  const uploadingCount = uploadQueue.filter((f) => f.status === "uploading").length;
+   const uploadingCount = uploadQueue.filter((f) => f.status === "uploading" || f.status === "queued").length;
   const failedCount = uploadQueue.filter((f) => f.status === "failed").length;
   const badgeCount = uploadingCount + failedCount;
   const recentUploads = uploadQueue.slice(-8).reverse();
@@ -370,7 +370,11 @@ const Header = () => {
                           ? "Upload complete"
                           : file.status === "failed"
                             ? "Upload failed"
-                            : `Uploading… ${Math.round(file.progress)}%`}
+                            : file.status === "cancelled"
+                            ? "Cancelled"
+                            : file.status === "queued"
+                              ? "Waiting…"
+                              : `Uploading… ${Math.round(file.progress)}%`}
                       </div>
                       {file.status === "uploading" && (
                         <div className="sp-progress">
@@ -445,99 +449,49 @@ const Header = () => {
       </nav>
 
       {/* Change password modal: markup unchanged so existing custom.css still applies */}
-      <div
-        className={`change-password-modal modal ${showModal ? "modal-open" : ""}`}
-        style={{ display: showModal ? "block" : "none" }}
-      >
-        <div className="change-password-modal-dialog modal-dialog">
-          <div className="change-password-modal-content modal-content">
-            <div className="change-password-modal-header modal-header">
-              <h4 className="change-password-modal-title text-primary">Change Password</h4>
-              <button
-                type="button"
-                className="change-password-close close"
-                onClick={() => setShowModal(false)}
-                disabled={isChangePasswordRequired === "Yes"}
-              >
-                <span>&times;</span>
-              </button>
+           {showModal && (
+        <div className="sp-dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="cp-title">
+          <div className="sp-dialog">
+            <div className="sp-dialog-head">
+              <h2 id="cp-title">Change password</h2>
+              <button type="button" className="sp-dialog-x" aria-label="Close"
+                onClick={() => setShowModal(false)} disabled={isChangePasswordRequired === "Yes"}>×</button>
             </div>
-            <div className="change-password-modal-body modal-body">
-              <div className="form-group">
-                <label htmlFor="current-password" className="change-password-label text-primary">
-                  Current Password<sup className="required-asterisk">*</sup>
-                </label>
-                <input
-                  type="password"
-                  className="change-password-input form-control form-control-sm"
-                  ref={currentPasswordRef}
-                  id="current-password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  placeholder="Current Password"
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="newPassword" className="change-password-label text-primary">
-                  New Password<sup className="required-asterisk">*</sup>
-                </label>
-                <input
-                  type="password"
-                  className={`change-password-input form-control form-control-sm ${highlightField === "newPassword" &&
-                      ((passwordError && newPassword === "") ||
-                        (passwordError && passwordError.includes("Passwords do not match")))
-                      ? "is-invalid"
-                      : ""
-                    }`}
-                  id="newPassword"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="New Password"
-                  ref={newPasswordRef}
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="confirmNewPassword" className="change-password-label text-primary">
-                  Confirm New Password<sup className="required-asterisk">*</sup>
-                </label>
-                <input
-                  type="password"
-                  className="change-password-input form-control form-control-sm"
-                  ref={confirmNewPasswordRef}
-                  id="confirmNewPassword"
-                  value={confirmNewPassword}
-                  onChange={(e) => setConfirmNewPassword(e.target.value)}
-                  placeholder="Confirm New Password"
-                />
-              </div>
-              {passwordError && (
-                <div className="change-password-alert alert alert-danger text-sm">
-                  {passwordError}
+            <form noValidate onSubmit={(e) => { e.preventDefault(); handleChangePassword(); }}>
+              <div className="sp-dialog-body">
+                {isChangePasswordRequired === "Yes" && (
+                  <div className="sp-note">You must change your password before continuing.</div>
+                )}
+                <div className="form-group">
+                  <label htmlFor="current-password">Current password <sup>*</sup></label>
+                  <input type="password" className="form-control" ref={currentPasswordRef} id="current-password"
+                    autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
                 </div>
-              )}
-            </div>
-            <div className="change-password-modal-footer modal-footer">
-              <button
-                type="button"
-                className="btn btn-outline-primary btn-sm change-password-close-button"
-                onClick={() => setShowModal(false)}
-                disabled={isChangePasswordRequired === "Yes"}
-              >
-                Close
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary btn-sm change-password-save-button"
-                onClick={handleChangePassword}
-              >
-                Save changes
-              </button>
-            </div>
+                <div className="form-group">
+                  <label htmlFor="newPassword">New password <sup>*</sup></label>
+                  <input type="password" className="form-control" ref={newPasswordRef} id="newPassword"
+                    autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="confirmNewPassword">Confirm new password <sup>*</sup></label>
+                  <input type="password" className="form-control" ref={confirmNewPasswordRef} id="confirmNewPassword"
+                    autoComplete="new-password" value={confirmNewPassword} onChange={(e) => setConfirmNewPassword(e.target.value)} />
+                </div>
+                <ul className="sp-rules">
+                  <li>8+ characters, upper and lower case</li>
+                  <li>At least one number and one of @ $ ! % * ? &amp;</li>
+                </ul>
+                {passwordError && <div className="sp-error" role="alert">{passwordError}</div>}
+              </div>
+              <div className="sp-dialog-foot">
+                <button type="button" className="btn btn-default btn-sm" onClick={() => setShowModal(false)}
+                  disabled={isChangePasswordRequired === "Yes"}>Cancel</button>
+                <button type="submit" className="btn btn-primary btn-sm">Save</button>
+              </div>
+            </form>
           </div>
         </div>
-      </div>
+      )}
     </>
   );
 };

@@ -105,16 +105,6 @@ const UserCreation = () => {
   };
 
 
-  const firstUpdate = useRef(true);
-  useLayoutEffect(() => {
-    if (firstUpdate.current) {
-      window.initDatePickerFuncation();
-      return;
-    }
-
-
-  });
-
   const handleCancelClick = () => {
     clearAllFields();
     addProjectCardHeaderButtonClick();

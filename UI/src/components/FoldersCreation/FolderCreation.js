@@ -4,6 +4,7 @@ import { ExcelRenderer } from "react-excel-renderer";
 import { useParams } from "react-router-dom";
 import { useLoader } from '../../Customhook/LoaderContext';
 import { useUpload } from '../../Customhook/UploadContext';
+import AssignProjectModal from "../Projects/AssignProjectModal";
 import { useSearchParams } from "react-router-dom";
 import { HiViewGrid, HiViewList } from "react-icons/hi";
 import { FiArrowLeft } from 'react-icons/fi';
@@ -120,6 +121,9 @@ const FolderCreation = () => {
   const [accessHistoryLoading, setAccessHistoryLoading] = useState(false);
   const [versionFileItem, setVersionFileItem] = useState(null);
   const [collabItem, setCollabItem] = useState(null);
+
+  const [assignProjectItem, setAssignProjectItem] = useState(null);
+  const [departmentGroups, setDepartmentGroups] = useState([]);
 
   const gradients = [
     "linear-gradient(to bottom, #ffeb75, #ffce3c)",
@@ -797,12 +801,7 @@ const FolderCreation = () => {
   // Sourced from the app-level UploadContext (see App.js) so the queue and its
   // floating status panel stay alive and visible even after navigating to a
   // different tab/menu/route, instead of resetting when this page unmounts.
-  const {
-    addUploadItems,
-    updateUploadItem,
-    setShowUploadPanel,
-    setIsUploadPanelMinimized,
-  } = useUpload();
+  const { enqueueUploads } = useUpload();
   const currentFolderIdRef = useRef(currentFolderId);
 
   useEffect(() => {
@@ -1395,73 +1394,13 @@ const FolderCreation = () => {
 
   const [uploadError, setUploadError] = useState("");
 
-  // Uploads a single file. The CreateFilesBeHalf API is used - instead of the
-  // normal CreateFiles API - in two "on behalf of someone else" scenarios:
-  //  1) A Global Admin is viewing another user's dashboard (?userFilesUserID=...)
-  //     -> StoregeUserId = that viewed user.
-  //  2) Any logged-in role is uploading into a Shared Files folder they have
-  //     Read/Write or Read/Write/Download access to
-  //     -> StoregeUserId = that shared folder's original owner.
-  // In both cases CreatedBy is always the logged-in user actually performing
-  // the upload, so the file/storage stays attributed to the right owner.
-  const uploadSingleFileInBackground = async (queueItem, folderIdAtUploadTime) => {
-    const isUploadingOnBehalfOfViewedUser = roleName === "Global Admin" && !!userFilesUserID;
-    const isUploadingIntoSharedWriteFolder = hasSharedWriteAccess;
-
-    const behalfStorageUserId = isUploadingOnBehalfOfViewedUser
-      ? userFilesUserID
-      : isUploadingIntoSharedWriteFolder
-        ? currentSharedFolderOwnerId
-        : null;
-
-    const formData = new FormData();
-    formData.append("Files", queueItem.file);
-    formData.append("FolderId", folderIdAtUploadTime);
-    formData.append("CreatedBy", personalInfo.userID);
-
-    if (behalfStorageUserId) {
-      formData.append("StoregeUserId", behalfStorageUserId);
-    }
-
-    const uploadUrl = behalfStorageUserId
-      ? `${config.DDA_API_API_URL}FolderData/CreateFilesBeHalf`
-      : `${config.DDA_API_API_URL}FolderData/CreateFiles`;
-
-    try {
-      const response = await axios.post(
-        uploadUrl,
-        formData,
-        {
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
-          onUploadProgress: (progressEvent) => {
-            const total = progressEvent.total || 1;
-            const loaded = progressEvent.loaded;
-            const percent = Math.min((loaded / total) * 100, 100);
-
-            updateUploadItem(queueItem.id, { progress: percent });
-          },
-        }
-      );
-
-      if (response.data.success) {
-        updateUploadItem(queueItem.id, { progress: 100, status: "completed" });
-        return { success: true, folderId: folderIdAtUploadTime };
-      } else {
-        updateUploadItem(queueItem.id, { status: "failed" });
-        return { success: false, folderId: folderIdAtUploadTime };
-      }
-    } catch (error) {
-      updateUploadItem(queueItem.id, { status: "failed" });
-      return { success: false, folderId: folderIdAtUploadTime };
-    }
-  };
-
   // Kicks off background, non-blocking uploads for the selected files. The user can keep
   // browsing, creating folders, opening files, etc. while these run - progress is shown
   // in a small floating panel instead of a page-blocking modal.
-  const handleFileUpload = async () => {
+  // Queues the selected files. The scheduler (UploadContext) runs 3 at a time and supports cancel / retry.
+  // CreateFilesBeHalf is used when a Global Admin views another user's files, or when uploading into a
+  // shared folder with Read/Write access (StoregeUserId = the owner); otherwise CreateFiles.
+  const handleFileUpload = () => {
     if (files.length === 0) {
       setUploadError("Please select at least one file to upload.");
       return;
@@ -1470,55 +1409,65 @@ const FolderCreation = () => {
     setShowFileModal(false);
 
     const folderIdAtUploadTime = currentFolderId;
+    const destination = currentPath.length > 0 ? currentPath[currentPath.length - 1].folderName : "Home";
+    const createdBy = personalInfo.userID;
+    const behalfStorageUserId =
+      roleName === "Global Admin" && userFilesUserID
+        ? userFilesUserID
+        : hasSharedWriteAccess
+          ? currentSharedFolderOwnerId
+          : null;
+    const uploadUrl = behalfStorageUserId
+      ? `${config.DDA_API_API_URL}FolderData/CreateFilesBeHalf`
+      : `${config.DDA_API_API_URL}FolderData/CreateFiles`;
     const filesToUpload = files;
     setFiles([]);
 
-    const newQueueItems = filesToUpload.map((file) => ({
-      id: `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-      file,
-      name: file.name,
-      size: file.size,
-      progress: 0,
-      status: "uploading",
-      folderId: folderIdAtUploadTime,
-    }));
-
-    addUploadItems(newQueueItems);
-
-    const CONCURRENCY = 3;
-    let cursor = 0;
-    const results = [];
-
-    const runNext = async () => {
-      if (cursor >= newQueueItems.length) return;
-      const item = newQueueItems[cursor++];
-      const result = await uploadSingleFileInBackground(item, folderIdAtUploadTime);
-      results.push(result);
-      await runNext();
+    const uploader = async (item, { signal, onProgress }) => {
+      const formData = new FormData();
+      formData.append("Files", item.file);
+      formData.append("FolderId", folderIdAtUploadTime);
+      formData.append("CreatedBy", createdBy);
+      if (behalfStorageUserId) formData.append("StoregeUserId", behalfStorageUserId);
+      try {
+        const response = await axios.post(uploadUrl, formData, {
+          signal,
+          headers: { "Content-Type": "multipart/form-data" },
+          onUploadProgress: (e) => onProgress(e.loaded, e.total || item.size),
+        });
+        return response.data.success
+          ? { success: true }
+          : { success: false, message: response.data.message };
+      } catch (error) {
+        if (axios.isCancel(error)) return { success: false, cancelled: true };
+        return { success: false, message: error.response?.data?.message || "Upload failed" };
+      }
     };
 
-    const workerCount = Math.min(CONCURRENCY, newQueueItems.length);
-    await Promise.all(Array.from({ length: workerCount }, runNext));
-
-    const successCount = results.filter((r) => r.success).length;
-    const failedCount = results.length - successCount;
-
-    if (successCount > 0) {
-      toast.success(
-        failedCount > 0
-          ? `${successCount} file(s) uploaded successfully, ${failedCount} failed`
-          : "Files uploaded successfully"
-      );
-    }
-    if (failedCount > 0 && successCount === 0) {
-      toast.error("Failed to upload files");
-    }
-
-    // Auto-refresh only if the user is still viewing the folder that was uploaded to
-    if (currentFolderIdRef.current === folderIdAtUploadTime) {
-      fetchFolders(folderIdAtUploadTime);
-    }
-    fetchStorageData();
+    enqueueUploads(
+      filesToUpload.map((file) => ({
+        id: `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+        file,
+        name: file.name,
+        size: file.size,
+        folderId: folderIdAtUploadTime,
+        destination,
+      })),
+      uploader,
+      {
+        onAllDone: (results) => {
+          const ok = results.filter((r) => r.success).length;
+          const failed = results.filter((r) => !r.success && !r.cancelled).length;
+          if (ok > 0) {
+            toast.success(failed > 0 ? `${ok} file(s) uploaded, ${failed} failed` : "Files uploaded successfully");
+          } else if (failed > 0) {
+            toast.error("Failed to upload files");
+          }
+          if (currentFolderIdRef.current === folderIdAtUploadTime) fetchFolders(folderIdAtUploadTime);
+          fetchStorageData();
+        },
+      }
+    );
   };
 
 
@@ -1656,6 +1605,24 @@ const FolderCreation = () => {
           }));
 
         setShareUsers(filteredUserOptions);
+        // Department-wise sharing: group active users (excluding self) by their Division.
+        const deptMap = {};
+        response.data.data
+          .filter(
+            (u) =>
+              u.isActive &&
+              u.division &&
+              u.userID !== personalInfo.userID &&
+              u.userID !== userFilesUserID
+          )
+          .forEach((u) => {
+            (deptMap[u.division] = deptMap[u.division] || []).push(u.userID);
+          });
+        setDepartmentGroups(
+          Object.keys(deptMap)
+            .sort()
+            .map((name) => ({ name, userIds: deptMap[name] }))
+        );
       } else {
         console.error("Failed to fetch users:", response.data.message);
         forModal ? setModalUsers([]) : setUsers([]);
@@ -1693,8 +1660,9 @@ const FolderCreation = () => {
       title={props.data.isCohort ? getCohortMemberTooltip(props.data.userIds) : undefined}
     >
       <i
-        className={`fas ${props.data.isCohort ? "fa-users" : "fa-user-plus"}`}
-        style={{ marginRight: 10 }}
+        className={`fas ${props.data.isDepartment ? "fa-building" : props.data.isCohort ? "fa-users" : "fa-user-plus"
+          }`}
+        style={{ marginRight: 10, color: "#0078d4" }}
       ></i>
       {props.data.label}
     </div>
@@ -1856,11 +1824,22 @@ const FolderCreation = () => {
     isCohort: true,
     userIds: group.userIds || [],
   }));
-  const cohortOptionValues = cohortOptions.map((o) => o.value);
+
+  // Department-wise sharing: one option per Division. Reuses the cohort mechanism
+  // (isCohort + userIds), which handleShare() already expands into individual users.
+  const departmentOptions = departmentGroups.map((d) => ({
+    value: `dept-${d.name}`,
+    label: `${d.name} (Department - ${d.userIds.length} users)`,
+    isCohort: true,
+    isDepartment: true,
+    userIds: d.userIds,
+  }));
+  const cohortOptionValues = [...cohortOptions, ...departmentOptions].map((o) => o.value);
 
   const allOptions = [
     { value: "select-all", label: "Select All" },
     ...cohortOptions,
+    ...departmentOptions,
     ...shareUsers,
   ];
 
@@ -2926,6 +2905,29 @@ const FolderCreation = () => {
                                 </button>
                               </MenuItem>
                             )}
+                            {(roleName === "Administrator" || roleName === "Global Admin") &&
+                              activeTab !== "shared" &&
+                              (item.fileId || item.folderId) && (
+                                <MenuItem>
+                                  <button
+                                    className="dropdown-item"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const isFile = item.docType === "Document" || (!!item.fileId && !!item.folderId && item.docType !== "Folder");
+                                      setAssignProjectItem({
+                                        docType: isFile ? "Document" : "Folder",
+                                        id: isFile ? item.fileId : item.folderId,
+                                        name: item.fileName || item.foldeOrFileName || item.folderName,
+                                      });
+                                      setTimeout(() => {
+                                        document.activeElement.blur();
+                                      }, 0);
+                                    }}
+                                  >
+                                    Assign to Project
+                                  </button>
+                                </MenuItem>
+                              )}
                             <MenuItem>
                               <button
                                 className="dropdown-item"
@@ -3773,6 +3775,12 @@ const FolderCreation = () => {
           file={versionFileItem}
           onClose={() => setVersionFileItem(null)}
           onChanged={() => fetchFolders(currentFolderId)}
+        />
+      )}
+      {assignProjectItem && (
+        <AssignProjectModal
+          item={assignProjectItem}
+          onClose={() => setAssignProjectItem(null)}
         />
       )}
     </>

@@ -1,8 +1,7 @@
 using DDAAPI.DbContexts;
 using DDAAPI.Services;
 using DDAAPI.Controllers;
-using DDAAPI.Services;
-using DDAAPI.Services;
+using DDAAPI.Hubs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.EntityFrameworkCore;
@@ -32,7 +31,9 @@ builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<SearchService>();
 builder.Services.AddScoped <CommentService>();
 builder.Services.AddScoped<FileVersionService>();
+builder.Services.AddScoped<ProjectService>(); 
 builder.Services.AddHttpClient();
+builder.Services.AddSignalR();
 // Using this for MSSQL
 builder.Services.AddDbContext<AppDbContext>(item => item.UseSqlServer(configuration.GetConnectionString("myconn")));
 
@@ -57,6 +58,16 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     {
         options.RequireHttpsMetadata = false;
         options.SaveToken = true;
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = ctx =>
+            {
+                var token = ctx.Request.Query["access_token"];
+                if (!string.IsNullOrEmpty(token) && ctx.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+                    ctx.Token = token;
+                return Task.CompletedTask;
+            }
+        };
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,
@@ -150,6 +161,7 @@ app.UseStaticFiles();
 app.UseRouting();
 
 app.MapControllers();
+app.MapHub<CollabHub>("/hubs/collab");
 
 app.Run();
 

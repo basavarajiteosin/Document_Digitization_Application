@@ -52,6 +52,9 @@ namespace DDAAPI.DbContexts
         public DbSet<DocComment> DocComments { get; set; }
         public DbSet<DocReview> DocReviews { get; set; }
         public DbSet<FileVersion> FileVersions { get; set; }
+        public DbSet<Project> Projects { get; set; }
+        public DbSet<ProjectMember> ProjectMembers { get; set; }
+        public DbSet<ProjectItem> ProjectItems { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<RoleAppMap>(

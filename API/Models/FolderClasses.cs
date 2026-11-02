@@ -433,6 +433,8 @@ namespace DDAAPI.Models
 
         public int CurrentVersion { get; set; } = 1;
         public string? VersionNote { get; set; }
+        public string? CheckedOutBy { get; set; }
+        public DateTime? CheckedOutOn { get; set; }
 
     }
 

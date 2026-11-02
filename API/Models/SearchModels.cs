@@ -12,6 +12,23 @@ namespace DDAAPI.Models
         public DateTime? ToDate { get; set; }
         public int Page { get; set; } = 1;
         public int PageSize { get; set; } = 10;
+        public string? SortBy { get; set; } = "created";  // relevance | name | created | size | type
+        public string? SortDir { get; set; } = "desc";    // asc | desc
+        public string? Owner { get; set; } = "All";       // All | Me | Others
+        public double? MinSizeMB { get; set; }
+        public double? MaxSizeMB { get; set; }
+    }
+
+    public class SearchFacetDTO
+    {
+        public string Key { get; set; } = "";
+        public int Count { get; set; }
+    }
+
+    public class TagCountDTO
+    {
+        public string Tag { get; set; } = "";
+        public int Count { get; set; }
     }
 
     public class SearchResultItemDTO
@@ -40,6 +57,9 @@ namespace DDAAPI.Models
         public int Page { get; set; }
         public int PageSize { get; set; }
         public int TotalPages { get; set; }
+        public int FolderCount { get; set; }
+        public int FileCount { get; set; }
+        public List<SearchFacetDTO> Extensions { get; set; } = new();
     }
 
     public class SetFolderTagsDTO

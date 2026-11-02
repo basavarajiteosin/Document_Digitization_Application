@@ -58,7 +58,7 @@ const App = () => {
                 <div className="content-wrapper">
                   <AppRoutes />
                 </div>
-                <Footer />
+                {/* <Footer /> */}
                 <ToastContainer
                   position="top-center"
                   autoClose={1500}

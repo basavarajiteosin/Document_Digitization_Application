@@ -1,37 +1,89 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import axios from "axios";
 import { toast } from "react-toastify";
+import "./search.css";
 
 const config = require("../../services/config.json");
+const API = `${config.DDA_API_API_URL}Search/`;
 
-const emptyFilters = { docType: "All", extension: "", tag: "", fromDate: "", toDate: "" };
+const emptyFilters = {
+  docType: "All", extension: "", tag: "", owner: "All",
+  fromDate: "", toDate: "", minSizeMB: "", maxSizeMB: "",
+};
 
 const formatSize = (bytes) => {
   if (bytes === null || bytes === undefined) return "-";
-  if (bytes >= 1024 * 1024 * 1024) return (bytes / (1024 * 1024 * 1024)).toFixed(2) + " GB";
-  if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(2) + " MB";
-  if (bytes >= 1024) return (bytes / 1024).toFixed(2) + " KB";
-  return bytes + " Bytes";
+  if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(2) + " GB";
+  if (bytes >= 1048576) return (bytes / 1048576).toFixed(2) + " MB";
+  if (bytes >= 1024) return (bytes / 1024).toFixed(1) + " KB";
+  return bytes + " B";
 };
+
+const fmtDate = (d) => {
+  if (!d) return "-";
+  const dt = new Date(d);
+  return dt.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+};
+
+// SharePoint-like file type icons/colours
+const TYPE_STYLE = {
+  pdf: ["fa-file-pdf", "#d13438"], doc: ["fa-file-word", "#2b579a"], docx: ["fa-file-word", "#2b579a"],
+  xls: ["fa-file-excel", "#217346"], xlsx: ["fa-file-excel", "#217346"], csv: ["fa-file-csv", "#217346"],
+  ppt: ["fa-file-powerpoint", "#c43e1c"], pptx: ["fa-file-powerpoint", "#c43e1c"],
+  png: ["fa-file-image", "#038387"], jpg: ["fa-file-image", "#038387"], jpeg: ["fa-file-image", "#038387"],
+  gif: ["fa-file-image", "#038387"], zip: ["fa-file-archive", "#8a6d00"], rar: ["fa-file-archive", "#8a6d00"],
+  txt: ["fa-file-alt", "#605e5c"],
+};
+const iconFor = (item) =>
+  item.docType === "Folder"
+    ? ["fa-folder", item.folderColor && /^#|rgb/i.test(item.folderColor) ? item.folderColor : "#e3a008"]
+    : TYPE_STYLE[item.extension] || ["fa-file", "#8a8886"];
+
+const initials = (n) =>
+  (n || "?").split(" ").filter(Boolean).slice(0, 2).map((x) => x[0].toUpperCase()).join("") || "?";
+
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const Highlight = ({ text, terms }) => {
+  if (!text || !terms.length) return <>{text}</>;
+  const re = new RegExp(`(${terms.map(escapeRe).join("|")})`, "ig");
+  return (
+    <>
+      {String(text).split(re).map((part, i) =>
+        i % 2 === 1 ? <mark key={i} className="sps-hl">{part}</mark> : <React.Fragment key={i}>{part}</React.Fragment>
+      )}
+    </>
+  );
+};
+
+const SORTS = { name: "Name", created: "Created", size: "Size", type: "Type" };
 
 const SearchDocuments = () => {
   const [searchParams] = useSearchParams();
   const urlQuery = searchParams.get("q") || "";
 
   const [query, setQuery] = useState(urlQuery);
-  const [filters, setFilters] = useState(emptyFilters);
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [applied, setApplied] = useState({ q: urlQuery, ...emptyFilters, page: 1 });
-  const [results, setResults] = useState({ items: [], totalCount: 0, totalPages: 0 });
+  const [draft, setDraft] = useState(emptyFilters);          // refiner pane values (applied with "Apply")
+  const [applied, setApplied] = useState({ q: urlQuery, ...emptyFilters, sortBy: "created", sortDir: "desc", page: 1 });
+  const [results, setResults] = useState({ items: [], totalCount: 0, totalPages: 0, folderCount: 0, fileCount: 0, extensions: [] });
   const [loading, setLoading] = useState(false);
+  const [popularTags, setPopularTags] = useState([]);
+  const [tagModal, setTagModal] = useState(null); // { item, tags: [], input: "" }
+  const [savingTags, setSavingTags] = useState(false);
   const requestSeq = useRef(0);
 
-  // Header search box changes ?q= -> re-run the search
   useEffect(() => {
     setQuery(urlQuery);
-    setApplied((prev) => ({ ...prev, q: urlQuery, page: 1 }));
+    setApplied((p) => ({ ...p, q: urlQuery, page: 1 }));
   }, [urlQuery]);
+
+  const loadTags = useCallback(async () => {
+    try {
+      const res = await axios.get(`${API}Tags`);
+      if (res.data.success) setPopularTags(res.data.data || []);
+    } catch (e) { /* suggestions are optional */ }
+  }, []);
+  useEffect(() => { loadTags(); }, [loadTags]);
 
   useEffect(() => {
     const run = async () => {
@@ -39,24 +91,19 @@ const SearchDocuments = () => {
       setLoading(true);
       try {
         const params = {
-          query: applied.q,
-          docType: applied.docType,
-          extension: applied.extension,
-          tag: applied.tag,
-          fromDate: applied.fromDate,
-          toDate: applied.toDate,
-          page: applied.page,
-          pageSize: 10,
+          query: applied.q, docType: applied.docType, extension: applied.extension, tag: applied.tag,
+          owner: applied.owner, fromDate: applied.fromDate, toDate: applied.toDate,
+          minSizeMB: applied.minSizeMB, maxSizeMB: applied.maxSizeMB,
+          sortBy: applied.sortBy, sortDir: applied.sortDir, page: applied.page, pageSize: 10,
         };
-        Object.keys(params).forEach((k) => params[k] === "" && delete params[k]);
-
-        const response = await axios.get(`${config.DDA_API_API_URL}Search/Documents`, { params });
-        if (seq !== requestSeq.current) return; // stale response
-        if (response.data.success) setResults(response.data.data);
-        else toast.error(response.data.message || "Search failed");
-      } catch (error) {
+        Object.keys(params).forEach((k) => (params[k] === "" || params[k] === undefined) && delete params[k]);
+        const res = await axios.get(`${API}Documents`, { params });
         if (seq !== requestSeq.current) return;
-        toast.error(error.response?.data?.message || "Error while searching");
+        if (res.data.success) setResults(res.data.data);
+        else toast.error(res.data.message || "Search failed");
+      } catch (e) {
+        if (seq !== requestSeq.current) return;
+        toast.error(e.response?.data?.message || "Error while searching");
       } finally {
         if (seq === requestSeq.current) setLoading(false);
       }
@@ -64,22 +111,67 @@ const SearchDocuments = () => {
     run();
   }, [applied]);
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    setApplied({ q: query.trim(), ...filters, page: 1 });
+  const terms = useMemo(
+    () => applied.q.split(" ").map((t) => t.trim()).filter(Boolean).slice(0, 6),
+    [applied.q]
+  );
+
+  const apply = (patch = {}, nextDraft) => {
+    const d = nextDraft || draft;
+    setApplied((p) => ({ ...p, q: query.trim(), ...d, ...patch, page: 1 }));
   };
 
-  const handleReset = () => {
+  const submit = (e) => { e.preventDefault(); apply(); };
+
+  const setDraftAndApply = (patch) => {
+    const d = { ...draft, ...patch };
+    setDraft(d);
+    apply({}, d);
+  };
+
+  const validateAndApply = () => {
+    if (draft.fromDate && draft.toDate && draft.toDate < draft.fromDate)
+      return toast.error("'Created to' cannot be before 'Created from'.");
+    if (draft.minSizeMB !== "" && draft.maxSizeMB !== "" && Number(draft.maxSizeMB) < Number(draft.minSizeMB))
+      return toast.error("Maximum size cannot be less than minimum size.");
+    if ((draft.minSizeMB !== "" && Number(draft.minSizeMB) < 0) || (draft.maxSizeMB !== "" && Number(draft.maxSizeMB) < 0))
+      return toast.error("Size cannot be negative.");
+    apply();
+  };
+
+  const resetAll = () => {
     setQuery("");
-    setFilters(emptyFilters);
-    setApplied({ q: "", ...emptyFilters, page: 1 });
+    setDraft(emptyFilters);
+    setApplied({ q: "", ...emptyFilters, sortBy: "created", sortDir: "desc", page: 1 });
   };
 
-  const goToPage = (p) => setApplied((prev) => ({ ...prev, page: p }));
+  const toggleSort = (col) =>
+    setApplied((p) => ({
+      ...p, sortBy: col, page: 1,
+      sortDir: p.sortBy === col ? (p.sortDir === "asc" ? "desc" : "asc") : col === "name" || col === "type" ? "asc" : "desc",
+    }));
 
+  const activeChips = [
+    applied.docType !== "All" && ["docType", applied.docType === "Folder" ? "Folders" : "Files"],
+    applied.extension && ["extension", `.${applied.extension.replace(/^\./, "")}`],
+    applied.tag && ["tag", `Tag: ${applied.tag}`],
+    applied.owner !== "All" && ["owner", applied.owner === "Me" ? "Created by me" : "Created by others"],
+    applied.fromDate && ["fromDate", `From ${applied.fromDate}`],
+    applied.toDate && ["toDate", `To ${applied.toDate}`],
+    applied.minSizeMB !== "" && ["minSizeMB", `≥ ${applied.minSizeMB} MB`],
+    applied.maxSizeMB !== "" && ["maxSizeMB", `≤ ${applied.maxSizeMB} MB`],
+  ].filter(Boolean);
+
+  const removeChip = (key) => {
+    const d = { ...draft, [key]: emptyFilters[key] };
+    setDraft(d);
+    setApplied((p) => ({ ...p, [key]: emptyFilters[key], page: 1 }));
+  };
+
+  /* ---------- actions ---------- */
   const handleView = (item) => {
     if (!item.serverPath) return toast.error("No file path available");
-    window.open(item.serverPath, "_blank");
+    window.open(item.serverPath, "_blank", "noopener");
   };
 
   const handleDownload = (item) => {
@@ -88,232 +180,326 @@ const SearchDocuments = () => {
         ? `${config.DDA_API_API_URL}FolderData/DownloadFolder?folderId=${item.id}`
         : `${config.DDA_API_API_URL}FolderData/DownloadFile?fileId=${item.id}`;
     const a = document.createElement("a");
-    a.href = url;
-    a.target = "_self";
-    a.download = "";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    a.href = url; a.target = "_self"; a.download = "";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
   };
 
-  const handleEditTags = async (item) => {
-    const input = window.prompt("Tags (comma separated, max 10):", item.tags || "");
-    if (input === null) return;
+  const openTagModal = (item) =>
+    setTagModal({ item, tags: item.tags ? item.tags.split(",").filter(Boolean) : [], input: "" });
+
+  const addTagsFromInput = (modal, raw) => {
+    const incoming = raw.split(",").map((t) => t.trim().toLowerCase().slice(0, 30)).filter(Boolean);
+    const merged = Array.from(new Set([...modal.tags, ...incoming]));
+    if (merged.length > 10) toast.warn("Maximum 10 tags allowed.");
+    return { ...modal, tags: merged.slice(0, 10), input: "" };
+  };
+
+  const saveTags = async () => {
+    const m = addTagsFromInput(tagModal, tagModal.input);
+    setSavingTags(true);
     try {
-      const response = await axios.post(`${config.DDA_API_API_URL}Search/SetFolderTags`, {
-        folderId: item.id,
-        tags: input,
-      });
-      if (response.data.success) {
+      const res = await axios.post(`${API}SetFolderTags`, { folderId: m.item.id, tags: m.tags.join(",") });
+      if (res.data.success) {
         toast.success("Tags updated");
         setResults((prev) => ({
           ...prev,
           items: prev.items.map((i) =>
-            i.docType === "Folder" && i.id === item.id ? { ...i, tags: response.data.data || null } : i
-          ),
+            i.docType === "Folder" && i.id === m.item.id ? { ...i, tags: res.data.data || null } : i),
         }));
-      } else {
-        toast.error(response.data.message || "Failed to update tags");
-      }
-    } catch (error) {
-      toast.error(error.response?.data?.message || "Error updating tags");
+        setTagModal(null);
+        loadTags();
+      } else toast.error(res.data.message || "Failed to update tags");
+    } catch (e) {
+      toast.error(e.response?.data?.message || "Error updating tags");
+    } finally {
+      setSavingTags(false);
     }
   };
 
+  const tabs = [
+    ["All", "All", results.folderCount + results.fileCount],
+    ["Document", "Files", results.fileCount],
+    ["Folder", "Folders", results.folderCount],
+  ];
+
+  const sortArrow = (col) =>
+    applied.sortBy === col ? <i className={`fas fa-arrow-${applied.sortDir === "asc" ? "up" : "down"}`} style={{ fontSize: 10 }} /> : null;
+
   return (
     <section className="content scroll-content">
-      <div className="container-fluid">
-        <div className="card card-primary card-outline">
-          <div className="card-header">
-            <h3 className="card-title text-sm">Search Files and Folders</h3>
+      <div className="sp-search-page">
+        {/* search bar */}
+        <form onSubmit={submit} role="search" className="d-flex" style={{ gap: 8 }}>
+          <div className="sps-bar flex-grow-1">
+            <i className="fas fa-search" />
+            <input
+              type="search"
+              aria-label="Search keywords"
+              placeholder="Search by file name, folder name or tag"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              autoFocus
+            />
+            {query && (
+              <button type="button" className="sps-clear" aria-label="Clear" onClick={() => setQuery("")}>
+                <i className="fas fa-times" />
+              </button>
+            )}
           </div>
+          <button type="submit" className="sps-btn">Search</button>
+        </form>
 
-          <form onSubmit={handleSubmit}>
-            <div className="card-body text-sm">
-              <div className="form-row">
-                <div className="form-group col-md-8">
-                  <input
-                    type="text"
-                    className="form-control form-control-sm"
-                    placeholder="Keywords in file name, folder name or tags"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                  />
-                </div>
-                <div className="form-group col-md-4">
-                  <button type="submit" className="btn btn-primary btn-sm mr-2">Search</button>
-                  <button type="button" className="btn btn-outline-primary btn-sm mr-2" onClick={handleReset}>
-                    Reset
-                  </button>
+        {/* type tabs with live counts */}
+        <div className="sps-tabs" role="tablist">
+          {tabs.map(([key, label, n]) => (
+            <button
+              key={key} type="button" role="tab" aria-selected={applied.docType === key}
+              className={`sps-tab ${applied.docType === key ? "active" : ""}`}
+              onClick={() => setDraftAndApply({ docType: key, extension: key === "Folder" ? "" : draft.extension })}
+            >
+              {label}<span className="n">{n}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="sps-layout">
+          {/* refiners */}
+          <aside className="sps-refine" aria-label="Refine results">
+            {results.extensions.length > 0 && (
+              <>
+                <h6>File type</h6>
+                {results.extensions.map((x) => (
                   <button
-                    type="button"
-                    className="btn btn-default btn-sm"
-                    onClick={() => setShowAdvanced((v) => !v)}
+                    key={x.key} type="button"
+                    className={`sps-facet ${applied.extension === x.key ? "active" : ""}`}
+                    onClick={() => setDraftAndApply({ extension: applied.extension === x.key ? "" : x.key, docType: applied.docType === "Folder" ? "All" : applied.docType })}
                   >
-                    {showAdvanced ? "Hide filters" : "More filters"}
+                    <span>.{x.key}</span><span className="c">{x.count}</span>
                   </button>
-                </div>
+                ))}
+              </>
+            )}
+
+            <h6>Created by</h6>
+            {[["All", "Anyone"], ["Me", "Me"], ["Others", "Others"]].map(([v, l]) => (
+              <label key={v} className="sps-radio">
+                <input type="radio" name="owner" checked={draft.owner === v} onChange={() => setDraftAndApply({ owner: v })} />
+                {l}
+              </label>
+            ))}
+
+            <h6>Created date</h6>
+            <label htmlFor="sps-from">From</label>
+            <input id="sps-from" type="date" className="sps-input" value={draft.fromDate}
+              onChange={(e) => setDraft({ ...draft, fromDate: e.target.value })} />
+            <label htmlFor="sps-to">To</label>
+            <input id="sps-to" type="date" className="sps-input" min={draft.fromDate} value={draft.toDate}
+              onChange={(e) => setDraft({ ...draft, toDate: e.target.value })} />
+
+            <h6>File size (MB)</h6>
+            <div className="sps-row">
+              <input type="number" min="0" step="any" className="sps-input" placeholder="Min" value={draft.minSizeMB}
+                onChange={(e) => setDraft({ ...draft, minSizeMB: e.target.value })} aria-label="Minimum size in MB" />
+              <input type="number" min="0" step="any" className="sps-input" placeholder="Max" value={draft.maxSizeMB}
+                onChange={(e) => setDraft({ ...draft, maxSizeMB: e.target.value })} aria-label="Maximum size in MB" />
+            </div>
+
+            <h6>Tag</h6>
+            <input type="text" className="sps-input mb-2" placeholder="Type a tag" maxLength={30} value={draft.tag}
+              onChange={(e) => setDraft({ ...draft, tag: e.target.value })} aria-label="Tag" />
+            {popularTags.length > 0 && (
+              <div className="sps-tagcloud">
+                {popularTags.slice(0, 12).map((t) => (
+                  <button
+                    key={t.tag} type="button"
+                    className={`sps-pill ${applied.tag === t.tag ? "active" : ""}`}
+                    onClick={() => setDraftAndApply({ tag: applied.tag === t.tag ? "" : t.tag })}
+                  >
+                    {t.tag} <small>{t.count}</small>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="d-flex mt-3" style={{ gap: 8 }}>
+              <button type="button" className="sps-btn flex-grow-1" onClick={validateAndApply}>Apply</button>
+              <button type="button" className="sps-btn ghost" onClick={resetAll}>Reset</button>
+            </div>
+          </aside>
+
+          {/* results */}
+          <div className="sps-main">
+            <div className="sps-summary">
+              <span aria-live="polite">
+                {loading ? "Searching…" : (
+                  <>
+                    <strong>{results.totalCount}</strong> result{results.totalCount === 1 ? "" : "s"}
+                    {applied.q && <> for “{applied.q}”</>}
+                  </>
+                )}
+              </span>
+              <span>
+                Sort by{" "}
+                <select
+                  className="sps-input d-inline-block" style={{ width: 120 }} aria-label="Sort by"
+                  value={applied.sortBy} onChange={(e) => toggleSort(e.target.value) || undefined}
+                >
+                  {Object.entries(SORTS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                </select>
+                <button type="button" className="sps-act" title="Toggle sort direction"
+                  onClick={() => setApplied((p) => ({ ...p, sortDir: p.sortDir === "asc" ? "desc" : "asc", page: 1 }))}>
+                  <i className={`fas fa-sort-amount-${applied.sortDir === "asc" ? "up" : "down"}`} />
+                </button>
+              </span>
+            </div>
+
+            {activeChips.length > 0 && (
+              <div className="sps-chips">
+                {activeChips.map(([key, label]) => (
+                  <span key={key} className="sps-chip">
+                    {label}
+                    <button type="button" aria-label={`Remove ${label}`} onClick={() => removeChip(key)}>×</button>
+                  </span>
+                ))}
+                <button type="button" className="sps-clear" onClick={resetAll} style={{ fontSize: 12 }}>Clear all</button>
+              </div>
+            )}
+
+            <div className="sps-list">
+              <div className="sps-head" role="row">
+                <button type="button" className="sps-sort" onClick={() => toggleSort("name")}>Name {sortArrow("name")}</button>
+                <span>Location</span>
+                <button type="button" className="sps-sort" onClick={() => toggleSort("size")}>Size {sortArrow("size")}</button>
+                <span>Created by</span>
+                <button type="button" className="sps-sort" onClick={() => toggleSort("created")}>Created {sortArrow("created")}</button>
+                <span />
               </div>
 
-              {showAdvanced && (
-                <div className="form-row">
-                  <div className="form-group col-md-2">
-                    <label>Type</label>
-                    <select
-                      className="form-control form-control-sm"
-                      value={filters.docType}
-                      onChange={(e) => setFilters({ ...filters, docType: e.target.value })}
-                    >
-                      <option value="All">All</option>
-                      <option value="Folder">Folders</option>
-                      <option value="Document">Files</option>
-                    </select>
-                  </div>
-                  <div className="form-group col-md-2">
-                    <label>File extension</label>
-                    <input
-                      type="text"
-                      className="form-control form-control-sm"
-                      placeholder="e.g. pdf"
-                      value={filters.extension}
-                      onChange={(e) => setFilters({ ...filters, extension: e.target.value })}
-                    />
-                  </div>
-                  <div className="form-group col-md-3">
-                    <label>Tag</label>
-                    <input
-                      type="text"
-                      className="form-control form-control-sm"
-                      placeholder="e.g. finance"
-                      value={filters.tag}
-                      onChange={(e) => setFilters({ ...filters, tag: e.target.value })}
-                    />
-                  </div>
-                  <div className="form-group col-md-2">
-                    <label>Created from</label>
-                    <input
-                      type="date"
-                      className="form-control form-control-sm"
-                      value={filters.fromDate}
-                      onChange={(e) => setFilters({ ...filters, fromDate: e.target.value })}
-                    />
-                  </div>
-                  <div className="form-group col-md-2">
-                    <label>Created to</label>
-                    <input
-                      type="date"
-                      className="form-control form-control-sm"
-                      min={filters.fromDate}
-                      value={filters.toDate}
-                      onChange={(e) => setFilters({ ...filters, toDate: e.target.value })}
-                    />
-                  </div>
+              {loading && results.items.length === 0 &&
+                [0, 1, 2, 3, 4].map((i) => <div key={i} className="sps-skel" />)}
+
+              {!loading && results.items.length === 0 && (
+                <div className="sps-empty">
+                  <div className="big"><i className="fas fa-search" /></div>
+                  <h5>No results found</h5>
+                  <div>Check the spelling, try fewer keywords, or clear some filters.</div>
+                  {(activeChips.length > 0 || applied.q) && (
+                    <button type="button" className="sps-btn ghost mt-3" onClick={resetAll}>Clear search and filters</button>
+                  )}
                 </div>
               )}
-            </div>
-          </form>
 
-          <div className="card-body text-sm pt-0" style={{ overflowX: "auto" }}>
-            <p className="text-muted mb-2">
-              {loading ? "Searching..." : `${results.totalCount} result(s)`}
-            </p>
-            <table className="table table-bordered table-sm">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Location</th>
-                  <th>Tags</th>
-                  <th>Type</th>
-                  <th>Size</th>
-                  <th>Owner</th>
-                  <th>Created</th>
-                  <th style={{ width: "14%" }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {results.items.length === 0 ? (
-                  <tr>
-                    <td colSpan="8" className="text-center">
-                      {loading ? "Loading..." : "No matching files or folders found."}
-                    </td>
-                  </tr>
-                ) : (
-                  results.items.map((item) => (
-                    <tr key={`${item.docType}-${item.id}`}>
-                      <td>
-                        <i className={`fas ${item.docType === "Folder" ? "fa-folder" : "fa-file"} mr-2`}></i>
-                        {item.name}
-                        {item.isHide && <span className="badge badge-secondary ml-2">Hidden</span>}
-                      </td>
-                      <td>{item.location}</td>
-                      <td>
-                        {item.tags
-                          ? item.tags.split(",").map((t) => (
-                              <span key={t} className="badge badge-info mr-1">{t}</span>
-                            ))
-                          : "-"}
-                      </td>
-                      <td>{item.docType === "Folder" ? "Folder" : (item.extension || "File").toUpperCase()}</td>
-                      <td>{item.docType === "Folder" ? "-" : formatSize(item.size)}</td>
-                      <td title={item.source}>{item.createdByName}</td>
-                      <td>{new Date(item.createdOn).toLocaleString()}</td>
-                      <td>
+              <div style={{ opacity: loading && results.items.length ? 0.55 : 1, transition: "opacity .15s" }}>
+                {results.items.map((item) => {
+                  const [ico, color] = iconFor(item);
+                  const tags = item.tags ? item.tags.split(",").filter(Boolean) : [];
+                  return (
+                    <div key={`${item.docType}-${item.id}`} className="sps-item" role="row">
+                      <div className="sps-name">
+                        <span className="sps-ico" style={{ background: color }}><i className={`fas ${ico}`} /></span>
+                        <div style={{ minWidth: 0 }}>
+                          <div className="sps-title" title={item.name}>
+                            {item.docType === "Document"
+                              ? <button type="button" onClick={() => handleView(item)}><Highlight text={item.name} terms={terms} /></button>
+                              : <Highlight text={item.name} terms={terms} />}
+                            {item.isHide && <span className="sps-hide">Hidden</span>}
+                          </div>
+                          <div className="sps-sub">
+                            {item.docType === "Folder" ? "Folder" : (item.extension || "file").toUpperCase()} · {item.source}
+                            {tags.map((t) => (
+                              <span key={t} className="sps-pill static ml-1" style={{ fontSize: 11, padding: "0 7px" }}>
+                                <Highlight text={t} terms={terms} />
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="sps-loc" title={item.location}>{item.location}</div>
+                      <div className="sps-meta-hide">{item.docType === "Folder" ? "—" : formatSize(item.size)}</div>
+                      <div className="sps-by sps-meta-hide" title={item.createdByName}>
+                        <span className="sps-av">{initials(item.createdByName)}</span>
+                        <span className="sps-loc">{item.createdByName}</span>
+                      </div>
+                      <div className="sps-meta-hide">{fmtDate(item.createdOn)}</div>
+                      <div className="sps-actions">
                         {item.docType === "Document" && (
-                          <button
-                            type="button"
-                            className="btn btn-xs btn-outline-primary mr-1"
-                            title="View"
-                            onClick={() => handleView(item)}
-                          >
-                            <i className="fas fa-eye"></i>
+                          <button type="button" className="sps-act" title="Open" aria-label={`Open ${item.name}`} onClick={() => handleView(item)}>
+                            <i className="fas fa-external-link-alt" />
                           </button>
                         )}
-                        <button
-                          type="button"
-                          className="btn btn-xs btn-outline-primary mr-1"
-                          title="Download"
-                          onClick={() => handleDownload(item)}
-                        >
-                          <i className="fas fa-download"></i>
+                        <button type="button" className="sps-act" title="Download" aria-label={`Download ${item.name}`} onClick={() => handleDownload(item)}>
+                          <i className="fas fa-download" />
                         </button>
                         {item.docType === "Folder" && item.canEditTags && (
-                          <button
-                            type="button"
-                            className="btn btn-xs btn-outline-primary"
-                            title="Edit tags"
-                            onClick={() => handleEditTags(item)}
-                          >
-                            <i className="fas fa-tag"></i>
+                          <button type="button" className="sps-act" title="Edit tags" aria-label={`Edit tags of ${item.name}`} onClick={() => openTagModal(item)}>
+                            <i className="fas fa-tag" />
                           </button>
                         )}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
 
             {results.totalPages > 1 && (
-              <div className="d-flex justify-content-center align-items-center">
-                <button
-                  className="btn btn-sm btn-default mr-2"
-                  disabled={applied.page <= 1}
-                  onClick={() => goToPage(applied.page - 1)}
-                >
-                  Previous
-                </button>
+              <div className="sps-pager">
+                <button type="button" className="sps-btn ghost" disabled={applied.page <= 1}
+                  onClick={() => setApplied((p) => ({ ...p, page: p.page - 1 }))}>Previous</button>
                 <span>Page {applied.page} of {results.totalPages}</span>
-                <button
-                  className="btn btn-sm btn-default ml-2"
-                  disabled={applied.page >= results.totalPages}
-                  onClick={() => goToPage(applied.page + 1)}
-                >
-                  Next
-                </button>
+                <button type="button" className="sps-btn ghost" disabled={applied.page >= results.totalPages}
+                  onClick={() => setApplied((p) => ({ ...p, page: p.page + 1 }))}>Next</button>
               </div>
             )}
           </div>
         </div>
+
+        {/* tag editor */}
+        {tagModal && (
+          <div className="sps-modal-bg" onMouseDown={(e) => e.target === e.currentTarget && setTagModal(null)}>
+            <div className="sps-modal" role="dialog" aria-modal="true" aria-label="Edit tags">
+              <header>Edit tags</header>
+              <div className="body">
+                <div className="sps-sub mb-2">{tagModal.item.name} — files inside this folder become searchable by these tags.</div>
+                <div className="sps-tagbox">
+                  {tagModal.tags.map((t) => (
+                    <span key={t} className="sps-pill active">
+                      {t}
+                      <button type="button" aria-label={`Remove ${t}`}
+                        style={{ border: 0, background: "transparent", color: "inherit", padding: 0, cursor: "pointer" }}
+                        onClick={() => setTagModal({ ...tagModal, tags: tagModal.tags.filter((x) => x !== t) })}>×</button>
+                    </span>
+                  ))}
+                  <input
+                    autoFocus maxLength={30} placeholder={tagModal.tags.length ? "" : "Type a tag and press Enter"}
+                    value={tagModal.input}
+                    onChange={(e) => setTagModal({ ...tagModal, input: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === ",") { e.preventDefault(); setTagModal(addTagsFromInput(tagModal, tagModal.input)); }
+                      else if (e.key === "Backspace" && !tagModal.input && tagModal.tags.length)
+                        setTagModal({ ...tagModal, tags: tagModal.tags.slice(0, -1) });
+                    }}
+                  />
+                </div>
+                <small className="text-muted">Up to 10 tags, 30 characters each.</small>
+                {popularTags.length > 0 && (
+                  <div className="sps-tagcloud mt-2">
+                    {popularTags.filter((t) => !tagModal.tags.includes(t.tag)).slice(0, 8).map((t) => (
+                      <button key={t.tag} type="button" className="sps-pill"
+                        onClick={() => setTagModal(addTagsFromInput(tagModal, t.tag))}>+ {t.tag}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <footer>
+                <button type="button" className="sps-btn ghost" onClick={() => setTagModal(null)}>Cancel</button>
+                <button type="button" className="sps-btn" disabled={savingTags} onClick={saveTags}>
+                  {savingTags ? "Saving…" : "Save"}
+                </button>
+              </footer>
+            </div>
+          </div>
+        )}
       </div>
     </section>
   );

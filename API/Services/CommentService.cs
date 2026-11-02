@@ -1,5 +1,7 @@
 using DDAAPI.DbContexts;
 using DDAAPI.Models;
+using DDAAPI.Hubs;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
 namespace DDAAPI.Services
@@ -18,7 +20,8 @@ namespace DDAAPI.Services
     public class CommentService
     {
         private readonly AppDbContext _db;
-        public CommentService(AppDbContext db) { _db = db; }
+        private readonly IHubContext<CollabHub> _hub;
+        public CommentService(AppDbContext db, IHubContext<CollabHub> hub) { _db = db; _hub = hub; }
 
         private sealed class Actor
         {
@@ -167,6 +170,15 @@ namespace DDAAPI.Services
             _db.DocComments.Add(entity);
             await _db.SaveChangesAsync();
             Log.DataLog(a.Uid, $"{a.Name} commented on {t} ID {dto.FolderOrFileId}", "Comments Log");
+            if (t == "Document")
+            {
+                try
+                {
+                    await _hub.Clients.Group(CollabHub.Group(dto.FolderOrFileId))
+                        .SendAsync("CommentsChanged", new { fileId = dto.FolderOrFileId, byUserId = a.Uid, byName = a.Name });
+                }
+                catch { }
+            }
             return entity.CommentId;
         }
 
@@ -270,9 +282,9 @@ namespace DDAAPI.Services
             var ru = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.UserID == rid && u.IsActive)
                      ?? throw new ArgumentException("Reviewer not found or inactive.");
             var reviewer = await BuildActorAsync(ru);
-            if (!await CanAccessAsync(reviewer, t, dto.FolderOrFileId))
-                throw new ArgumentException("The selected reviewer has no access to this item. Share it with them first.");
-
+            var participants = await ParticipantIdsAsync(t, dto.FolderOrFileId);
+            if (!participants.ContainsKey(reviewer.Uid) && !reviewer.IsGA)
+                throw new ArgumentException("Reviews can only be sent to the owner or users this item is shared with.");
             if (await _db.DocReviews.AnyAsync(r => r.FolderOrFileId == dto.FolderOrFileId && r.DocType == t
                                                   && r.ReviewerId == reviewer.Uid && r.Status == "Pending"))
                 throw new ArgumentException("This reviewer already has a pending review for this item.");
@@ -336,6 +348,67 @@ namespace DDAAPI.Services
             r.Status = "Cancelled"; r.ReviewedOn = DateTime.Now;
             await _db.SaveChangesAsync();
             return true;
+        }
+
+        // uid -> "Owner" | "Shared". Owner = creator/authorized user of the item or any parent folder.
+        // Shared = active share on the item or any parent folder.
+        private async Task<Dictionary<string, string>> ParticipantIdsAsync(string docType, int id)
+        {
+            var map = new Dictionary<string, string>();
+            void Add(string? uid, string role)
+            {
+                if (string.IsNullOrWhiteSpace(uid) || !Guid.TryParse(uid, out var g)) return;
+                var k = g.ToString().ToLower();
+                if (role == "Owner" || !map.ContainsKey(k)) map[k] = role;
+            }
+
+            int folderId;
+            if (docType == "Document")
+            {
+                var f = await _db.FileData.AsNoTracking().FirstOrDefaultAsync(x => x.FileId == id)
+                        ?? throw new KeyNotFoundException("Item not found.");
+                Add(f.CreatedBy, "Owner");
+                folderId = f.FolderId;
+                var fileShares = await _db.ShareDocAccess.AsNoTracking()
+                    .Where(s => s.IsActive && s.DocType == "Document" && s.FolderOrFileId == id)
+                    .Select(s => s.AccessUserId).ToListAsync();
+                foreach (var g in fileShares) Add(g.ToString(), "Shared");
+            }
+            else folderId = id;
+
+            var chain = new List<int>(); var cur = folderId; var guard = 0;
+            while (cur != 0 && guard++ < 25)
+            {
+                var n = await _db.FolderData.AsNoTracking().Where(x => x.FolderId == cur)
+                    .Select(x => new { x.ParentFolderId, x.CreatedBy, x.AuthorizedUserId }).FirstOrDefaultAsync();
+                if (n == null) break;
+                chain.Add(cur); Add(n.CreatedBy, "Owner"); Add(n.AuthorizedUserId, "Owner");
+                cur = n.ParentFolderId ?? 0;
+            }
+            if (docType == "Folder" && chain.Count == 0) throw new KeyNotFoundException("Item not found.");
+
+            var folderShares = await _db.ShareDocAccess.AsNoTracking()
+                .Where(s => s.IsActive && s.DocType == "Folder" && chain.Contains(s.FolderOrFileId))
+                .Select(s => s.AccessUserId).ToListAsync();
+            foreach (var g in folderShares) Add(g.ToString(), "Shared");
+            return map;
+        }
+
+        public async Task<List<ParticipantDTO>> GetParticipantsAsync(string? emp, string? docType, int id)
+        {
+            var a = await ResolveAsync(emp); var t = NormType(docType);
+            await EnsureAccessAsync(a, t, id);
+            var map = await ParticipantIdsAsync(t, id);
+            map.Remove(a.Uid);
+            var guids = map.Keys.Select(Guid.Parse).ToList();
+            var users = await _db.Users.AsNoTracking().Where(u => guids.Contains(u.UserID) && u.IsActive)
+                .Select(u => new { u.UserID, u.Email }).ToListAsync();
+            var names = await NamesAsync(map.Keys);
+            return users.Select(u =>
+            {
+                var k = u.UserID.ToString().ToLower();
+                return new ParticipantDTO { UserId = k, Name = NameOf(names, k), Email = u.Email ?? "", Role = map[k] };
+            }).OrderBy(p => p.Role != "Owner").ThenBy(p => p.Name).ToList();
         }
     }
 }

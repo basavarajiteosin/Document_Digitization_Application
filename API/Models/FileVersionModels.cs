@@ -24,6 +24,7 @@ namespace DDAAPI.Models
         public int FileId { get; set; }
         public IFormFile File { get; set; } = null!;
         public string? Note { get; set; }
+        public int? ExpectedVersion { get; set; }
     }
 
     public class FileVersionDTO
@@ -44,6 +45,12 @@ namespace DDAAPI.Models
         public string FileName { get; set; } = "";
         public int CurrentVersion { get; set; }
         public bool CanUpload { get; set; }
+        public bool CanCheckOut { get; set; }
+        public bool IsLocked { get; set; }
+        public bool LockedByMe { get; set; }
+        public string? LockedByName { get; set; }
+        public DateTime? LockedOn { get; set; }
+        public bool CanForceRelease { get; set; }
         public List<FileVersionDTO> Versions { get; set; } = new();
     }
 }

@@ -1,5 +1,7 @@
 ﻿using DDAAPI.DbContexts;
 using DDAAPI.Models;
+using DDAAPI.Hubs;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
 namespace DDAAPI.Services
@@ -14,10 +16,11 @@ namespace DDAAPI.Services
         private readonly AppDbContext _db;
         private readonly IConfiguration _cfg;
         private readonly IReportService _report;
+        private readonly IHubContext<CollabHub> _hub;
 
-        public FileVersionService(AppDbContext db, IConfiguration cfg, IReportService report)
+        public FileVersionService(AppDbContext db, IConfiguration cfg, IReportService report, IHubContext<CollabHub> hub)
         {
-            _db = db; _cfg = cfg; _report = report;
+            _db = db; _cfg = cfg; _report = report; _hub = hub;
         }
 
         private static bool Eq(string? a, string b) => a != null && a.Equals(b, StringComparison.OrdinalIgnoreCase);
@@ -100,9 +103,47 @@ namespace DDAAPI.Services
             };
         }
 
+        // Used by the SignalR hub: verifies the user can view the file, returns identity for presence.
+        public async Task<(string UserId, string Name)> GetViewerAsync(string? emp, int fileId)
+        {
+            var (u, ga) = await ResolveAsync(emp);
+            var f = await _db.FileData.AsNoTracking().FirstOrDefaultAsync(x => x.FileId == fileId && x.IsActive)
+                    ?? throw new HubException("File not found.");
+            var (view, _) = await AccessAsync(u, ga, f);
+            if (!view) throw new HubException("You do not have access to this file.");
+            var uid = u.UserID.ToString().ToLower();
+            var names = await NamesAsync(new[] { uid });
+            return (uid, NameOf(names, uid));
+        }
+
+        // Pushes a live event to everyone currently viewing the file. Never breaks the main operation.
+        private async Task NotifyAsync(FileData f, string action, string uid, string message)
+        {
+            try
+            {
+                var names = await NamesAsync(new[] { uid });
+                await _hub.Clients.Group(CollabHub.Group(f.FileId)).SendAsync("FileChanged", new
+                {
+                    fileId = f.FileId,
+                    action,
+                    byUserId = uid.ToLower(),
+                    byName = NameOf(names, uid),
+                    version = f.CurrentVersion,
+                    message
+                });
+            }
+            catch { }
+        }
+
+        private static void EnsureNotLockedByOther(FileData f, string uid)
+        {
+            if (!string.IsNullOrEmpty(f.CheckedOutBy) && !Eq(f.CheckedOutBy, uid))
+                throw new ArgumentException("This file is checked out by another user. Ask them to check it in first.");
+        }
         public async Task<FileVersionListDTO> ListAsync(string? emp, int fileId)
         {
             var (u, ga) = await ResolveAsync(emp);
+            var uid = u.UserID.ToString();
             var f = await _db.FileData.AsNoTracking().FirstOrDefaultAsync(x => x.FileId == fileId && x.IsActive)
                     ?? throw new KeyNotFoundException("File not found.");
             var (view, write) = await AccessAsync(u, ga, f);
@@ -110,14 +151,24 @@ namespace DDAAPI.Services
 
             var rows = await _db.FileVersions.AsNoTracking().Where(v => v.FileId == fileId)
                 .OrderByDescending(v => v.VersionNumber).ToListAsync();
-            var names = await NamesAsync(rows.Select(r => r.CreatedBy).Append(f.ModifiedBy ?? f.CreatedBy));
+            var names = await NamesAsync(rows.Select(r => r.CreatedBy)
+                .Append(f.ModifiedBy ?? f.CreatedBy).Append(f.CheckedOutBy));
+
+            var locked = !string.IsNullOrEmpty(f.CheckedOutBy);
+            var mine = locked && Eq(f.CheckedOutBy, uid);
 
             var result = new FileVersionListDTO
             {
                 FileId = f.FileId,
                 FileName = f.FileName,
                 CurrentVersion = f.CurrentVersion,
-                CanUpload = write
+                CanUpload = write && (!locked || mine),
+                CanCheckOut = write && !locked,
+                IsLocked = locked,
+                LockedByMe = mine,
+                LockedByName = locked ? NameOf(names, f.CheckedOutBy) : null,
+                LockedOn = f.CheckedOutOn,
+                CanForceRelease = locked && !mine && ga
             };
             result.Versions.Add(new FileVersionDTO
             {
@@ -152,6 +203,10 @@ namespace DDAAPI.Services
             var (_, write) = await AccessAsync(u, ga, f);
             if (!write) throw new FileVersionForbiddenException("You do not have permission to upload a new version.");
 
+            EnsureNotLockedByOther(f, uid);
+            if (dto.ExpectedVersion.HasValue && dto.ExpectedVersion.Value != f.CurrentVersion)
+                throw new ArgumentException($"Someone else saved a newer version (v{f.CurrentVersion}) while you were working. Reopen Version History and try again.");
+
             if (dto.File == null || dto.File.Length == 0) throw new ArgumentException("Please choose a file.");
             var oldExt = Path.GetExtension(f.FileName);
             if (!string.Equals(oldExt, Path.GetExtension(dto.File.FileName), StringComparison.OrdinalIgnoreCase))
@@ -178,10 +233,12 @@ namespace DDAAPI.Services
             f.VersionNote = note.Length == 0 ? null : note;
             f.ModifiedOn = DateTime.Now;
             f.ModifiedBy = uid;
+            if (Eq(f.CheckedOutBy, uid)) { f.CheckedOutBy = null; f.CheckedOutOn = null; } // upload = check in
             await _db.SaveChangesAsync();
 
             await TouchFolderAsync(f, uid, $"File '{f.FileName}' new version v{f.CurrentVersion}");
             Log.DataLog(uid, $"New version v{f.CurrentVersion} uploaded for file '{f.FileName}' (ID {f.FileId})", "File Version Log");
+            await NotifyAsync(f, "uploaded", uid, $"uploaded v{f.CurrentVersion}");
             return f.CurrentVersion;
         }
 
@@ -195,6 +252,9 @@ namespace DDAAPI.Services
                     ?? throw new KeyNotFoundException("File not found.");
             var (_, write) = await AccessAsync(u, ga, f);
             if (!write) throw new FileVersionForbiddenException("You do not have permission to restore versions.");
+
+            EnsureNotLockedByOther(f, uid);
+
             if (!File.Exists(v.StoredPath)) throw new Exception("The stored version file is missing on the server.");
 
             _db.FileVersions.Add(Archive(f));
@@ -209,7 +269,46 @@ namespace DDAAPI.Services
 
             await TouchFolderAsync(f, uid, $"File '{f.FileName}' restored to v{v.VersionNumber} content (now v{f.CurrentVersion})");
             Log.DataLog(uid, $"File '{f.FileName}' (ID {f.FileId}) restored from v{v.VersionNumber}", "File Version Log");
+            await NotifyAsync(f, "restored", uid, $"restored an older version (now v{f.CurrentVersion})");
             return f.CurrentVersion;
+        }
+
+        public async Task<bool> CheckOutAsync(string? emp, int fileId)
+        {
+            var (u, ga) = await ResolveAsync(emp);
+            var uid = u.UserID.ToString();
+            var f = await _db.FileData.FirstOrDefaultAsync(x => x.FileId == fileId && x.IsActive)
+                    ?? throw new KeyNotFoundException("File not found.");
+            var (_, write) = await AccessAsync(u, ga, f);
+            if (!write) throw new FileVersionForbiddenException("You need write access to check out this file.");
+            if (!string.IsNullOrEmpty(f.CheckedOutBy))
+            {
+                if (Eq(f.CheckedOutBy, uid)) return true; // already yours
+                throw new ArgumentException("This file is already checked out by another user.");
+            }
+            f.CheckedOutBy = uid;
+            f.CheckedOutOn = DateTime.Now;
+            await _db.SaveChangesAsync();
+            Log.DataLog(uid, $"File '{f.FileName}' (ID {f.FileId}) checked out", "File Version Log");
+            await NotifyAsync(f, "checkedout", uid, "checked out this file");
+            return true;
+        }
+
+        public async Task<bool> ReleaseAsync(string? emp, int fileId)
+        {
+            var (u, ga) = await ResolveAsync(emp);
+            var uid = u.UserID.ToString();
+            var f = await _db.FileData.FirstOrDefaultAsync(x => x.FileId == fileId && x.IsActive)
+                    ?? throw new KeyNotFoundException("File not found.");
+            if (string.IsNullOrEmpty(f.CheckedOutBy)) return true;
+            if (!(ga || Eq(f.CheckedOutBy, uid)))
+                throw new FileVersionForbiddenException("Only the person who checked out this file (or a Global Admin) can release it.");
+            f.CheckedOutBy = null;
+            f.CheckedOutOn = null;
+            await _db.SaveChangesAsync();
+            Log.DataLog(uid, $"File '{f.FileName}' (ID {f.FileId}) check-out released", "File Version Log");
+            await NotifyAsync(f, "released", uid, "released the check-out");
+            return true;
         }
 
         public async Task<(string Path, string Name)> GetVersionFileAsync(string? emp, int versionId)

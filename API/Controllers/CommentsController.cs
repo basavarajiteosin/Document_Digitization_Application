@@ -69,5 +69,9 @@ namespace DDAAPI.Controllers
         [HttpPost("CancelReview/{reviewId}")]
         public Task<IActionResult> CancelReview(int reviewId) =>
             Run(() => _svc.CancelReviewAsync(Emp, reviewId), "Review cancelled");
+
+        [HttpGet("Participants")]
+        public Task<IActionResult> Participants([FromQuery] string docType, [FromQuery] int id) =>
+    Run(() => _svc.GetParticipantsAsync(Emp, docType, id));
     }
 }

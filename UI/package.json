@@ -5,6 +5,7 @@
   "private": true,
   "dependencies": {
     "@azure/msal-browser": "^3.28.1",
+    "@microsoft/signalr": "^10.0.11",
     "@react-pdf/renderer": "^4.0.0",
     "@reduxjs/toolkit": "^2.2.3",
     "@szhsin/react-menu": "^4.2.2",
