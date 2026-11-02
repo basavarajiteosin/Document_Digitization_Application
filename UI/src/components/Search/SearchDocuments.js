@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import { toast } from "react-toastify";
+import FileVersionsModal from "../FileVersions/FileVersionsModal";
 import "./search.css";
 
 const config = require("../../services/config.json");
@@ -56,10 +57,38 @@ const Highlight = ({ text, terms }) => {
   );
 };
 
+// Mirrors the API query syntax: words, "exact phrases", tag:x ext:x by:x (operators are not highlighted)
+const parseTerms = (q) => {
+  const out = [];
+  const re = /\w+:(?:"[^"]+"|\S+)|"([^"]+)"|(\S+)/g;
+  let m;
+  while ((m = re.exec(q || "")) !== null) {
+    if (m[1]) out.push(m[1]);
+    else if (m[2] && !/^(tag|ext|type|by|owner):/i.test(m[2])) out.push(m[2]);
+  }
+  return out.slice(0, 6);
+};
+
+const RECENT_KEY = "dda.recentSearches";
+const readRecents = () => {
+  try { return JSON.parse(localStorage.getItem(RECENT_KEY) || "[]").slice(0, 6); } catch (e) { return []; }
+};
+const writeRecents = (list) => {
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(list)); } catch (e) { /* storage optional */ }
+};
+const TIPS = [
+  ['"purchase order"', "Exact phrase"],
+  ["tag:finance", "Has tag"],
+  ["ext:pdf", "File type"],
+  ["by:john", "Created by"],
+];
+
 const SORTS = { name: "Name", created: "Created", size: "Size", type: "Type" };
 
 const SearchDocuments = () => {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const [versionItem, setVersionItem] = useState(null);
   const urlQuery = searchParams.get("q") || "";
 
   const [query, setQuery] = useState(urlQuery);
@@ -71,6 +100,22 @@ const SearchDocuments = () => {
   const [tagModal, setTagModal] = useState(null); // { item, tags: [], input: "" }
   const [savingTags, setSavingTags] = useState(false);
   const requestSeq = useRef(0);
+  const [focused, setFocused] = useState(false);
+  const [recents, setRecents] = useState(readRecents);
+  const barRef = useRef(null);
+
+  useEffect(() => {
+    const close = (e) => barRef.current && !barRef.current.contains(e.target) && setFocused(false);
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, []);
+
+  const remember = (q) => {
+    if (!q) return;
+    const next = [q, ...recents.filter((r) => r !== q)].slice(0, 6);
+    setRecents(next);
+    writeRecents(next);
+  };
 
   useEffect(() => {
     setQuery(urlQuery);
@@ -111,17 +156,21 @@ const SearchDocuments = () => {
     run();
   }, [applied]);
 
-  const terms = useMemo(
-    () => applied.q.split(" ").map((t) => t.trim()).filter(Boolean).slice(0, 6),
-    [applied.q]
-  );
+  const terms = useMemo(() => parseTerms(applied.q), [applied.q]);
 
   const apply = (patch = {}, nextDraft) => {
     const d = nextDraft || draft;
     setApplied((p) => ({ ...p, q: query.trim(), ...d, ...patch, page: 1 }));
   };
 
-  const submit = (e) => { e.preventDefault(); apply(); };
+  const submit = (e) => { e.preventDefault(); setFocused(false); remember(query.trim()); apply(); };
+
+  const runQuery = (q) => {
+    setQuery(q);
+    setFocused(false);
+    remember(q);
+    setApplied((p) => ({ ...p, q, page: 1 }));
+  };
 
   const setDraftAndApply = (patch) => {
     const d = { ...draft, ...patch };
@@ -184,8 +233,45 @@ const SearchDocuments = () => {
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
   };
 
-  const openTagModal = (item) =>
-    setTagModal({ item, tags: item.tags ? item.tags.split(",").filter(Boolean) : [], input: "" });
+  // open a folder (or a file's location) in the main library view, with full breadcrumb
+  const openLocation = (item, { parent = false } = {}) => {
+    let path = item.path || [];
+    if (parent) path = path.slice(0, -1);
+    if (path.length === 0) {
+      if (parent || item.docType === "Folder") {
+        if (item.docType === "Folder" && !parent) return toast.error("You don't have a navigable path to this folder.");
+        navigate("/dashboard");   // top level
+        return;
+      }
+      return toast.error("This item was shared directly with you, so its folder isn't browsable.");
+    }
+    const last = path[path.length - 1];
+    const p = new URLSearchParams({
+      openFolderId: String(last.folderId),
+      folderName: last.folderName,
+      tab: item.navTab || "current",
+      crumbs: JSON.stringify(path),
+    });
+    if (item.navAccessType) p.set("accessType", String(item.navAccessType));
+    if (item.navOwnerId) p.set("ownerId", item.navOwnerId);
+    navigate(`/dashboard?${p.toString()}`);
+  };
+
+  const copyLink = async (item) => {
+    const base = `${window.location.origin}${window.location.pathname.replace(/\/search$|\/dashboard$/, "")}`;
+    const url = item.docType === "Folder" || item.path?.length
+      ? `${base}/dashboard?openFolderId=${item.containerFolderId}&folderName=${encodeURIComponent(item.path?.slice(-1)[0]?.folderName || "Folder")}`
+      : window.location.href;
+    try { await navigator.clipboard.writeText(url); toast.success("Link copied"); }
+    catch (e) { toast.info(url); }
+  };
+
+  const openItem = (item) => (item.docType === "Folder" ? openLocation(item) : handleView(item));
+
+  const openTagModal = (item) => {
+    const own = item.docType === "Document" ? item.ownTags : item.tags;
+    setTagModal({ item, tags: own ? own.split(",").filter(Boolean) : [], input: "" });
+  };
 
   const addTagsFromInput = (modal, raw) => {
     const incoming = raw.split(",").map((t) => t.trim().toLowerCase().slice(0, 30)).filter(Boolean);
@@ -198,16 +284,12 @@ const SearchDocuments = () => {
     const m = addTagsFromInput(tagModal, tagModal.input);
     setSavingTags(true);
     try {
-      const res = await axios.post(`${API}SetFolderTags`, { folderId: m.item.id, tags: m.tags.join(",") });
+      const res = await axios.post(`${API}SetTags`, { docType: m.item.docType, id: m.item.id, tags: m.tags.join(",") });
       if (res.data.success) {
         toast.success("Tags updated");
-        setResults((prev) => ({
-          ...prev,
-          items: prev.items.map((i) =>
-            i.docType === "Folder" && i.id === m.item.id ? { ...i, tags: res.data.data || null } : i),
-        }));
         setTagModal(null);
         loadTags();
+        setApplied((p) => ({ ...p }));   // refresh results (files also show inherited tags)
       } else toast.error(res.data.message || "Failed to update tags");
     } catch (e) {
       toast.error(e.response?.data?.message || "Error updating tags");
@@ -230,20 +312,51 @@ const SearchDocuments = () => {
       <div className="sp-search-page">
         {/* search bar */}
         <form onSubmit={submit} role="search" className="d-flex" style={{ gap: 8 }}>
-          <div className="sps-bar flex-grow-1">
-            <i className="fas fa-search" />
-            <input
-              type="search"
-              aria-label="Search keywords"
-              placeholder="Search by file name, folder name or tag"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              autoFocus
-            />
-            {query && (
-              <button type="button" className="sps-clear" aria-label="Clear" onClick={() => setQuery("")}>
-                <i className="fas fa-times" />
-              </button>
+          <div className="sps-barwrap flex-grow-1" ref={barRef}>
+            <div className="sps-bar">
+              <i className="fas fa-search" />
+              <input
+                type="search"
+                aria-label="Search keywords"
+                placeholder='Search files, folders, tags or people  —  try tag:finance ext:pdf by:john'
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onFocus={() => setFocused(true)}
+                onKeyDown={(e) => e.key === "Escape" && setFocused(false)}
+                maxLength={200}
+                autoFocus
+              />
+              {query && (
+                <button type="button" className="sps-clear" aria-label="Clear" onClick={() => setQuery("")}>
+                  <i className="fas fa-times" />
+                </button>
+              )}
+            </div>
+            {focused && (
+              <div className="sps-suggest" role="listbox">
+                {recents.length > 0 && (
+                  <>
+                    <div className="sps-sg-h">
+                      Recent
+                      <button type="button" className="sps-clear" onClick={() => { setRecents([]); writeRecents([]); }}>Clear</button>
+                    </div>
+                    {recents.map((r) => (
+                      <button key={r} type="button" className="sps-sg-i" role="option" onClick={() => runQuery(r)}>
+                        <i className="fas fa-history" /> {r}
+                      </button>
+                    ))}
+                  </>
+                )}
+                <div className="sps-sg-h">Search tips</div>
+                <div className="sps-sg-tips">
+                  {TIPS.map(([t, d]) => (
+                    <button key={t} type="button" className="sps-sg-tip"
+                      onClick={() => setQuery((q) => (q.trim() ? q.trim() + " " : "") + t)}>
+                      <code>{t}</code><span>{d}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
           <button type="submit" className="sps-btn">Search</button>
@@ -399,9 +512,10 @@ const SearchDocuments = () => {
                         <span className="sps-ico" style={{ background: color }}><i className={`fas ${ico}`} /></span>
                         <div style={{ minWidth: 0 }}>
                           <div className="sps-title" title={item.name}>
-                            {item.docType === "Document"
-                              ? <button type="button" onClick={() => handleView(item)}><Highlight text={item.name} terms={terms} /></button>
-                              : <Highlight text={item.name} terms={terms} />}
+                            <button type="button" onClick={() => openItem(item)}
+                              title={item.docType === "Folder" ? "Open folder" : "Open file"}>
+                              <Highlight text={item.name} terms={terms} />
+                            </button>
                             {item.isHide && <span className="sps-hide">Hidden</span>}
                           </div>
                           <div className="sps-sub">
@@ -414,7 +528,13 @@ const SearchDocuments = () => {
                           </div>
                         </div>
                       </div>
-                      <div className="sps-loc" title={item.location}>{item.location}</div>
+                      <div className="sps-loc" title={item.location}>
+                        {item.path?.length > 0 || item.docType === "Folder" ? (
+                          <button type="button" className="sps-link" onClick={() => openLocation(item, { parent: item.docType === "Folder" })}>
+                            {item.location}
+                          </button>
+                        ) : item.location}
+                      </div>
                       <div className="sps-meta-hide">{item.docType === "Folder" ? "—" : formatSize(item.size)}</div>
                       <div className="sps-by sps-meta-hide" title={item.createdByName}>
                         <span className="sps-av">{initials(item.createdByName)}</span>
@@ -422,17 +542,33 @@ const SearchDocuments = () => {
                       </div>
                       <div className="sps-meta-hide">{fmtDate(item.createdOn)}</div>
                       <div className="sps-actions">
-                        {item.docType === "Document" && (
-                          <button type="button" className="sps-act" title="Open" aria-label={`Open ${item.name}`} onClick={() => handleView(item)}>
-                            <i className="fas fa-external-link-alt" />
+                        <button type="button" className="sps-act" title={item.docType === "Folder" ? "Open folder" : "Open file"}
+                          aria-label={`Open ${item.name}`} onClick={() => openItem(item)}>
+                          <i className={`fas ${item.docType === "Folder" ? "fa-folder-open" : "fa-external-link-alt"}`} />
+                        </button>
+                        {item.docType === "Document" && item.path?.length > 0 && (
+                          <button type="button" className="sps-act" title="Open file location" aria-label={`Open location of ${item.name}`}
+                            onClick={() => openLocation(item)}>
+                            <i className="fas fa-folder-tree" />
                           </button>
                         )}
                         <button type="button" className="sps-act" title="Download" aria-label={`Download ${item.name}`} onClick={() => handleDownload(item)}>
                           <i className="fas fa-download" />
                         </button>
-                        {item.docType === "Folder" && item.canEditTags && (
-                          <button type="button" className="sps-act" title="Edit tags" aria-label={`Edit tags of ${item.name}`} onClick={() => openTagModal(item)}>
+                        {item.canEditTags && (
+                          <button type="button" className="sps-act" title="Add / edit tags" aria-label={`Edit tags of ${item.name}`} onClick={() => openTagModal(item)}>
                             <i className="fas fa-tag" />
+                          </button>
+                        )}
+                        {item.docType === "Document" && (
+                          <button type="button" className="sps-act" title="Version history & co-authoring" aria-label={`Versions of ${item.name}`}
+                            onClick={() => setVersionItem({ id: item.id, name: item.name })}>
+                            <i className="fas fa-history" />
+                          </button>
+                        )}
+                        {item.path?.length > 0 && (
+                          <button type="button" className="sps-act" title="Copy link" aria-label={`Copy link to ${item.name}`} onClick={() => copyLink(item)}>
+                            <i className="fas fa-link" />
                           </button>
                         )}
                       </div>
@@ -454,13 +590,21 @@ const SearchDocuments = () => {
           </div>
         </div>
 
+        {versionItem && (
+          <FileVersionsModal
+            file={versionItem}
+            onClose={() => setVersionItem(null)}
+            onChanged={() => setApplied((p) => ({ ...p }))}
+          />
+        )}
+
         {/* tag editor */}
         {tagModal && (
           <div className="sps-modal-bg" onMouseDown={(e) => e.target === e.currentTarget && setTagModal(null)}>
             <div className="sps-modal" role="dialog" aria-modal="true" aria-label="Edit tags">
               <header>Edit tags</header>
               <div className="body">
-                <div className="sps-sub mb-2">{tagModal.item.name} — files inside this folder become searchable by these tags.</div>
+                <div className="sps-sub mb-2">{tagModal.item.name} — {tagModal.item.docType === "Folder" ? "files inside this folder become searchable by these tags." : "this file becomes searchable by these tags."}</div>
                 <div className="sps-tagbox">
                   {tagModal.tags.map((t) => (
                     <span key={t} className="sps-pill active">

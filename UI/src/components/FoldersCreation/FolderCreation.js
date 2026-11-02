@@ -2311,14 +2311,32 @@ const FolderCreation = () => {
       setActiveTab(tab);
       localStorage.setItem("activeTab", tab);
       localStorage.setItem("accessType", accessTypeParam || "");
-      setCurrentPath([
-        {
-          folderId: openId,
-          folderName: searchParams.get("folderName") || "Folder",
-          accessType: accessTypeParam,
-          ownerId: searchParams.get("ownerId") || null,
-        },
-      ]);
+      // optional full breadcrumb from Search: crumbs=[{folderId,folderName},...] (root -> openId)
+      let crumbs = [];
+      try {
+        const raw = searchParams.get("crumbs");
+        if (raw) crumbs = JSON.parse(raw);
+      } catch (e) { crumbs = []; }
+      const ownerParam = searchParams.get("ownerId") || null;
+      const validCrumbs =
+        Array.isArray(crumbs) && crumbs.length > 0 && Number(crumbs[crumbs.length - 1].folderId) === openId;
+      setCurrentPath(
+        validCrumbs
+          ? crumbs.map((c) => ({
+              folderId: Number(c.folderId),
+              folderName: c.folderName,
+              accessType: accessTypeParam,
+              ownerId: ownerParam,
+            }))
+          : [
+              {
+                folderId: openId,
+                folderName: searchParams.get("folderName") || "Folder",
+                accessType: accessTypeParam,
+                ownerId: ownerParam,
+              },
+            ]
+      );
       setCurrentFolderId(openId);
       localStorage.setItem("currentFolderId", String(openId));
       setFolders([]);

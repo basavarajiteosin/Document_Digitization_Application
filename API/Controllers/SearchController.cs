@@ -36,6 +36,30 @@ namespace DDAAPI.Controllers
             }
         }
 
+        // GET api/Search/Tags -> popular tags (with counts) for the filter pane
+        [HttpGet("Tags")]
+        public async Task<IActionResult> Tags()
+        {
+            try { return Ok(new { success = true, data = await _searchService.TagsAsync(User.Identity?.Name) }); }
+            catch (UnauthorizedAccessException ex) { return Unauthorized(new { success = false, message = ex.Message }); }
+            catch (Exception ex) { return BadRequest(new { success = false, message = ex.Message }); }
+        }
+
+        // POST api/Search/SetTags { docType: "Folder"|"Document", id, tags: "a,b" }
+        [HttpPost("SetTags")]
+        public async Task<IActionResult> SetTags([FromBody] SetTagsDTO dto)
+        {
+            try
+            {
+                var tags = await _searchService.SetTagsAsync(User.Identity?.Name, dto);
+                return Ok(new { success = true, message = "Tags updated", data = tags });
+            }
+            catch (SearchForbiddenException ex) { return StatusCode(403, new { success = false, message = ex.Message }); }
+            catch (UnauthorizedAccessException ex) { return Unauthorized(new { success = false, message = ex.Message }); }
+            catch (KeyNotFoundException ex) { return NotFound(new { success = false, message = ex.Message }); }
+            catch (Exception ex) { return BadRequest(new { success = false, message = ex.Message }); }
+        }
+
         [HttpPost("SetFolderTags")]
         public async Task<IActionResult> SetFolderTags([FromBody] SetFolderTagsDTO dto)
         {

@@ -435,6 +435,7 @@ namespace DDAAPI.Models
         public string? VersionNote { get; set; }
         public string? CheckedOutBy { get; set; }
         public DateTime? CheckedOutOn { get; set; }
+        public string? Tags { get; set; }   // comma separated, set from Advanced Search
 
     }
 

@@ -38,6 +38,7 @@ namespace DDAAPI.Models
         public string Name { get; set; } = "";
         public string Location { get; set; } = "";
         public string? Tags { get; set; }
+        public string? OwnTags { get; set; }   // tags set on the item itself (files also show inherited ones in Tags)
         public string? Extension { get; set; }
         public long? Size { get; set; }
         public string? CreatedById { get; set; }
@@ -48,6 +49,25 @@ namespace DDAAPI.Models
         public string? FolderColor { get; set; }
         public bool IsHide { get; set; }
         public bool CanEditTags { get; set; }
+        // navigation (open folder / open location)
+        public int ContainerFolderId { get; set; }                 // folder to open (itself for a folder, parent for a file)
+        public List<PathCrumbDTO> Path { get; set; } = new();     // breadcrumb root -> container
+        public string NavTab { get; set; } = "current";           // current | shared
+        public int? NavAccessType { get; set; }
+        public string? NavOwnerId { get; set; }
+    }
+
+    public class PathCrumbDTO
+    {
+        public int FolderId { get; set; }
+        public string FolderName { get; set; } = "";
+    }
+
+    public class SetTagsDTO
+    {
+        [Required] public string DocType { get; set; } = "Folder";   // Folder | Document
+        [Required] public int Id { get; set; }
+        public string? Tags { get; set; }
     }
 
     public class SearchResponseDTO
