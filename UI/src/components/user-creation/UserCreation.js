@@ -1,1068 +1,301 @@
-import React, { useRef, useEffect, useState, useLayoutEffect } from "react";
+import React, { useRef, useEffect, useState, useMemo } from "react";
 import { useSelector } from "react-redux";
-import { removeExtraSpaces } from "../../common/textOperations";
-import { isValidContact } from "../../common/validations";
 import { toast } from "react-toastify";
-import PleaseWaitButton from "../../shared/PleaseWaitButton";
 import axios from "axios";
 import Switch from "react-switch";
-import { useLoader } from '../../Customhook/LoaderContext';
-import countryCodes from '../../common/countryCodes.json';
-import $ from "jquery";
+import { FiPlus, FiEdit2, FiTrash2 } from "react-icons/fi";
+import { removeExtraSpaces } from "../../common/textOperations";
+import { useLoader } from "../../Customhook/LoaderContext";
+import countryCodes from "../../common/countryCodes.json";
+import DataGrid from "../../shared/DataGrid";
 
 const config = require("../../services/config.json");
+const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+
+const emptyForm = {
+  roleId: "", firstName: "", lastName: "", employeeId: "", email: "", password: "",
+  countryCode: "", contactNumber: "", designation: "", division: "", isActive: "true", address: "",
+};
 
 const UserCreation = () => {
-  const inputFirstNameReference = useRef(null);
-  const inputLastNameReference = useRef(null);
-  const inputDesignationReference = useRef(null);
-  const inputDivisionReference = useRef(null);
-
-  const inputEmployeeIdReference = useRef(null);
-  const inputEmailReference = useRef(null);
-  const inputRoleReference = useRef(null);
-  const inputPasswordReference = useRef(null);
-  const inputContactNumberReference = useRef(null);
-  const personalInfo = useSelector((state) => state.personalInformationReducer);
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [address, setAddress] = useState("");
-  const [employeeId, setemployeeId] = useState("");
-  const [userEmail, setUserEmail] = useState("");
-  const [roleId, setRoleId] = useState("");
-  const [password, setPassword] = useState("");
-  const [contactNumber, setContactNumber] = useState("");
-  const [designation, setdesignation] = useState("");
-  const [isLoaderActive, setIsLoaderActive] = useState(false);
-  const [allRolesList, setAllRolesList] = useState([]);
-  const [allUsersList, setAllUsersList] = useState([]);
-  const [updateOrDeleteId, setUpdateOrDeleteId] = useState("");
-  const [division, setDivision] = useState("");
-  const inputIsActiveReference = useRef(null);
-  const [isActive, setIsActive] = useState("");
-
-  const [countryCode, setCountryCode] = useState('');
-  // const [contactNumber, setContactNumber] = useState('');
-  // const inputContactNumberReference = useRef(null);
+  const personalInfo = useSelector((s) => s.personalInformationReducer);
   const { showLoader, hideLoader } = useLoader();
-  const passwordRegex =
-    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
 
+  const [form, setForm] = useState(emptyForm);
+  const [editId, setEditId] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [showPwd, setShowPwd] = useState(false);
+  const [users, setUsers] = useState([]);
+  const [roles, setRoles] = useState([]);
+  const [divisions, setDivisions] = useState([]);
   const [emailDomains, setEmailDomains] = useState([]);
-  const handleChange = (e) => {
-    const selectedCountry = countryCodes.find(country => country.name === e.target.value);
-    setCountryCode(selectedCountry ? selectedCountry.code : '');
-    setContactNumber(''); // Clear contact number when country changes
+  const [deleteUser, setDeleteUser] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const refs = useRef({});
+
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const reg = (k) => (el) => { refs.current[k] = el; };
+
+  const fail = (key, msg) => {
+    toast.error(msg);
+    refs.current[key]?.focus();
+    refs.current[key]?.classList.add("is-invalid");
+    return false;
   };
 
-  const [hasShownToast, setHasShownToast] = useState(false);
-  const handleContactNumberChange = (e) => {
-    const value = e.target.value;
-
-    if (/^\d*$/.test(value)) {
-      if (value.length <= 11) {
-        setContactNumber(value);
-        setHasShownToast(false);
-      } else if (value.length > 11 && !hasShownToast) {
-        toast.error("Contact number must not exceed 11 digits.");
-        setHasShownToast(true);
-      }
-    } else if (!hasShownToast) {
-      toast.error("Please enter a valid contact number (digits only).");
-      setHasShownToast(true);
-    }
+  const loadUsers = () => {
+    showLoader();
+    axios.get(`${config.DDA_API_API_URL}AuthMasterController/GetAllUsers?ClientId=${config.clientId}`, { headers: config.headers2 })
+      .then((r) => {
+        if (r.data.success === "success") setUsers(r.data.data || []);
+        else toast.error(r.data.message);
+      })
+      .catch(() => toast.error("Oops, something went wrong. Please try again later."))
+      .finally(hideLoader);
   };
-
-
-
-  const fetchEmailDomains = async () => {
-    window.initDestroyDataTableFuncation();
-    try {
-      const response = await axios.get(
-        `${config.DDA_API_API_URL}FieldMaster/GetAllEmailDomains`,
-        { headers: config.headers2 }
-      );
-      setEmailDomains(response.data.data);
-      setTimeout(() => {
-        window.initDataTableFuncation();
-      }, 1000);
-    } catch (error) {
-      toast.error("Error fetching email domains");
-      console.error("Error fetching email domains:", error);
-    }
-  };
-
 
   useEffect(() => {
-    getAllRolesList();
-    getUsersList();
-    fetchEmailDomains();
+    loadUsers();
+    axios.get(`${config.DDA_API_API_URL}AuthMasterController/GetAllRoles?ClientId=${config.clientId}`, { headers: config.headers2 })
+      .then((r) => r.data.success === "success" && setRoles([...(r.data.data || [])].sort((a, b) => a.roleName.localeCompare(b.roleName))))
+      .catch(() => toast.error("Failed to load roles"));
+    axios.get(`${config.DDA_API_API_URL}FieldMaster/GetAllDivisionMasters`, { headers: config.headers2 })
+      .then((r) => r.data.success && setDivisions([...r.data.data].sort((a, b) => a.description.localeCompare(b.description))))
+      .catch(() => {});
+    axios.get(`${config.DDA_API_API_URL}FieldMaster/GetAllEmailDomains`, { headers: config.headers2 })
+      .then((r) => setEmailDomains(r.data.data || []))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const isEmailDomainValid = (email) => {
-    const emailDomain = email.split('@')[1];
-    return emailDomains.some(domain => domain.domain === emailDomain);
+  const resetForm = () => { setForm(emptyForm); setEditId(""); setShowForm(false); setShowPwd(false); };
+
+  const handleContact = (e) => {
+    const v = e.target.value;
+    if (!/^\d*$/.test(v)) return toast.error("Please enter digits only.");
+    if (v.length > 11) return toast.error("Contact number must not exceed 11 digits.");
+    setForm((f) => ({ ...f, contactNumber: v }));
   };
 
-
-  const handleCancelClick = () => {
-    clearAllFields();
-    addProjectCardHeaderButtonClick();
+  const handleCountry = (e) => {
+    const c = countryCodes.find((x) => x.name === e.target.value);
+    setForm((f) => ({ ...f, countryCode: c ? c.code : "", contactNumber: "" }));
   };
 
-  const getUsersList = () => {
-    window.initDestroyDataTableFuncation();
-    showLoader();
-    axios
-      .get(
-        config.DDA_API_API_URL +
-        "AuthMasterController/GetAllUsers?ClientId=" +
-        config.clientId,
-        {
-          headers: config.headers2,
-        }
-      )
-      .then((response) => {
-        if (response.status == 200) {
-
-          if (response.data.success == "success") {
-            if (response.data.data.length > 0) {
-              setAllUsersList(response.data.data);
-              setTimeout(() => {
-                window.initDataTableFuncation();
-                hideLoader();
-              }, 1000);
-
-            }
-          } else {
-            toast.error(response.data.message);
-            setTimeout(() => {
-              window.initDataTableFuncation();
-            }, 1000);
-          }
-        } else if (response.data.status.status == 500) {
-          toast.error("Invalid username or password");
-          hideLoader()
-        }
-      })
-      .catch((error) => {
-        toast.error("oops something went wrong. please try again later.");
-        hideLoader()
-      });
-  };
-
-
-  const getAllRolesList = () => {
-    axios
-      .get(
-        config.DDA_API_API_URL +
-        "AuthMasterController/GetAllRoles?ClientId=" +
-        config.clientId,
-        {
-          headers: config.headers2,
-        }
-      )
-      .then((response) => {
-        if (response.status === 200) {
-
-          if (response.data.success === "success") {
-            if (response.data.data.length > 0) {
-              // Sort the roles alphabetically by role name
-              const sortedRoles = response.data.data.sort((a, b) => {
-                return a.roleName.localeCompare(b.roleName); // assuming the role name field is 'roleName'
-              });
-              setAllRolesList(sortedRoles);
-            }
-          } else {
-            toast.error(response.data.message);
-          }
-        } else if (response.data.status.status === 500) {
-          toast.error("Invalid username or password");
-        }
-      })
-      .catch((error) => {
-        toast.error("Oops, something went wrong. Please try again later.");
-      });
-  };
-
-  const addProjectCardHeaderButtonClick = () => {
-    $("#listOfProjectsHeaderExpandButtion").click();
-  };
-
-  const listOfProjectsHeaderExpandButtionClick = () => {
-    $("#AddNewHeaderButton").click();
-  };
-
-  const handleEditTaskDetails = (userObj) => {
-    const [countryCode, contactNumber] = userObj.contactNumber.split('-');
-
-    setemployeeId(userObj.employeeId);
-    setUserEmail(userObj.email);
-    setRoleId(userObj.roleID);
-    setPassword(userObj.password);
-    setContactNumber(contactNumber); // Set the extracted contact number
-    setCountryCode(countryCode); // Set the country code
-    setdesignation(userObj.designation);
-    setDivision(String(userObj.division ?? ""));
-    setUpdateOrDeleteId(userObj.userID);
-    setFirstName(userObj.firstName);
-    setLastName(userObj.lastName);
-    setAddress(userObj.address);
-    setIsActive(userObj.isActive);
-
-    listOfProjectsHeaderExpandButtionClick();
+  const handleEdit = (u) => {
+    const [cc, num] = (u.contactNumber || "").split("-");
+    setForm({
+      roleId: u.roleID, firstName: u.firstName || "", lastName: u.lastName || "", employeeId: u.employeeId || "",
+      email: u.email || "", password: u.password || "", countryCode: cc || "", contactNumber: num || "",
+      designation: u.designation || "", division: String(u.division ?? ""), isActive: String(u.isActive), address: u.address || "",
+    });
+    setEditId(u.userID);
+    setShowForm(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const handleRemoveUser = (userObj) => {
-    setUpdateOrDeleteId(userObj.userID);
-    window.confirmModalShow();
+  const validate = () => {
+    Object.values(refs.current).forEach((el) => el?.classList.remove("is-invalid"));
+    if (!form.roleId) return fail("roleId", "Please select role.");
+    if (!removeExtraSpaces(form.firstName)) return fail("firstName", "Please enter first name.");
+    if (!removeExtraSpaces(form.lastName)) return fail("lastName", "Please enter last name.");
+    if (!removeExtraSpaces(form.employeeId)) return fail("employeeId", "Please enter Employee Id.");
+    if (!removeExtraSpaces(form.email)) return fail("email", "Please enter email.");
+    const domain = form.email.split("@")[1];
+    if (!emailDomains.some((d) => d.domain === domain)) return fail("email", "Email domain is not valid.");
+    if (!form.password) return fail("password", "Please enter password.");
+    if (!passwordRegex.test(form.password))
+      return fail("password", "Password must be at least 8 characters with uppercase, lowercase, number and special character (@, $, !, %, *, ?, &).");
+    if (!form.contactNumber) return fail("contactNumber", "Please enter contact number.");
+    if (!removeExtraSpaces(form.designation)) return fail("designation", "Please enter designation.");
+    if (!removeExtraSpaces(form.division)) return fail("division", "Please select division.");
+    return true;
   };
 
-  const yesConfirmSubmitRequest = () => {
-    // setIsLoaderActive(true);
-    let APIMethodName =
-      "AuthMasterController/DeleteUser?ClientId=" +
-      config.clientId +
-      "&UserID=" +
-      updateOrDeleteId;
-    axios
-      .post(config.DDA_API_API_URL + APIMethodName, {
-        headers: config.headers2,
-      })
-      .then((response) => {
-
-        if (response.data.success == "success") {
-          toast.success("User deleted successfully...");
-          window.confirmModalHide();
-          clearAllFields();
-          getUsersList();
-          setIsLoaderActive(false);
-        } else {
-          setIsLoaderActive(false);
-          toast.error(response.data.message);
-        }
-      })
-      .catch((error) => {
-        if (!error.response.data.success) {
-          toast.error(error.response.data.message);
-        } else {
-          toast.error("oops something went wrong. please try again later.");
-        }
-        setIsLoaderActive(false);
-      });
-  };
-
-  const clearAllFields = () => {
-    setemployeeId("");
-    setUserEmail("");
-    setRoleId("");
-    setPassword("");
-    setContactNumber("");
-    setCountryCode("")
-    setdesignation("");
-    setDivision("");
-    setUpdateOrDeleteId("");
-
-    setFirstName("");
-    setLastName("");
-    setAddress("");
-    setIsActive("")
-
-    $("#inputDateOfBirthV").val("");
-    $("#joiningDateV").val("");
-  };
-
-  const handleUserSubmit = (e) => {
-    const formattedContactNumber = `${countryCode}-${contactNumber}`;
+  const handleSubmit = (e) => {
     e.preventDefault();
-
-    if (!roleId) {
-      toast.error("Please select role.");
-      inputRoleReference.current?.focus();
-      inputRoleReference.current?.classList.add("is-invalid");
-      return;
-    }
-
-    if (!removeExtraSpaces(firstName)) {
-      toast.error("Please enter first name.");
-      inputFirstNameReference.current?.focus();
-      inputFirstNameReference.current?.classList.add("is-invalid");
-      return;
-    }
-    if (!removeExtraSpaces(lastName)) {
-      toast.error("Please enter last name.");
-      inputLastNameReference.current?.focus();
-      inputLastNameReference.current?.classList.add("is-invalid");
-      return;
-    }
-    if (!removeExtraSpaces(employeeId)) {
-      toast.error("Please enter Employee Id.");
-      inputEmployeeIdReference.current?.focus();
-      inputEmployeeIdReference.current?.classList.add("is-invalid");
-      return;
-    }
-    if (!removeExtraSpaces(userEmail)) {
-      toast.error("Please enter email.");
-      inputEmailReference.current?.focus();
-      inputEmailReference.current?.classList.add("is-invalid");
-      return;
-    }
-    if (!isEmailDomainValid(userEmail)) {
-      toast.error("Email domain is not valid.");
-      inputEmailReference.current?.focus();
-      inputEmailReference.current?.classList.add("is-invalid");
-      return;
-    }
-
-    if (!password) { toast.error("Please enter password."); inputPasswordReference.current?.focus(); inputPasswordReference.current?.classList.add("is-invalid"); return; }
-
-    if (!passwordRegex.test(password)) { toast.error("Password must be at least 8 characters and contain uppercase, lowercase, number, and special character (@, $, !, %, *, ?, &)."); inputPasswordReference.current?.focus(); inputPasswordReference.current?.classList.add("is-invalid"); return; }
-
-    if (!contactNumber) {
-      toast.error("Please enter contact number.");
-      inputContactNumberReference.current?.focus();
-      inputContactNumberReference.current?.classList.add("is-invalid");
-      return;
-    }
-    // if (!isValidContact(contactNumber)) {
-    //   toast.error("Please enter a valid contact number.");
-    //   toast.error('Please enter a valid contact number. It should start with 7, 8, or 9 and be between 10 to 20 digits long. Optionally, it can start with a "+" sign.');
-    //   inputContactNumberReference.current?.focus();
-    //   inputContactNumberReference.current?.classList.add("is-invalid");
-    //   return;
-    // }
-    if (!removeExtraSpaces(designation)) {
-      toast.error("Please enter designation.");
-      inputDesignationReference.current?.focus();
-      inputDesignationReference.current?.classList.add("is-invalid");
-      return;
-    }
-    if (!removeExtraSpaces(division)) {
-      toast.error("Please select division.");
-      inputDivisionReference.current?.focus();
-      inputDivisionReference.current?.classList.add("is-invalid");
-      return;
-    }
-
-
-    // setIsLoaderActive(true);
+    if (!validate()) return;
     showLoader();
-    const APIMethodName = updateOrDeleteId
-      ? "AuthMasterController/UpdateUser"
-      : "AuthMasterController/CreateUser";
-    const getRoleName = allRolesList.find((x) => x.roleID === roleId);
-
-    axios
-      .post(
-        `${config.DDA_API_API_URL}${APIMethodName}`,
-        {
-          createdBy: personalInfo.userID,
-          clientId: config.clientId,
-          modifiedBy: personalInfo.userID,
-          userID: updateOrDeleteId,
-          roleID: roleId,
-          employeeId: employeeId,
-          email: userEmail,
-          password: password,
-          contactNumber: formattedContactNumber,
-          designation: designation,
-          division: division,
-          firstName: firstName,
-          lastName: lastName,
-
-          address: address,
-          dateOfBirth: $("#inputDateOfBirthV").val(),
-          joiningDate: $("#joiningDateV").val(),
-          roleName: getRoleName?.roleName,
-          isActive: updateOrDeleteId ? isActive : true,
-        },
-        {
-          headers: config.headers3,
-        }
-      )
-      .then((response) => {
-        if (response.data.success === "success") {
-          const successMessage = updateOrDeleteId
-            ? "User updated successfully."
-            : "User created successfully.";
-          toast.success(successMessage);
-          clearAllFields();
-          addProjectCardHeaderButtonClick();
-          getUsersList();
-        } else {
-          toast.error(response.data.message);
-        }
-        hideLoader();
+    setBusy(true);
+    const role = roles.find((r) => r.roleID === form.roleId);
+    axios.post(`${config.DDA_API_API_URL}AuthMasterController/${editId ? "UpdateUser" : "CreateUser"}`, {
+      createdBy: personalInfo.userID, modifiedBy: personalInfo.userID, clientId: config.clientId,
+      userID: editId, roleID: form.roleId, employeeId: form.employeeId, email: form.email, password: form.password,
+      contactNumber: `${form.countryCode}-${form.contactNumber}`, designation: form.designation, division: form.division,
+      firstName: form.firstName, lastName: form.lastName, address: form.address,
+      dateOfBirth: "", joiningDate: "", roleName: role?.roleName,
+      isActive: editId ? form.isActive === "true" : true,
+    }, { headers: config.headers3 })
+      .then((r) => {
+        if (r.data.success === "success") {
+          toast.success(editId ? "User updated successfully." : "User created successfully.");
+          resetForm();
+          loadUsers();
+        } else toast.error(r.data.message);
       })
-      .catch((error) => {
-        const errorMessage =
-          error.response?.data?.message ||
-          "Oops, something went wrong. Please try again later.";
-        toast.error(errorMessage);
-        // setIsLoaderActive(false);
-        hideLoader();
-      });
+      .catch((err) => toast.error(err.response?.data?.message || "Oops, something went wrong. Please try again later."))
+      .finally(() => { hideLoader(); setBusy(false); });
   };
 
-
-  const handleToggleUserStatus = async (userObj) => {
-    setIsLoaderActive(true);
+  const toggleStatus = async (u) => {
+    showLoader();
     try {
-      // Construct the URL without query parameters
-      const url = `${config.DDA_API_API_URL}AuthMasterController/UpdateUser`;
-
-      // Prepare the data object
-      const data = {
-        userID: userObj.userID,
-        roleID: userObj.roleID,
-        EmployeeId: userObj.employeeId,
-        email: userObj.email,
-        password: userObj.password,
-        contactNumber: userObj.contactNumber,
-        designation: userObj.designation,
-        division: userObj.division,
-        firstName: userObj.firstName,
-        lastName: userObj.lastName,
-        address: userObj.address,
-        dateOfBirth: userObj.dateOfBirth,
-        joiningDate: userObj.joiningDate,
-        roleName: userObj.roleName,
-        isActive: !userObj.isActive,
-        ClientId: config.clientId,
-      };
-
-      // Send the POST request
-      const response = await axios.post(url, data, {
-        headers: config.headers3,
-      });
-
-      if (response.data.success) {
-        toast.success("User status updated successfully!");
-        getUsersList();
-      } else {
-        toast.error("Failed to update user status");
-      }
-    } catch (error) {
-      toast.error("An error occurred while updating user status");
-    } finally {
-      setIsLoaderActive(false);
-    }
+      const r = await axios.post(`${config.DDA_API_API_URL}AuthMasterController/UpdateUser`, {
+        userID: u.userID, roleID: u.roleID, EmployeeId: u.employeeId, email: u.email, password: u.password,
+        contactNumber: u.contactNumber, designation: u.designation, division: u.division,
+        firstName: u.firstName, lastName: u.lastName, address: u.address,
+        dateOfBirth: u.dateOfBirth, joiningDate: u.joiningDate, roleName: u.roleName,
+        isActive: !u.isActive, ClientId: config.clientId, modifiedBy: personalInfo.userID,
+      }, { headers: config.headers3 });
+      if (r.data.success === "success") { toast.success("User status updated successfully!"); loadUsers(); }
+      else toast.error(r.data.message || "Failed to update user status");
+    } catch { toast.error("An error occurred while updating user status"); }
+    finally { hideLoader(); }
   };
 
-  // division dropdown
+  const confirmDelete = () => {
+    showLoader();
+    axios.post(`${config.DDA_API_API_URL}AuthMasterController/DeleteUser?ClientId=${config.clientId}&UserID=${deleteUser.userID}`, null, { headers: config.headers2 })
+      .then((r) => {
+        if (r.data.success === "success") { toast.success("User deleted successfully..."); setDeleteUser(null); loadUsers(); }
+        else toast.error(r.data.message);
+      })
+      .catch((err) => toast.error(err.response?.data?.message || "Oops, something went wrong."))
+      .finally(hideLoader);
+  };
 
-  const [divisions, setDivisions] = useState([]);
-  useEffect(() => {
-    // Fetch the division data from the API
-    axios
-      .get(config.DDA_API_API_URL + "FieldMaster/GetAllDivisionMasters", {
-        headers: config.headers2,
-      })
-      .then((response) => {
-        if (response.data.success) {
-          // Sort divisions alphabetically by description before setting state
-          const sortedDivisions = response.data.data.sort((a, b) =>
-            a.description.localeCompare(b.description)
-          );
-          setDivisions(sortedDivisions);
-        }
-      })
-      .catch((error) => {
-        console.error("There was an error fetching the divisions!", error);
-      });
-  }, []);
+  const columns = useMemo(() => [
+    { key: "sr", label: "#", sortable: false, noExport: true, width: 50, render: (_, i) => i + 1 },
+    { key: "employeeId", label: "Employee ID" },
+    { key: "firstName", label: "First Name" },
+    { key: "lastName", label: "Last Name" },
+    { key: "email", label: "Email" },
+    { key: "contactNumber", label: "Contact" },
+    { key: "designation", label: "Designation" },
+    { key: "divisionName", label: "Division", value: (u) => u.divisionName || u.division },
+    { key: "roleName", label: "Role" },
+    {
+      key: "status", label: "Status", value: (u) => (u.isActive ? "Active" : "Inactive"),
+      render: (u) => (
+        <div className="d-flex align-items-center" style={{ gap: 8, opacity: u.roleName === "Administrator" ? 0.5 : 1, pointerEvents: u.roleName === "Administrator" ? "none" : "auto" }}>
+          <span className={`dg-badge ${u.isActive ? "dg-badge--ok" : "dg-badge--off"}`}>{u.isActive ? "Active" : "Inactive"}</span>
+          <Switch checked={u.isActive} width={30} height={15} onChange={() => toggleStatus(u)} />
+        </div>
+      ),
+    },
+    {
+      key: "actions", label: "Actions", sortable: false, noExport: true,
+      render: (u) => (
+        <div className="dg-actions">
+          <button type="button" className="btn bg-gradient-warning btn-xs" title="Edit" onClick={() => handleEdit(u)}><FiEdit2 size={13} /></button>
+          <button type="button" className="btn bg-gradient-danger btn-xs" title="Delete" disabled={u.roleName === "Administrator"} onClick={() => setDeleteUser(u)}><FiTrash2 size={13} /></button>
+        </div>
+      ),
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [users]);
+
+  const Field = ({ id, label, children, className = "col-md-4" }) => (
+    <div className={`form-group ${className}`}>
+      <label htmlFor={id}>{label}<sup>*</sup></label>
+      {children}
+    </div>
+  );
+
   return (
     <>
       <section className="content scroll-content">
         <div className="container-fluid">
-          <div className="row">
-            <div className="col-md-12">
-              <div className="card card-primary card-outline ">
-                <div className="card-header">
-                  <h3 className="card-title text-sm">Create New User</h3>
-                </div>
-                <div className="card-body text-sm">
-                  <div className="row">
-                    <div className="form-group col-md-4">
-                      <label>
-                        Select Role<sup style={{ color: "red" }}>*</sup>
-                      </label>
-                      <select
-                        className="form-control form-control-sm"
-                        ref={inputRoleReference}
-                        value={roleId}
-                        onChange={(e) => setRoleId(e.target.value)}
-                      >
-                        <option value="">--Select--</option>
-                        {allRolesList.map((role) => {
-                          return (
-                            <option
-                              key={"Mana_" + role.roleID}
-                              value={role.roleID}
-                            >
-                              {role.roleName}
-                            </option>
-                          );
-                        })}
+          {showForm && (
+            <form className="card card-primary card-outline" onSubmit={handleSubmit} noValidate>
+              <div className="card-header"><h3 className="card-title text-sm">{editId ? "Edit User" : "Create New User"}</h3></div>
+              <div className="card-body text-sm">
+                <div className="row">
+                  <Field id="roleId" label="Select Role">
+                    <select id="roleId" ref={reg("roleId")} className="form-control form-control-sm" value={form.roleId} onChange={set("roleId")}>
+                      <option value="">--Select--</option>
+                      {roles.map((r) => <option key={r.roleID} value={r.roleID}>{r.roleName}</option>)}
+                    </select>
+                  </Field>
+                  <Field id="firstName" label="First Name"><input id="firstName" ref={reg("firstName")} className="form-control form-control-sm" value={form.firstName} onChange={set("firstName")} placeholder="First Name" /></Field>
+                  <Field id="lastName" label="Last Name"><input id="lastName" ref={reg("lastName")} className="form-control form-control-sm" value={form.lastName} onChange={set("lastName")} placeholder="Last Name" /></Field>
+                  <Field id="employeeId" label="Employee ID"><input id="employeeId" ref={reg("employeeId")} className="form-control form-control-sm" value={form.employeeId} onChange={set("employeeId")} placeholder="Employee ID" /></Field>
+                  <Field id="email" label="Email"><input id="email" ref={reg("email")} className="form-control form-control-sm" value={form.email} onChange={set("email")} placeholder="Email" /></Field>
+                  <Field id="password" label="Password">
+                    <div className="input-group">
+                      <input id="password" ref={reg("password")} type={showPwd ? "text" : "password"} className="form-control form-control-sm" value={form.password} onChange={set("password")} placeholder="Password" />
+                      <button type="button" className="btn btn-default btn-sm" onClick={() => setShowPwd((v) => !v)}>{showPwd ? "Hide" : "Show"}</button>
+                    </div>
+                  </Field>
+                  <Field id="contactNumber" label="Contact Number" className="col-md-8">
+                    <div className="input-group">
+                      <select className="form-control form-control-sm" value={countryCodes.find((c) => c.code === form.countryCode)?.name || ""} onChange={handleCountry}>
+                        <option value="" disabled hidden>Select Country</option>
+                        {countryCodes.map((c, i) => <option key={`${c.code}-${i}`} value={c.name}>{c.name}</option>)}
                       </select>
+                      <input className="form-control form-control-sm" style={{ maxWidth: 90 }} value={form.countryCode} placeholder="code" disabled />
+                      <input id="contactNumber" ref={reg("contactNumber")} className="form-control form-control-sm" value={form.contactNumber} onChange={handleContact} placeholder="Enter Contact Number" disabled={!form.countryCode} />
                     </div>
-                    <div className="form-group col-md-4">
-                      <label for="firstNameInput">
-                        First Name<sup style={{ color: "red" }}>*</sup>
-                      </label>
-                      <input
-                        type="text"
-                        className="form-control form-control-sm"
-                        id="firstNameInput"
-                        ref={inputFirstNameReference}
-                        value={firstName}
-                        onChange={(e) => setFirstName(e.target.value)}
-                        placeholder=" First Name"
-                      />
-                    </div>
-                    <div className="form-group col-md-4">
-                      <label for="lastNameInput">
-                        Last Name<sup style={{ color: "red" }}>*</sup>
-                      </label>
-                      <input
-                        type="text"
-                        className="form-control form-control-sm"
-                        id="lastNameInput"
-                        ref={inputLastNameReference}
-                        value={lastName}
-                        onChange={(e) => setLastName(e.target.value)}
-                        placeholder=" Last Name"
-                      />
-                    </div>
-                    <div className="form-group col-md-4">
-                      <label for="employeeIdInput">
-                        Employee ID<sup style={{ color: "red" }}>*</sup>
-                      </label>
-                      <input
-                        type="text"
-                        className="form-control form-control-sm"
-                        id="employeeIdInput"
-                        ref={inputEmployeeIdReference}
-                        value={employeeId}
-                        onChange={(e) => setemployeeId(e.target.value)}
-                        placeholder="Employee ID"
-                      />
-                    </div>
-                    <div className="form-group  col-md-4">
-                      <label for="userEmailInput">
-                        Email<sup style={{ color: "red" }}>*</sup>
-                      </label>
-                      <input
-                        type="text"
-                        className="form-control form-control-sm"
-                        id="userEmailInput"
-                        ref={inputEmailReference}
-                        value={userEmail}
-                        onChange={(e) => setUserEmail(e.target.value)}
-                        placeholder=" Email"
-                      />
-                    </div>
-                    <div className="form-group col-md-4">
-                      <label for="passwordInput">
-                        Password<sup style={{ color: "red" }}>*</sup>
-                      </label>
-                      <input
-                        type="password"
-                        className="form-control form-control-sm"
-                        id="passwordInput"
-                        ref={inputPasswordReference}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="Password"
-                      />
-                      <span
-                        toggle="#passwordInput"
-                        class="fa fa-fw fa-eye field-icon-password toggle-password"
-                      ></span>
-                    </div>
-                    <div className="form-group col-md-8">
-                      <label htmlFor="contactNumberInput">
-                        Contact Number<sup style={{ color: "red" }}>*</sup>
-                      </label>
-                      <div className="input-group  ">
-                        {/* Country Code dropdown */}
-                        <select
-                          name="countryCode"
-                          // value={countryCode} // Bind the value to the countryCode state
-                          value={countryCodes.find(country => country.code === countryCode)?.name || ''}
-                          onChange={handleChange}
-                          className="form-control form-control-sm contact-number-dropdown"
-                          placeholder="Select country"
-                        >
-                          <option value="" disabled hidden>
-                            Select Country
-                          </option>
-                          {countryCodes.map((country, index) => (
-                            <option key={`${country.code}-${index}`} value={country.name}>
-                              {country.name}
-                            </option>
-                          ))}
-                        </select>
-
-                        {/* Disabled input showing the selected country code */}
-                        <input
-                          type="text"
-                          className="form-control form-control-sm contact-number"
-                          value={countryCode}
-                          placeholder="code"
-                          disabled
-                        />
-
-                        {/* Contact number input field */}
-                        <input
-                          type="text"
-                          className="form-control form-control-sm"
-                          id="contactNumberInput"
-                          ref={inputContactNumberReference}
-                          value={contactNumber}
-                          onChange={handleContactNumberChange}
-                          placeholder="Enter Contact Number"
-                          disabled={!countryCode}
-                        />
-                      </div>
-                    </div>
-                    {/* <div className="form-group col-md-4">
-                      <label htmlFor="contactNumberInput">
-                        Contact Number<sup style={{ color: "red" }}>*</sup>
-                      </label>
-                      <input
-                        type="text"
-                        className="form-control form-control-sm"
-                        id="contactNumberInput"
-                        // ref={inputContactNumberReference}
-                        value={contactNumber}
-                        onChange={(e) => {
-                          // Get the numeric value and keep the first character as '+'
-                          const inputValue = e.target.value;
-                          const numericValue = inputValue.replace(
-                            /[^+\d]/g,
-                            ""
-                          );
-
-                          // Limit the length to 20 characters
-                          const limitedValue = numericValue.slice(0, 20);
-
-                          // Update state with the limited value
-                          setContactNumber(limitedValue);
-                        }}
-                        placeholder="Contact Number"
-                        pattern="\d*"
-                        inputMode="numeric"
-                        maxLength={20} // This limits the number of characters the user can enter
-                      />
-                    </div> */}
-
-                    <div className="form-group  col-md-4">
-                      <label for="designationInput">
-                        Designation
-                        <sup style={{ color: "red" }}>*</sup>
-                      </label>
-                      <input
-                        type="text"
-                        className="form-control form-control-sm"
-                        id="designationInput"
-                        ref={inputDesignationReference}
-                        value={designation}
-                        onChange={(e) => setdesignation(e.target.value)}
-                        placeholder="Enter Designation"
-                      />
-                    </div>
-                    <div className="form-group col-md-4">
-                      <label htmlFor="divisionInput">
-                        Division<sup style={{ color: "red" }}>*</sup>
-                      </label>
-                      <select
-                        className="form-control form-control-sm"
-                        id="divisionInput"
-                        ref={inputDivisionReference}
-                        value={division}
-                        onChange={(e) => setDivision(e.target.value)}
-                      >
-                        <option value="" disabled hidden>
-                          Select Division
-                        </option>
-                        {divisions.map((d) => (
-                          <option key={d.divisionId} value={String(d.divisionId)}>
-                            {d.description}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="form-group col-md-4">
-                      <label htmlFor="isActiveInput">
-                        isActive<sup style={{ color: "red" }}>*</sup>
-                      </label>
-                      <select
-                        className="form-control form-control-sm"
-                        id="isActiveInput"
-                        ref={inputIsActiveReference}
-                        value={isActive}
-                        onChange={(e) => setIsActive(e.target.value)}
-                        placeholder="Select Status"
-                      >
+                  </Field>
+                  <Field id="designation" label="Designation"><input id="designation" ref={reg("designation")} className="form-control form-control-sm" value={form.designation} onChange={set("designation")} placeholder="Enter Designation" /></Field>
+                  <Field id="division" label="Division">
+                    <select id="division" ref={reg("division")} className="form-control form-control-sm" value={form.division} onChange={set("division")}>
+                      <option value="" disabled hidden>Select Division</option>
+                      {divisions.map((d) => <option key={d.divisionId} value={String(d.divisionId)}>{d.description}</option>)}
+                    </select>
+                  </Field>
+                  {editId && (
+                    <Field id="isActive" label="Status">
+                      <select id="isActive" className="form-control form-control-sm" value={form.isActive} onChange={set("isActive")}>
                         <option value="true">Active</option>
                         <option value="false">Inactive</option>
                       </select>
-                    </div>
-
-                  </div>
-                </div>
-                <div className="card-footer text-sm">
-                  {/* {isLoaderActive ? (
-                    <PleaseWaitButton className="float-right btn-xs ml-2 font-weight-medium auth-form-btn" />
-                  ) : ( */}
-                  <button
-                    type="submit"
-                    className="btn btn-primary float-right btn-xs ml-2"
-                    onClick={(e) => {
-                      handleUserSubmit(e);
-                    }}
-                  >
-                    {updateOrDeleteId ? 'Update & Submit' : 'Save & Submit'}
-                  </button>
-
-                  {/* )} */}
-                  <button
-                    type="submit"
-                    className="btn btn-default float-right btn-xs"
-                    onClick={(e) => {
-                      handleCancelClick(e);
-                    }}
-                  >
-                    Cancel
-                  </button>
+                    </Field>
+                  )}
                 </div>
               </div>
+              <div className="card-footer text-sm">
+                <button type="submit" className="btn btn-primary float-right btn-xs ml-2" disabled={busy}>{editId ? "Update & Submit" : "Save & Submit"}</button>
+                <button type="button" className="btn btn-default float-right btn-xs" onClick={resetForm}>Cancel</button>
+              </div>
+            </form>
+          )}
+
+          <div className="card card-primary card-outline">
+            <div className="card-header pg-head">
+              <h3 className="card-title text-sm">Users</h3>
+              {!showForm && (
+                <button type="button" className="btn btn-primary btn-sm" onClick={() => setShowForm(true)}><FiPlus size={14} /> Add user</button>
+              )}
             </div>
-          </div>
-
-          <div className="row">
-            <div className="col-md-12">
-              <div className="card card-primary card-outline ">
-                <div className="card-header">
-                  <h3 className="card-title text-sm">
-                    Users List ( {allUsersList.length} )
-                  </h3>
-                </div>
-                <div className="card-body text-sm" style={{ overflowX: "auto" }}>
-                  <table id="example1" className="table table-bordered table-sm ">
-                    <thead>
-                      <tr>
-                        <th
-                          style={{ fontWeight: "500", fontSize: "smaller" }}
-                          className="text-center"
-                        >
-                          Sr. No.
-                        </th>
-                        <th style={{ fontWeight: "500", fontSize: "smaller" }}>
-                          Employee ID
-                        </th>
-                        <th style={{ fontWeight: "500", fontSize: "smaller" }}>
-                          First Name
-                        </th>
-                        <th style={{ fontWeight: "500", fontSize: "smaller" }}>
-                          Last Name
-                        </th>
-
-                        <th style={{ fontWeight: "500", fontSize: "smaller" }}>
-                          Email
-                        </th>
-                        <th style={{ fontWeight: "500", fontSize: "smaller" }}>
-                          Contact Number
-                        </th>
-                        <th style={{ fontWeight: "500", fontSize: "smaller" }}>
-                          Designation
-                        </th>
-                        <th style={{ fontWeight: "500", fontSize: "smaller" }}>
-                          Division
-                        </th>
-
-                        <th style={{ fontWeight: "500", fontSize: "smaller" }}>
-                          Role
-                        </th>
-                        <th style={{ fontWeight: "500", fontSize: "smaller" }}>
-                          Status
-                        </th>
-
-                        <th
-                          style={{
-                            fontWeight: "500",
-                            fontSize: "smaller",
-                            width: "7%",
-                          }}
-                        >
-                          Action
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {allUsersList.length > 0
-                        ? allUsersList.map((userObj, index) => {
-                          return (
-                            <tr>
-                              <td
-                                style={{
-                                  fontWeight: "400",
-                                  fontSize: "smaller",
-                                }}
-                                className="text-center text-sm"
-                              >
-                                {index + 1}
-                              </td>
-                              <td
-                                style={{
-                                  fontWeight: "400",
-                                  fontSize: "smaller",
-                                }}
-                              >
-                                {userObj.employeeId}
-                              </td>
-                              <td
-                                style={{
-                                  fontWeight: "400",
-                                  fontSize: "smaller",
-                                }}
-                              >
-                                {userObj.firstName}
-                              </td>
-                              <td
-                                style={{
-                                  fontWeight: "400",
-                                  fontSize: "smaller",
-                                }}
-                              >
-                                {userObj.lastName}
-                              </td>
-
-                              <td
-                                style={{
-                                  fontWeight: "400",
-                                  fontSize: "smaller",
-                                }}
-                              >
-                                {userObj.email}
-                              </td>
-                              <td
-                                style={{
-                                  fontWeight: "400",
-                                  fontSize: "smaller",
-                                }}
-                              >
-                                {userObj.contactNumber}
-                              </td>
-                              <td
-                                style={{
-                                  fontWeight: "400",
-                                  fontSize: "smaller",
-                                }}
-                              >
-                                {userObj.designation}
-                              </td>
-                              <td
-                                style={{
-                                  fontWeight: "400",
-                                  fontSize: "smaller",
-                                }}
-                              >
-                                {userObj.divisionName || userObj.division}
-                              </td>
-
-                              <td
-                                style={{
-                                  fontWeight: "400",
-                                  fontSize: "smaller",
-                                }}
-                              >
-                                {userObj.roleName}
-                              </td>
-                              <td
-                                style={{
-                                  fontWeight: "400",
-                                  fontSize: "smaller",
-                                }}
-                              >
-
-                                <div
-                                  className={`d-flex align-items-center ${userObj.roleName === "Administrator"
-                                    ? "disabled"
-                                    : ""
-                                    }`}
-                                  style={{
-                                    opacity:
-                                      userObj.roleName === "Administrator"
-                                        ? 0.5
-                                        : 1,
-                                    pointerEvents:
-                                      userObj.roleName === "Administrator"
-                                        ? "none"
-                                        : "auto",
-                                  }}
-                                >
-                                  <label
-                                    style={{
-                                      fontWeight: "400",
-                                      fontSize: "smaller",
-                                      color: userObj.isActive
-                                        ? "white"
-                                        : "white",
-                                      backgroundColor: userObj.isActive
-                                        ? "green"
-                                        : "red",
-                                      padding: "2px 6px",
-                                      borderRadius: "5px",
-                                    }}
-                                    className="mr-3"
-                                  >
-                                    {userObj.isActive ? "Active" : "Inactive"}
-                                  </label>
-                                  <Switch
-                                    checked={userObj.isActive}
-                                    width={30}
-                                    height={15}
-                                    className=""
-                                    onChange={() =>
-                                      handleToggleUserStatus(
-                                        userObj,
-                                        "isActive"
-                                      )
-                                    }
-                                  />
-                                </div>
-                              </td>
-
-                              <td
-                                style={{
-                                  fontWeight: "400",
-                                  fontSize: "smaller",
-                                }}
-                                className="text-center text-sm d-flex"
-                              >
-                                <button
-                                  type="button"
-                                  className="btn bg-gradient-warning btn-xs"
-                                  onClick={(e) => {
-                                    handleEditTaskDetails(userObj);
-                                  }}
-                                  style={{
-                                    padding: "5px",
-                                    fontSize: ".75rem",
-                                    lineHeight: "0",
-                                    borderRadius: ".15rem",
-                                  }}
-                                >
-                                  <i
-                                    className="fas fa-pen"
-                                    style={{ fontSize: "smaller" }}
-                                  ></i>
-                                </button>
-                                {userObj.roleName !== "Administrator" ? (
-                                  <>
-
-                                    <button
-                                      type="button"
-                                      className="btn bg-gradient-danger btn-xs ml-2"
-                                      onClick={() =>
-                                        handleRemoveUser(userObj)
-                                      }
-                                      style={{
-                                        padding: "5px",
-                                        fontSize: ".75rem",
-                                        lineHeight: "0",
-                                        borderRadius: ".15rem",
-                                      }}
-                                    >
-                                      <i
-                                        className="fas fa-trash"
-                                        style={{ fontSize: "smaller" }}
-                                      ></i>
-                                    </button>
-                                  </>
-                                ) : (
-                                  <>
-
-                                    <button
-                                      type="button"
-                                      className="btn bg-gradient-danger btn-xs ml-2"
-                                      style={{
-                                        padding: "5px",
-                                        fontSize: ".75rem",
-                                        lineHeight: "0",
-                                        borderRadius: ".15rem",
-                                      }}
-                                      disabled
-                                    >
-                                      <i
-                                        className="fas fa-trash"
-                                        style={{ fontSize: "smaller" }}
-                                      ></i>
-                                    </button>
-                                  </>
-                                )}
-
-
-                              </td>
-                            </tr>
-                          );
-                        })
-                        : ""}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+            <div className="card-body text-sm">
+              <DataGrid
+                title="Users List"
+                columns={columns}
+                data={users}
+                rowKey="userID"
+                exportName="Users"
+                filterColumns={["roleName", "divisionName", "status"]}
+              />
             </div>
           </div>
         </div>
       </section>
 
-      <div
-        id="confirmCommonModal"
-        class="modal fade confirmCommonModal"
-        data-backdrop="static"
-        tabindex="-1"
-        role="dialog"
-        aria-labelledby="staticBackdropLabel"
-        aria-hidden="true"
-      >
-        <div class="modal-dialog modal-confirm">
-          <div class="modal-content">
-            <div class="modal-header">
-              <div class="icon-box">
-                <i class="fas fa-info"></i>
-              </div>
-              <h5 class="modal-title w-100">Are you sure ?</h5>
+      {deleteUser && (
+        <div className="sp-dialog-backdrop" role="dialog" aria-modal="true">
+          <div className="sp-dialog">
+            <div className="sp-dialog-head"><h2>Are you sure?</h2></div>
+            <div className="sp-dialog-body">
+              Delete <b>{deleteUser.firstName} {deleteUser.lastName}</b>? Once deleted it cannot be recovered.
             </div>
-            <div class="modal-body">
-              <p class="text-center">
-                By clicking on Yes delete all the user details. Once you deleted
-                it can not be recovered.
-              </p>
-            </div>
-            <div class="modal-footer col-md-12">
-              <button class="btn btn-default btn-sm" data-dismiss="modal">
-                Cancel
-              </button>
-              {isLoaderActive ? (
-                <PleaseWaitButton className="btn-sm pl-3 pr-3 ml-2 font-weight-medium auth-form-btn" />
-              ) : (
-                <button
-                  class="btn btn-warning btn-sm pl-3 pr-3 ml-2"
-                  onClick={(e) => {
-                    yesConfirmSubmitRequest(e);
-                  }}
-                >
-                  Yes
-                </button>
-              )}
+            <div className="sp-dialog-foot">
+              <button className="btn btn-default btn-sm" onClick={() => setDeleteUser(null)}>Cancel</button>
+              <button className="btn btn-warning btn-sm" onClick={confirmDelete}>Yes, delete</button>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </>
   );
 };

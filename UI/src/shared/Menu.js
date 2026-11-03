@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { setActiveComponentName } from "../reduxStorage/personalInformation";
@@ -6,6 +6,8 @@ import {
   FiHome, FiGrid, FiUsers, FiShield, FiMail, FiDatabase, FiHardDrive, FiFileText,
   FiFolder, FiMessageSquare, FiChevronDown, FiSettings, FiLayers, FiPenTool, FiBarChart2,
 } from "react-icons/fi";
+
+const MOBILE_BP = 992;
 
 const ICONS = {
   "/home": FiHome,
@@ -23,27 +25,21 @@ const ICONS = {
 
 const HOME_ITEM = { appName: "Home", appRoute: "/home" };
 
-// Section = small hint heading. collapsible = parent menu with child menus.
 const GROUPS = [
   { key: "overview", title: "Overview", routes: ["/home", "/dashboard"] },
   { key: "work", title: "Work", routes: ["/my-reviews", "/all-files"] },
   { key: "insights", title: "Insights", routes: ["/reports", "/folder-access-report"] },
-  {
-    key: "config", title: "App Configuration", collapsible: true, icon: FiSettings,
-    routes: ["/create-user", "/manage-roles", "/email-config"],
-  },
-  {
-    key: "masters", title: "Masters", collapsible: true, icon: FiLayers,
-    routes: ["/all-masters", "/storage-settings"],
-  },
+  { key: "config", title: "App Configuration", collapsible: true, icon: FiSettings, routes: ["/create-user", "/manage-roles", "/email-config"] },
+  { key: "masters", title: "Masters", collapsible: true, icon: FiLayers, routes: ["/all-masters", "/storage-settings"] },
 ];
 
-const closeSidebarOnSmallScreens = () => {
-  if (window.innerWidth >= 992) return;
+const isMobile = () => window.innerWidth < MOBILE_BP;
+
+const closeSidebar = () => {
+  if (!isMobile()) return;
   try {
     if (window.$ && window.$.fn && window.$.fn.PushMenu) {
       window.$('[data-widget="pushmenu"]').PushMenu("collapse");
-      return;
     }
   } catch (e) { /* fall through */ }
   document.body.classList.remove("sidebar-open");
@@ -57,15 +53,32 @@ const Menu = () => {
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState({});
 
+  // dynamic menu from Redux
   useEffect(() => {
     setItems(personalInfo.menuItemNames || []);
   }, [personalInfo.menuItemNames]);
 
-  const isActive = (path, appName) => {
+  // auto-collapse on mount + whenever the viewport shrinks below 992px
+  useEffect(() => {
+    let wasMobile = isMobile();
+    if (wasMobile) document.body.classList.remove("sidebar-open");
+    const onResize = () => {
+      const nowMobile = isMobile();
+      if (nowMobile && !wasMobile) closeSidebar();
+      wasMobile = nowMobile;
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  // collapse after every navigation on small screens
+  useEffect(() => { closeSidebar(); }, [location.pathname]);
+
+  const isActive = useCallback((path, appName) => {
     const sp = new URLSearchParams(location.search);
     if (appName === "Create Folder" && sp.get("userFilesUserID") && sp.get("userName")) return false;
     return location.pathname === path;
-  };
+  }, [location.pathname, location.search]);
 
   const all = [HOME_ITEM, ...items.filter((m) => m.appRoute !== "/home")];
   const byRoute = Object.fromEntries(all.map((m) => [m.appRoute, m]));
@@ -77,7 +90,7 @@ const Menu = () => {
     { key: "more", title: "More", list: leftovers },
   ].filter((g) => g.list.length > 0);
 
-  // auto-open the parent menu that contains the current page
+  // auto-expand the submenu that contains the current page
   useEffect(() => {
     sections.forEach((g) => {
       if (g.collapsible && g.list.some((m) => m.appRoute === location.pathname)) {
@@ -89,7 +102,7 @@ const Menu = () => {
 
   const onNav = (appName) => {
     dispatch(setActiveComponentName(appName));
-    closeSidebarOnSmallScreens();
+    closeSidebar();
   };
 
   const renderLink = (m) => {
@@ -110,50 +123,53 @@ const Menu = () => {
   };
 
   return (
-    <aside className="main-sidebar sf-side elevation-0" aria-label="Main navigation">
-      <button type="button" className="sf-brand" onClick={() => { navigate("/home"); closeSidebarOnSmallScreens(); }}>
-        <span className="sf-brand-tile"><FiPenTool size={20} /></span>
-        <span>
-          <span className="sf-brand-name">Document Digitization</span>
-          <span className="sf-brand-sub">{personalInfo.userRole || "Workspace"}</span>
-        </span>
-      </button>
+    <>
+      <aside className="main-sidebar sf-side elevation-0" aria-label="Main navigation">
+        <button type="button" className="sf-brand" onClick={() => { navigate("/home"); closeSidebar(); }}>
+          <span className="sf-brand-tile"><FiPenTool size={20} /></span>
+          <span>
+            <span className="sf-brand-name">Document Digitization</span>
+            <span className="sf-brand-sub">{personalInfo.userRole || "Workspace"}</span>
+          </span>
+        </button>
 
-      <div className="sf-scroll">
-        <nav>
-          {sections.map((g) => {
-            if (!g.collapsible) {
+        <div className="sf-scroll">
+          <nav>
+            {sections.map((g) => {
+              if (!g.collapsible) {
+                return (
+                  <div key={g.key}>
+                    <div className="sf-hint">{g.title}</div>
+                    {g.list.map(renderLink)}
+                  </div>
+                );
+              }
+              const GIcon = g.icon;
+              const isOpen = !!open[g.key];
+              const hasActive = g.list.some((m) => m.appRoute === location.pathname);
               return (
-                <div key={g.key}>
-                  <div className="sf-hint">{g.title}</div>
-                  {g.list.map(renderLink)}
+                <div key={g.key} className="sf-group">
+                  <button
+                    type="button"
+                    className={`sf-link sf-group-btn ${hasActive ? "has-active" : ""}`}
+                    aria-expanded={isOpen}
+                    onClick={() => setOpen((p) => ({ ...p, [g.key]: !p[g.key] }))}
+                  >
+                    <GIcon className="sf-ico" />
+                    <span>{g.title}</span>
+                    <FiChevronDown className={`sf-chev ${isOpen ? "open" : ""}`} />
+                  </button>
+                  <div className={`sf-collapse ${isOpen ? "open" : ""}`}>
+                    <div className="sf-children">{g.list.map(renderLink)}</div>
+                  </div>
                 </div>
               );
-            }
-            const GIcon = g.icon;
-            const isOpen = !!open[g.key];
-            const hasActive = g.list.some((m) => m.appRoute === location.pathname);
-            return (
-              <div key={g.key} className="sf-group">
-                <button
-                  type="button"
-                  className={`sf-link sf-group-btn ${hasActive ? "has-active" : ""}`}
-                  aria-expanded={isOpen}
-                  onClick={() => setOpen((p) => ({ ...p, [g.key]: !p[g.key] }))}
-                >
-                  <GIcon className="sf-ico" />
-                  <span>{g.title}</span>
-                  <FiChevronDown className={`sf-chev ${isOpen ? "open" : ""}`} />
-                </button>
-                <div className={`sf-collapse ${isOpen ? "open" : ""}`}>
-                  <div className="sf-children">{g.list.map(renderLink)}</div>
-                </div>
-              </div>
-            );
-          })}
-        </nav>
-      </div>
-    </aside>
+            })}
+          </nav>
+        </div>
+      </aside>
+      <div className="sf-backdrop" onClick={closeSidebar} aria-hidden="true" />
+    </>
   );
 };
 

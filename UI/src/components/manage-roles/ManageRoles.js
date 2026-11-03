@@ -1,377 +1,181 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { useSelector } from 'react-redux';
-import { toast } from 'react-toastify';
-import PleaseWaitButton from '../../shared/PleaseWaitButton';
-import axios from 'axios';
-import { useLoader } from '../../Customhook/LoaderContext';
-import $ from "jquery";
-import Select from 'react-select'; // Import react-select
+import React, { useRef, useEffect, useState, useMemo } from "react";
+import { useSelector } from "react-redux";
+import { toast } from "react-toastify";
+import axios from "axios";
+import Select from "react-select";
+import { FiPlus, FiEdit2, FiTrash2 } from "react-icons/fi";
+import { useLoader } from "../../Customhook/LoaderContext";
+import DataGrid from "../../shared/DataGrid";
 
-const config = require('../../services/config.json');
+const config = require("../../services/config.json");
 
-
-const customStyles = {
-  multiValue: (styles) => {
-    return {
-      ...styles,
-      background: '#746fa7', // Darker gradient background
-      color: '#fff', // Ensures text remains visible
-      fontSize: '10px', // Smaller font size
-      borderRadius: '15px', // Softer rounded corners
-      // display: 'inline-block',
-      // fontWeight: 'bold', // Makes the text stand out more
-      textAlign: 'center',
-      padding: '4px 8px', // Adjusted padding for balance with smaller font
-      boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)', // Slightly stronger shadow for more depth
-      marginBottom: '4px', // Adjusted margin for spacing
-    };
-  },
-  multiValueLabel: (styles) => ({
-    ...styles,
-    color: '#fff', // Text color
-    fontWeight: 'bold', // Optional: bold text
-    fontSize: '10px', // Smaller font size to match multiValue
+const selectStyles = {
+  control: (s, st) => ({
+    ...s, minHeight: 34, fontSize: 13, borderRadius: 11,
+    borderColor: st.isFocused ? "#2563eb" : "#dbe3f0", boxShadow: st.isFocused ? "0 0 0 3px rgba(37,99,235,.16)" : "none",
   }),
-  multiValueRemove: (styles) => ({
-    ...styles,
-    color: '#ffffff', // Color for the remove (X) icon
-    ':hover': {
-      // backgroundColor: '#ffa500', // Background color when hovering over remove icon
-      color: '#fff', // Ensure text remains visible on hover
-    },
-  }),
+  multiValue: (s) => ({ ...s, background: "#eaf1ff", borderRadius: 999 }),
+  multiValueLabel: (s) => ({ ...s, color: "#1d4ed8", fontSize: 11, fontWeight: 600 }),
+  multiValueRemove: (s) => ({ ...s, color: "#1d4ed8", borderRadius: 999, ":hover": { background: "#c7dbff", color: "#e11d48" } }),
 };
 
 const ManageRoles = () => {
-  const inputRoleNameReference = useRef(null);
-  const selectAppsReference = useRef(null);
-  const personalInfo = useSelector((state) => state.personalInformationReducer);
-  const [roleName, setRoleName] = useState("");
-  const [appId, setAppId] = useState([]);
-  const [isLoaderActive, setIsLoaderActive] = useState(false);
-  const [allRolesList, setAllRolesList] = useState([]);
-  const [allAppsList, setAllAppsList] = useState([]);
-  const [updateOrDeleteId, setUpdateOrDeleteId] = useState("");
-  const [showModal, setShowModal] = useState(false); // State to control modal visibility
+  const personalInfo = useSelector((s) => s.personalInformationReducer);
   const { showLoader, hideLoader } = useLoader();
+  const nameRef = useRef(null);
+
+  const [roles, setRoles] = useState([]);
+  const [apps, setApps] = useState([]);
+  const [roleName, setRoleName] = useState("");
+  const [selectedApps, setSelectedApps] = useState([]);
+  const [editId, setEditId] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [deleteRole, setDeleteRole] = useState(null);
+
+  const appName = (id) => apps.find((a) => a.appID === id)?.appName || "";
+  const appOptions = apps.map((a) => ({ value: a.appID, label: a.appName }));
+
+  const loadRoles = () => {
+    showLoader();
+    axios.get(`${config.DDA_API_API_URL}AuthMasterController/GetAllRoles?ClientId=${config.clientId}`, { headers: config.headers2 })
+      .then((r) => {
+        if (r.data.success === "success") setRoles(r.data.data || []);
+        else toast.error(r.data.message);
+      })
+      .catch(() => toast.error("Oops, something went wrong. Please try again later."))
+      .finally(hideLoader);
+  };
 
   useEffect(() => {
-    getAllAppsList();
+    axios.get(`${config.DDA_API_API_URL}AuthMasterController/GetAllApps`, { headers: config.headers2 })
+      .then((r) => { if (r.data.success === "success") setApps(r.data.data || []); else toast.error(r.data.message); })
+      .catch(() => toast.error("Oops, something went wrong. Please try again later."));
+    loadRoles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const getAllAppsList = () => {
-    axios.get(config.DDA_API_API_URL + 'AuthMasterController/GetAllApps', {
-      headers: config.headers2,
-    }).then((response) => {
-      if (response.status === 200) {
-        if (response.data.success === "success") {
-          if (response.data.data.length > 0) {
-            setAllAppsList(response.data.data);
-            getAllRolesList();
-          }
-        } else {
-          toast.error(response.data.message);
-        }
-      } else if (response.data.status.status === 500) {
-        toast.error("Invalid username or password");
-      }
-    }).catch((error) => {
-      toast.error("Oops, something went wrong. Please try again later.");
-    });
-  }
+  const reset = () => { setRoleName(""); setSelectedApps([]); setEditId(""); setShowForm(false); nameRef.current?.classList.remove("is-invalid"); };
 
-   const getAllRolesList = () => {
-    window.initDestroyDataTableFuncation();
-    showLoader();
-    axios.get(config.DDA_API_API_URL + 'AuthMasterController/GetAllRoles?ClientId=' + config.clientId, {
-      headers: config.headers2,
-    }).then((response) => {
-      if (response.status == 200) {
+  const handleEdit = (r) => {
+    setEditId(r.roleID);
+    setRoleName(r.roleName);
+    setSelectedApps((r.appIDList || []).map((id) => ({ value: id, label: appName(id) })));
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
-        if (response.data.success == "success") {
-          if (response.data.data.length > 0) {
-            setAllRolesList(response.data.data);
-            setTimeout(() => {
-              window.initDataTableFuncation();
-              hideLoader();
-            }, 1000)
-          }
-        } else {
-          toast.error(response.data.message);
-          setTimeout(() => {
-            window.initDataTableFuncation();
-          }, 1000)
-        }
-      } else if (response.data.status.status == 500) {
-        toast.error("Invalid username or password");
-      }
-    }).catch((error) => {
-      toast.error("oops something went wrong. please try again later.");
-    })
-  }
-  const addProjectCardHeaderButtonClick = () => {
-    $("#listOfProjectsHeaderExpandButtion").click();
-  }
-
-  const listOfProjectsHeaderExpandButtionClick = () => {
-    $("#AddNewHeaderButton").click();
-  }
-
-  const handleEditRoleDetails = (roleObj) => {
-    setUpdateOrDeleteId(roleObj.roleID);
-    setRoleName(roleObj.roleName);
-    const appOptions = roleObj.appIDList.map(appID => ({ value: appID, label: allAppsList.find(app => app.appID === appID)?.appName }));
-    setAppId(appOptions);
-    listOfProjectsHeaderExpandButtionClick();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-
-  const handleRemoveRole = (roleObj) => {
-    setUpdateOrDeleteId(roleObj.roleID);
-    window.confirmModalShow();
-  }
-
-  const yesConfirmSubmitRequest = () => {
-
-    showLoader();
-    let APIMethodName = 'AuthMasterController/DeleteRole?roleId=' + updateOrDeleteId
-    axios.post(config.DDA_API_API_URL + APIMethodName, {
-      headers: config.headers2,
-    }).then((response) => {
-
-      if (response.data.success == "success") {
-        toast.success("Role deleted successfully...");
-        window.confirmModalHide();
-        clearAllFields();
-        getAllAppsList();
-        // setIsLoaderActive(false);
-        hideLoader();
-      } else {
-        // setIsLoaderActive(false);
-        hideLoader();
-        toast.error(response.data.message);
-      }
-    }).catch((error) => {
-      if (!error.response.data.success) {
-        toast.error(error.response.data.message);
-      } else {
-        toast.error("oops something went wrong. please try again later.");
-      }
-      // setIsLoaderActive(false);
-      hideLoader();
-    })
-  }
-
-  const handleCancelClick = () => {
-    clearAllFields();
-    addProjectCardHeaderButtonClick();
-  }
-
-  const clearAllFields = () => {
-    setRoleName("");
-    setAppId([]);
-    setUpdateOrDeleteId('');
-  }
-
-  const handleRoleSubmit = (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    if (roleName) {
-      if (appId.length > 0) {
-        showLoader();
-        let APIMethodName = '';
-        let successMessage = '';
-        if (updateOrDeleteId !== "") {
-          APIMethodName = 'AuthMasterController/UpdateRole';
-          successMessage = "Role updated successfully.";
-        } else {
-          APIMethodName = 'AuthMasterController/CreateRole';
-          successMessage = "Role created successfully.";
-        }
-
-        axios.post(config.DDA_API_API_URL + APIMethodName, {
-          "roleID": updateOrDeleteId,
-          "createdBy": personalInfo.userID,
-          "clientId": config.clientId,
-          "modifiedBy": personalInfo.userID,
-          "roleName": roleName,
-          "appIDList": appId.map(app => app.value),
-          "isActive": true
-        }, {
-          headers: config.headers2,
-        }).then((response) => {
-          if (response.data.success === "success") {
-            toast.success(successMessage);
-            clearAllFields();
-            addProjectCardHeaderButtonClick();
-            getAllRolesList();
-            hideLoader();
-          } else {
-            hideLoader();
-            toast.error(response.data.message);
-          }
-        }).catch((error) => {
-          if (!error.response.data.success) {
-            toast.error(error.response.data.message);
-          } else {
-            toast.error("Oops, something went wrong. Please try again later.");
-          }
-          hideLoader();
-        });
-      } else {
-        toast.error("Select apps.");
-        selectAppsReference.current.focus();
-        selectAppsReference.current.classList.add('is-invalid');
-      }
-    } else {
+    if (!roleName.trim()) {
       toast.error("Please enter role name.");
-      inputRoleNameReference.current.focus();
-      inputRoleNameReference.current.classList.add('is-invalid');
+      nameRef.current?.classList.add("is-invalid");
+      nameRef.current?.focus();
+      return;
     }
-  }
+    if (selectedApps.length === 0) return toast.error("Select apps.");
+    showLoader();
+    axios.post(`${config.DDA_API_API_URL}AuthMasterController/${editId ? "UpdateRole" : "CreateRole"}`, {
+      roleID: editId, createdBy: personalInfo.userID, modifiedBy: personalInfo.userID, clientId: config.clientId,
+      roleName: roleName.trim(), appIDList: selectedApps.map((a) => a.value), isActive: true,
+    }, { headers: config.headers2 })
+      .then((r) => {
+        if (r.data.success === "success") {
+          toast.success(editId ? "Role updated successfully." : "Role created successfully.");
+          reset();
+          loadRoles();
+        } else toast.error(r.data.message);
+      })
+      .catch((err) => toast.error(err.response?.data?.message || "Oops, something went wrong. Please try again later."))
+      .finally(hideLoader);
+  };
 
-  const createAttachmentHTML = (appArray) => {
-    if (appArray.length > 0) {
-      return appArray.map((appID, index) => {
-        const appName = allAppsList.find(x => x.appID === appID);
-        return (<small key={index} className="badge-custom mr-1"> {appName?.appName}</small>);
-      });
-    }
-  }
+  const confirmDelete = () => {
+    showLoader();
+    axios.post(`${config.DDA_API_API_URL}AuthMasterController/DeleteRole?roleId=${deleteRole.roleID}`, null, { headers: config.headers2 })
+      .then((r) => {
+        if (r.data.success === "success") { toast.success("Role deleted successfully..."); setDeleteRole(null); loadRoles(); }
+        else toast.error(r.data.message);
+      })
+      .catch((err) => toast.error(err.response?.data?.message || "Oops, something went wrong."))
+      .finally(hideLoader);
+  };
 
-  
-
-  const appOptions = allAppsList.map(app => ({ value: app.appID, label: app.appName }));
+  const columns = useMemo(() => [
+    { key: "sr", label: "#", sortable: false, noExport: true, width: 60, render: (_, i) => i + 1 },
+    { key: "roleName", label: "Role Name" },
+    {
+      key: "apps", label: "Apps", value: (r) => (r.appIDList || []).map(appName).join(", "),
+      render: (r) => (r.appIDList || []).map((id) => <span key={id} className="dg-badge dg-badge--app">{appName(id)}</span>),
+    },
+    { key: "appCount", label: "App Count", value: (r) => (r.appIDList || []).length, width: 100 },
+    {
+      key: "actions", label: "Actions", sortable: false, noExport: true, width: 100,
+      render: (r) => (
+        <div className="dg-actions">
+          <button type="button" className="btn bg-gradient-warning btn-xs" title="Edit" onClick={() => handleEdit(r)}><FiEdit2 size={13} /></button>
+          <button type="button" className="btn bg-gradient-danger btn-xs" title="Delete" onClick={() => setDeleteRole(r)}><FiTrash2 size={13} /></button>
+        </div>
+      ),
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [apps, roles]);
 
   return (
     <>
       <section className="content scroll-content">
         <div className="container-fluid">
-          <div className='row'>
-            <div className="col-md-12">
-              <div className="card card-primary card-outline ">
-                <div className="card-header">
-                  <h3 className="card-title text-sm">Create New Role</h3>
-                </div>
-                <div className="card-body text-sm">
-                  <div className='row'>
-                    <div className="form-group col-md-6">
-                      <label htmlFor="userRoleNameInput">Role Name<sup style={{ color: "red" }}>*</sup></label>
-                      <input
-                        type="text"
-                        className="form-control form-control-md"
-                        id="userRoleNameInput"
-                        ref={inputRoleNameReference}
-                        value={roleName}
-                        onChange={(e) => setRoleName(e.target.value)}
-                        placeholder="Role Name"
-                      />
-                    </div>
-                    <div className="form-group col-md-6">
-                      <label>Select Apps<sup style={{ color: "red" }}>*</sup></label>
-                      <Select
-                        isMulti
-                        options={appOptions}
-                        className="roles-custom-select" // Add custom class here
-                        value={appId}
-                        onChange={(selectedOptions) => setAppId(selectedOptions || [])}
-                        ref={selectAppsReference}
-                        placeholder="Select Apps.."
-                        styles={customStyles} 
-                      />
-                    </div>
-                   
+          {showForm && (
+            <form className="card card-primary card-outline" onSubmit={handleSubmit} noValidate>
+              <div className="card-header"><h3 className="card-title text-sm">{editId ? "Edit Role" : "Create New Role"}</h3></div>
+              <div className="card-body text-sm">
+                <div className="row">
+                  <div className="form-group col-md-6">
+                    <label htmlFor="roleName">Role Name<sup>*</sup></label>
+                    <input id="roleName" ref={nameRef} className="form-control form-control-sm" value={roleName}
+                      onChange={(e) => setRoleName(e.target.value)} placeholder="Role Name" />
+                  </div>
+                  <div className="form-group col-md-6">
+                    <label>Select Apps<sup>*</sup></label>
+                    <Select isMulti options={appOptions} value={selectedApps} onChange={(s) => setSelectedApps(s || [])}
+                      placeholder="Select Apps.." styles={selectStyles} />
                   </div>
                 </div>
-                <div className="card-footer text-sm">
-
-                  <button
-                    type="submit"
-                    className="btn btn-primary float-right btn-xs ml-2"
-                    onClick={(e) => {
-                      handleRoleSubmit(e);
-                    }}
-                  >
-                    {updateOrDeleteId ? 'Update & Submit' : 'Save & Submit'}
-                  </button>
-
-                  {/* } */}
-                  <button type="submit" className="btn btn-outline-primary float-right btn-xs" onClick={(e) => { handleCancelClick(e) }}>Cancel</button>
-                </div>
               </div>
+              <div className="card-footer text-sm">
+                <button type="submit" className="btn btn-primary float-right btn-xs ml-2">{editId ? "Update & Submit" : "Save & Submit"}</button>
+                <button type="button" className="btn btn-outline-primary float-right btn-xs" onClick={reset}>Cancel</button>
+              </div>
+            </form>
+          )}
+
+          <div className="card card-primary card-outline">
+            <div className="card-header pg-head">
+              <h3 className="card-title text-sm">Roles</h3>
+              {!showForm && (
+                <button type="button" className="btn btn-primary btn-sm" onClick={() => setShowForm(true)}><FiPlus size={14} /> Add role</button>
+              )}
+            </div>
+            <div className="card-body text-sm">
+              <DataGrid title="Roles List" columns={columns} data={roles} rowKey="roleID" exportName="Roles" />
             </div>
           </div>
-        <div className='row'>
-             <div className="col-md-12">
-               <div className="card card-primary card-outline ">
-                 <div className="card-header">
-                   <h3 className="card-title text-sm">Roles List ( {allRolesList.length} )</h3>
-
-                 </div>
-                 <div className="card-body text-sm" >
-                   <table
-                     id="example1"
-                     class="table table-bordered table-sm "
-                   >
-                     <thead>
-                       <tr>
-                         <th style={{ fontWeight: '500', fontSize: 'smaller', width: "7%" }} className='text-center'>Sr. No.</th>
-                         <th style={{ fontWeight: '500', fontSize: 'smaller' }}>Role Name</th>
-                         <th style={{ fontWeight: '500', fontSize: 'smaller' }}>App Names</th>
-                         <th style={{ fontWeight: '500', fontSize: 'smaller', width: "7%" }}>Action</th>
-                       </tr>
-                     </thead>
-                     <tbody>
-                       {allRolesList.length > 0 ?
-                         allRolesList.map((roleObj, index) => {
-                           return (
-                             <tr>
-                               <td style={{ fontWeight: '400', fontSize: 'smaller' }} className='text-center text-sm'>{index + 1}</td>
-                               <td style={{ fontWeight: '400', fontSize: 'smaller' }}>{roleObj.roleName}</td>
-                               <td style={{ fontWeight: '400', fontSize: 'smaller' }}>{createAttachmentHTML(roleObj.appIDList)}</td>
-                               <td style={{ fontWeight: '400', fontSize: 'smaller' }} className='text-center text-sm'>
-                                 <button type="button" class="btn bg-gradient-warning btn-xs btn-xs-custom" onClick={(e) => { handleEditRoleDetails(roleObj) }} >
-                                   <i class="fas fa-pen" ></i>
-                                 </button>
-                                 <button type="button" class="btn bg-gradient-danger btn-xs ml-2 btn-xs-custom" onClick={(e) => { handleRemoveRole(roleObj) }} >
-                                   <i class="fas fa-trash" ></i>
-                                 </button>
-                               </td>
-                             </tr>
-                           )
-                         })
-                         : ""
-                       }
-                     </tbody>
-                   </table>
-                 </div>
-               </div>
-             </div>
-           </div>
         </div>
       </section>
 
-            <div id="confirmCommonModal" class="modal fade confirmCommonModal" data-backdrop="static" tabindex="-1" role="dialog" aria-labelledby="staticBackdropLabel" aria-hidden="true">
-        <div class="modal-dialog modal-confirm">
-          <div class="modal-content">
-            <div class="modal-header">
-              <div class="icon-box">
-                <i class="fas fa-info"></i>
-              </div>
-              <h5 class="modal-title w-100">Are you sure ?</h5>
+      {deleteRole && (
+        <div className="sp-dialog-backdrop" role="dialog" aria-modal="true">
+          <div className="sp-dialog">
+            <div className="sp-dialog-head"><h2>Are you sure?</h2></div>
+            <div className="sp-dialog-body">
+              Delete the role <b>{deleteRole.roleName}</b> and its app mappings? This cannot be recovered.
             </div>
-            <div class="modal-body">
-              <p class="text-center">By clicking on Yes delete all the role details. Once you deleted it can not be recovered.</p>
-            </div>
-            <div class="modal-footer col-md-12">
-              <button class="btn btn-default btn-sm" data-dismiss="modal">Cancel</button>
-              {isLoaderActive ? <PleaseWaitButton className='btn-sm pl-3 pr-3 ml-2 font-weight-medium auth-form-btn' /> :
-                <button class="btn btn-warning btn-sm pl-3 pr-3 ml-2" onClick={(e) => { yesConfirmSubmitRequest(e) }}>Yes</button>
-              }
-
+            <div className="sp-dialog-foot">
+              <button className="btn btn-default btn-sm" onClick={() => setDeleteRole(null)}>Cancel</button>
+              <button className="btn btn-warning btn-sm" onClick={confirmDelete}>Yes, delete</button>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </>
   );
 };

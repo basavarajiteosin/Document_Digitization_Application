@@ -713,33 +713,31 @@ const Login = () => {
     <div className="auth-split-layout">
       {/* Left Hero / Branding Panel */}
       <div className="auth-hero-pane">
+        <div className="auth-hero-top">
+          <img className="auth-hero-logo" src={bmswhiteLogoWipro} alt="Wipro" />
+          <span className="auth-brand-badge">Document Digitization Application</span>
+        </div>
+
         <div className="auth-hero-content">
-          <div className="auth-brand-badge">
-            <span className="auth-brand-icon">📁</span> Document Digitization Application
-          </div>
           <h1 className="auth-hero-title">
-            Enterprise documents. <br />
-            <span>Securely digitized & governed.</span>
+            Every document,<br />
+            <span>digitized, secured &amp; in control.</span>
           </h1>
           <p className="auth-hero-desc">
-            Role-based access, advanced metadata search, real-time collaboration, and version control across departments and projects.
+            One governed workspace to store, search, share and review documents with your whole organization.
           </p>
-          <div className="auth-hero-card-preview">
-            <div className="auth-preview-header">
-              <span>Department Onboarding Archive</span>
-              <span className="auth-preview-pill">SECURE REPOSITORY</span>
-            </div>
-            <div className="auth-preview-steps">
-              <div>✓ SSO & Independent Storage</div>
-              <div>⚡ Co-authoring & Comments</div>
-              <div>○ Project-wise Sharing</div>
-            </div>
-          </div>
+
+          <ul className="auth-hero-feats">
+            <li><b>Secure access</b><small>Role-based permissions &amp; Microsoft SSO</small></li>
+            <li><b>Find instantly</b><small>Tags, filters and advanced search</small></li>
+            <li><b>Work together</b><small>Comments, reviews &amp; version history</small></li>
+            <li><b>Stay audited</b><small>Access reports &amp; ownership trail</small></li>
+          </ul>
         </div>
+
         <div className="auth-hero-footer">
-          <span>🔒 Role-based governance</span>
-          <span>🛡️ Metadata search</span>
-          <span>⚡ Version control</span>
+          <span>Internal &amp; Restricted</span>
+          <span>© Wipro</span>
         </div>
       </div>
 
