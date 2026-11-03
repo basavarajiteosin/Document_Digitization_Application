@@ -494,13 +494,10 @@ namespace DDAAPI.Services
         public Task<string> SetFolderTagsAsync(string? employeeId, SetFolderTagsDTO dto) =>
             SetTagsAsync(employeeId, new SetTagsDTO { DocType = "Folder", Id = dto.FolderId, Tags = dto.Tags });
 
-        public async Task<string> SetTagsAsync(string? employeeId, SetTagsDTO dto)
+        // ---- tag authorization (single source of truth for GetTagAccess + SetTags) ----
+        private async Task<(bool Can, string? Reason, string? Tags, string Name)> TagAccessCoreAsync(
+            User user, bool isGA, string uid, string docType, int id)
         {
-            var (user, isGA) = await ResolveUserAsync(employeeId);
-            var uid = user.UserID.ToString().ToLower();
-            var cleaned = CleanTags(dto.Tags);
-            var tags = cleaned.Any() ? string.Join(",", cleaned) : null;
-
             var nodes = await _db.FolderData.AsNoTracking().Where(f => f.IsActive)
                 .Select(f => new FolderNode
                 {
@@ -510,37 +507,80 @@ namespace DDAAPI.Services
                     CreatedBy = f.CreatedBy,
                     AuthorizedUserId = f.AuthorizedUserId
                 }).ToListAsync();
-            var children = nodes.Where(n => n.ParentFolderId.HasValue && n.ParentFolderId.Value != 0).ToLookup(n => n.ParentFolderId!.Value);
+            var children = nodes.Where(n => n.ParentFolderId.HasValue && n.ParentFolderId.Value != 0)
+                                .ToLookup(n => n.ParentFolderId!.Value);
             var (folderShares, fileShares) = await ShareMapsAsync(user);
-            var writeRoots = new HashSet<int>(nodes.Where(n => Eq(n.CreatedBy, uid) || Eq(n.AuthorizedUserId, uid)).Select(n => n.FolderId));
+            var writeRoots = new HashSet<int>(nodes
+                .Where(n => Eq(n.CreatedBy, uid) || Eq(n.AuthorizedUserId, uid)).Select(n => n.FolderId));
             writeRoots.UnionWith(folderShares.Where(k => k.Value >= 2).Select(k => k.Key));
             var writeScope = Expand(writeRoots, children);
 
-            if (dto.DocType == "Document")
+            if (docType == "Document")
             {
-                var file = await _db.FileData.FirstOrDefaultAsync(f => f.FileId == dto.Id && f.IsActive)
+                var file = await _db.FileData.AsNoTracking().FirstOrDefaultAsync(f => f.FileId == id && f.IsActive)
                            ?? throw new KeyNotFoundException("File not found.");
-                var ok = isGA || Eq(file.CreatedBy, uid) || (fileShares.TryGetValue(file.FileId, out var t) && t >= 2) || writeScope.Contains(file.FolderId);
-                if (!ok) throw new SearchForbiddenException("You do not have permission to edit tags on this file.");
+                if (!isGA && file.IsHide) return (false, "This file is not available.", file.Tags, file.FileName);
+                var ok = isGA || Eq(file.CreatedBy, uid)
+                         || (fileShares.TryGetValue(file.FileId, out var t) && t >= 2)
+                         || writeScope.Contains(file.FolderId);
+                if (!ok) return (false, "You have read-only access. Tags can be edited with Read/Write access or by the owner.", file.Tags, file.FileName);
+                if (!string.IsNullOrEmpty(file.CheckedOutBy) && !Eq(file.CheckedOutBy, uid))
+                    return (false, "This file is checked out by another user.", file.Tags, file.FileName);
+                return (true, null, file.Tags, file.FileName);
+            }
+
+            var folder = await _db.FolderData.AsNoTracking().FirstOrDefaultAsync(f => f.FolderId == id && f.IsActive)
+                         ?? throw new KeyNotFoundException("Folder not found.");
+            if (!isGA && folder.IsHide) return (false, "This folder is not available.", folder.Tags, folder.FolderName);
+            if (!(isGA || writeScope.Contains(folder.FolderId)))
+                return (false, "You have read-only access. Tags can be edited with Read/Write access or by the owner.", folder.Tags, folder.FolderName);
+            return (true, null, folder.Tags, folder.FolderName);
+        }
+
+        public async Task<TagAccessDTO> GetTagAccessAsync(string? employeeId, string? docType, int id)
+        {
+            var (user, isGA) = await ResolveUserAsync(employeeId);
+            var uid = user.UserID.ToString().ToLower();
+            var type = string.Equals(docType, "Document", StringComparison.OrdinalIgnoreCase) ? "Document" : "Folder";
+            var r = await TagAccessCoreAsync(user, isGA, uid, type, id);
+            return new TagAccessDTO { CanEdit = r.Can, Reason = r.Reason, Tags = r.Tags, Name = r.Name };
+        }
+
+        public async Task<string> SetTagsAsync(string? employeeId, SetTagsDTO dto)
+        {
+            var (user, isGA) = await ResolveUserAsync(employeeId);
+            var uid = user.UserID.ToString().ToLower();
+            var type = string.Equals(dto.DocType, "Document", StringComparison.OrdinalIgnoreCase) ? "Document" : "Folder";
+            var cleaned = CleanTags(dto.Tags);
+            var tags = cleaned.Any() ? string.Join(",", cleaned) : null;
+
+            var access = await TagAccessCoreAsync(user, isGA, uid, type, dto.Id);
+            if (!access.Can) throw new SearchForbiddenException(access.Reason ?? "You do not have permission to edit tags.");
+
+            if (type == "Document")
+            {
+                var file = await _db.FileData.FirstAsync(f => f.FileId == dto.Id);
                 file.Tags = tags;
                 file.ModifiedOn = DateTime.Now;
                 file.ModifiedBy = uid;
                 var parent = await _db.FolderData.FirstOrDefaultAsync(f => f.FolderId == file.FolderId);
                 if (parent != null)
-                    await _report.AddFolderVersionAsync(parent, "FileUpdated", uid, $"Tags of file '{file.FileName}' updated to '{tags ?? ""}'", file.FileName, saveChanges: false);
+                    await _report.AddFolderVersionAsync(parent, "FileUpdated", uid,
+                        $"Tags of file '{file.FileName}' updated to '{tags ?? ""}'", file.FileName, saveChanges: false);
             }
             else
             {
-                var folder = await _db.FolderData.FirstOrDefaultAsync(f => f.FolderId == dto.Id && f.IsActive)
-                             ?? throw new KeyNotFoundException("Folder not found.");
-                if (!(isGA || writeScope.Contains(folder.FolderId)))
-                    throw new SearchForbiddenException("You do not have permission to edit tags on this folder.");
+                var folder = await _db.FolderData.FirstAsync(f => f.FolderId == dto.Id);
                 folder.Tags = tags;
                 folder.ModifiedOn = DateTime.Now;
                 folder.ModifiedBy = uid;
                 await _report.AddFolderVersionAsync(folder, "Updated", uid, $"Tags updated to '{tags ?? ""}'", saveChanges: false);
             }
+
+            await _report.LogOwnershipOrAccessAsync(dto.Id, type, "Modified", null, null, null, null, uid,
+                $"Tags set to '{tags ?? ""}'", saveChanges: false);
             await _db.SaveChangesAsync();
+            await _report.LogFolderAccessAsync(dto.Id, type, access.Name, uid, "Update");
             return tags ?? "";
         }
     }

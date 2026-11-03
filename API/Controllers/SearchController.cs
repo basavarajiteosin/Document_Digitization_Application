@@ -85,5 +85,15 @@ namespace DDAAPI.Controllers
                 return BadRequest(new { success = false, message = ex.Message });
             }
         }
+
+        // GET api/Search/TagAccess?docType=Folder|Document&id=5
+        [HttpGet("TagAccess")]
+        public async Task<IActionResult> TagAccess([FromQuery] string docType, [FromQuery] int id)
+        {
+            try { return Ok(new { success = true, data = await _searchService.GetTagAccessAsync(User.Identity?.Name, docType, id) }); }
+            catch (UnauthorizedAccessException ex) { return Unauthorized(new { success = false, message = ex.Message }); }
+            catch (KeyNotFoundException ex) { return NotFound(new { success = false, message = ex.Message }); }
+            catch (Exception ex) { return BadRequest(new { success = false, message = ex.Message }); }
+        }
     }
 }

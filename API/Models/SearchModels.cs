@@ -88,4 +88,12 @@ namespace DDAAPI.Models
         public int FolderId { get; set; }
         public string? Tags { get; set; }   // comma separated
     }
+
+    public class TagAccessDTO
+    {
+        public bool CanEdit { get; set; }
+        public string? Reason { get; set; }
+        public string? Tags { get; set; }
+        public string Name { get; set; } = "";
+    }
 }

@@ -8,6 +8,7 @@ import "./styles/sp-pages.css";
 import "./styles/sp-forms.css";
 import "./styles/sp-collab.css";
 import "./styles/sf-theme.css";
+import "./styles/sf-tags.css";
 import App from "./App";
 import reportWebVitals from "./reportWebVitals";
 import "./services/axiosInterceptor";

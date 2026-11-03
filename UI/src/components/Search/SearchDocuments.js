@@ -6,7 +6,7 @@ import FileVersionsModal from "../FileVersions/FileVersionsModal";
 import { useSelector } from "react-redux";
 import { getRecents, addRecent, clearRecents } from "../../common/recentSearches";
 import "./search.css";
-
+import TagsModal from "../Tags/TagsModal";
 const config = require("../../services/config.json");
 const API = `${config.DDA_API_API_URL}Search/`;
 
@@ -94,7 +94,6 @@ const SearchDocuments = () => {
   const [loading, setLoading] = useState(false);
   const [popularTags, setPopularTags] = useState([]);
   const [tagModal, setTagModal] = useState(null); // { item, tags: [], input: "" }
-  const [savingTags, setSavingTags] = useState(false);
   const requestSeq = useRef(0);
   const [focused, setFocused] = useState(false);
   const barRef = useRef(null);
@@ -267,35 +266,7 @@ const SearchDocuments = () => {
 
   const openItem = (item) => (item.docType === "Folder" ? openLocation(item) : handleView(item));
 
-  const openTagModal = (item) => {
-    const own = item.docType === "Document" ? item.ownTags : item.tags;
-    setTagModal({ item, tags: own ? own.split(",").filter(Boolean) : [], input: "" });
-  };
-
-  const addTagsFromInput = (modal, raw) => {
-    const incoming = raw.split(",").map((t) => t.trim().toLowerCase().slice(0, 30)).filter(Boolean);
-    const merged = Array.from(new Set([...modal.tags, ...incoming]));
-    if (merged.length > 10) toast.warn("Maximum 10 tags allowed.");
-    return { ...modal, tags: merged.slice(0, 10), input: "" };
-  };
-
-  const saveTags = async () => {
-    const m = addTagsFromInput(tagModal, tagModal.input);
-    setSavingTags(true);
-    try {
-      const res = await axios.post(`${API}SetTags`, { docType: m.item.docType, id: m.item.id, tags: m.tags.join(",") });
-      if (res.data.success) {
-        toast.success("Tags updated");
-        setTagModal(null);
-        loadTags();
-        setApplied((p) => ({ ...p }));   // refresh results (files also show inherited tags)
-      } else toast.error(res.data.message || "Failed to update tags");
-    } catch (e) {
-      toast.error(e.response?.data?.message || "Error updating tags");
-    } finally {
-      setSavingTags(false);
-    }
-  };
+  const openTagModal = (item) => setTagModal({ docType: item.docType, id: item.id, name: item.name });
 
   const tabs = [
     ["All", "All", results.folderCount + results.fileCount],
@@ -546,7 +517,7 @@ const SearchDocuments = () => {
                         {item.docType === "Document" && item.path?.length > 0 && (
                           <button type="button" className="sps-act" title="Open file location" aria-label={`Open location of ${item.name}`}
                             onClick={() => openLocation(item)}>
-                            <i className="fas fa-folder-tree" />
+                            <i className="fas fa-folder-open" />
                           </button>
                         )}
                         <button type="button" className="sps-act" title="Download" aria-label={`Download ${item.name}`} onClick={() => handleDownload(item)}>
@@ -555,6 +526,11 @@ const SearchDocuments = () => {
                         {item.canEditTags && (
                           <button type="button" className="sps-act" title="Add / edit tags" aria-label={`Edit tags of ${item.name}`} onClick={() => openTagModal(item)}>
                             <i className="fas fa-tag" />
+                          </button>
+                        )}
+                        {!item.canEditTags && (
+                          <button type="button" className="sps-act" title="View tags" aria-label={`View tags of ${item.name}`} onClick={() => openTagModal(item)}>
+                            <i className="fas fa-tags" />
                           </button>
                         )}
                         {item.docType === "Document" && (
@@ -597,49 +573,11 @@ const SearchDocuments = () => {
 
         {/* tag editor */}
         {tagModal && (
-          <div className="sps-modal-bg" onMouseDown={(e) => e.target === e.currentTarget && setTagModal(null)}>
-            <div className="sps-modal" role="dialog" aria-modal="true" aria-label="Edit tags">
-              <header>Edit tags</header>
-              <div className="body">
-                <div className="sps-sub mb-2">{tagModal.item.name} — {tagModal.item.docType === "Folder" ? "files inside this folder become searchable by these tags." : "this file becomes searchable by these tags."}</div>
-                <div className="sps-tagbox">
-                  {tagModal.tags.map((t) => (
-                    <span key={t} className="sps-pill active">
-                      {t}
-                      <button type="button" aria-label={`Remove ${t}`}
-                        style={{ border: 0, background: "transparent", color: "inherit", padding: 0, cursor: "pointer" }}
-                        onClick={() => setTagModal({ ...tagModal, tags: tagModal.tags.filter((x) => x !== t) })}>×</button>
-                    </span>
-                  ))}
-                  <input
-                    autoFocus maxLength={30} placeholder={tagModal.tags.length ? "" : "Type a tag and press Enter"}
-                    value={tagModal.input}
-                    onChange={(e) => setTagModal({ ...tagModal, input: e.target.value })}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === ",") { e.preventDefault(); setTagModal(addTagsFromInput(tagModal, tagModal.input)); }
-                      else if (e.key === "Backspace" && !tagModal.input && tagModal.tags.length)
-                        setTagModal({ ...tagModal, tags: tagModal.tags.slice(0, -1) });
-                    }}
-                  />
-                </div>
-                <small className="text-muted">Up to 10 tags, 30 characters each.</small>
-                {popularTags.length > 0 && (
-                  <div className="sps-tagcloud mt-2">
-                    {popularTags.filter((t) => !tagModal.tags.includes(t.tag)).slice(0, 8).map((t) => (
-                      <button key={t.tag} type="button" className="sps-pill"
-                        onClick={() => setTagModal(addTagsFromInput(tagModal, t.tag))}>+ {t.tag}</button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <footer>
-                <button type="button" className="sps-btn ghost" onClick={() => setTagModal(null)}>Cancel</button>
-                <button type="button" className="sps-btn" disabled={savingTags} onClick={saveTags}>
-                  {savingTags ? "Saving…" : "Save"}
-                </button>
-              </footer>
-            </div>
-          </div>
+          <TagsModal
+            item={tagModal}
+            onClose={() => setTagModal(null)}
+            onSaved={() => { loadTags(); setApplied((p) => ({ ...p })); }}
+          />
         )}
       </div>
     </section>

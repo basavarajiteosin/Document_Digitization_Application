@@ -32,6 +32,7 @@ import CreatableSelect from "react-select/creatable";
 import axios from "axios";
 import FileVersionsModal from "../FileVersions/FileVersionsModal";
 import CommentsReviewModal from "../Comments/CommentsReviewModal";
+import TagsModal from "../Tags/TagsModal";
 const config = require("../../services/config.json");
 
 // Static, human-readable labels for the Access Type IDs used across the app
@@ -121,7 +122,7 @@ const FolderCreation = () => {
   const [accessHistoryLoading, setAccessHistoryLoading] = useState(false);
   const [versionFileItem, setVersionFileItem] = useState(null);
   const [collabItem, setCollabItem] = useState(null);
-
+  const [tagItem, setTagItem] = useState(null);
   const [assignProjectItem, setAssignProjectItem] = useState(null);
   const [departmentGroups, setDepartmentGroups] = useState([]);
 
@@ -2323,19 +2324,19 @@ const FolderCreation = () => {
       setCurrentPath(
         validCrumbs
           ? crumbs.map((c) => ({
-              folderId: Number(c.folderId),
-              folderName: c.folderName,
+            folderId: Number(c.folderId),
+            folderName: c.folderName,
+            accessType: accessTypeParam,
+            ownerId: ownerParam,
+          }))
+          : [
+            {
+              folderId: openId,
+              folderName: searchParams.get("folderName") || "Folder",
               accessType: accessTypeParam,
               ownerId: ownerParam,
-            }))
-          : [
-              {
-                folderId: openId,
-                folderName: searchParams.get("folderName") || "Folder",
-                accessType: accessTypeParam,
-                ownerId: ownerParam,
-              },
-            ]
+            },
+          ]
       );
       setCurrentFolderId(openId);
       localStorage.setItem("currentFolderId", String(openId));
@@ -2748,7 +2749,16 @@ const FolderCreation = () => {
                             : isGridView
                               ? truncateText(item.foldeOrFileName || item.folderName, 16)
                               : item.foldeOrFileName || item.folderName}
-
+                          {item.tags && (
+                            <div className="sf-tagrow">
+                              {item.tags.split(",").filter(Boolean).slice(0, 3).map((t) => (
+                                <span key={t} className="sf-tagchip">{t}</span>
+                              ))}
+                              {item.tags.split(",").filter(Boolean).length > 3 && (
+                                <span className="sf-tagchip more">+{item.tags.split(",").filter(Boolean).length - 3}</span>
+                              )}
+                            </div>
+                          )}
                           <div
                             className="item-details text-muted"
                             style={{
@@ -2946,6 +2956,23 @@ const FolderCreation = () => {
                                   </button>
                                 </MenuItem>
                               )}
+                            <MenuItem>
+                              <button
+                                className="dropdown-item"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const isDoc = item.docType === "Document" || (!!item.fileId && item.docType !== "Folder");
+                                  setTagItem({
+                                    docType: isDoc ? "Document" : "Folder",
+                                    id: isDoc ? (item.fileId || item.folderOrFileId) : (item.folderId || item.folderOrFileId),
+                                    name: item.foldeOrFileName || item.fileName || item.folderName,
+                                  });
+                                  setTimeout(() => document.activeElement.blur(), 0);
+                                }}
+                              >
+                                Manage Tags
+                              </button>
+                            </MenuItem>
                             <MenuItem>
                               <button
                                 className="dropdown-item"
@@ -3788,6 +3815,13 @@ const FolderCreation = () => {
       {collabItem && (
         <CommentsReviewModal item={collabItem} onClose={() => setCollabItem(null)} />
       )}
+      {tagItem && (
+  <TagsModal
+    item={tagItem}
+    onClose={() => setTagItem(null)}
+    onSaved={() => fetchFolders(currentFolderId)}
+  />
+)}
       {versionFileItem && (
         <FileVersionsModal
           file={versionFileItem}
