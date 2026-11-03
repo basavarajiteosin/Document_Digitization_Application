@@ -76,13 +76,16 @@ namespace DDAAPI.Services
                 .ToDictionaryAsync(f => f.FolderId, f => f.FolderName);
             var fileNames = await _db.FileData.AsNoTracking().Where(f => fileIds.Contains(f.FileId))
                 .ToDictionaryAsync(f => f.FileId, f => f.FileName);
+            var divNames = await _db.DivisionMaster.AsNoTracking()
+    .ToDictionaryAsync(d => d.DivisionId, d => d.Description ?? "");
 
             return projects.Select(p => new ProjectDTO
             {
                 ProjectId = p.ProjectId,
                 ProjectName = p.ProjectName,
                 Description = p.Description,
-                Division = p.Division,
+                DivisionIds = ParseDivIds(p.DivisionIds),
+                DivisionNames = ParseDivIds(p.DivisionIds).Select(i => divNames.GetValueOrDefault(i, "")).Where(n => n != "").ToList(),
                 IsActive = p.IsActive,
                 CreatedOn = p.CreatedOn,
                 Members = members.Where(m => m.ProjectId == p.ProjectId).Select(m => new ProjectMemberDTO
@@ -115,6 +118,14 @@ namespace DDAAPI.Services
                 .Select(s => Guid.TryParse(s, out var g) ? g : (Guid?)null)
                 .Where(g => g.HasValue).Select(g => g!.Value).Distinct().ToList();
 
+            var divIds = (dto.DivisionIds ?? new List<int>()).Distinct().ToList();
+            if (divIds.Count > 0)
+            {
+                var validCount = await _db.DivisionMaster.CountAsync(d => divIds.Contains(d.DivisionId));
+                if (validCount != divIds.Count) throw new ArgumentException("One or more selected departments are invalid.");
+            }
+            var divCsv = divIds.Count == 0 ? null : string.Join(",", divIds);
+
             Project p;
             if (dto.ProjectId.HasValue && dto.ProjectId.Value > 0)
             {
@@ -123,7 +134,7 @@ namespace DDAAPI.Services
                 if (await _db.Projects.AnyAsync(x => x.ProjectId != p.ProjectId && x.ProjectName == name))
                     throw new ArgumentException("A project with this name already exists.");
                 p.ProjectName = name; p.Description = desc.Length == 0 ? null : desc;
-                p.Division = string.IsNullOrWhiteSpace(dto.Division) ? null : dto.Division.Trim();
+                p.DivisionIds = divCsv;
                 p.IsActive = dto.IsActive; p.ModifiedOn = DateTime.Now; p.ModifiedBy = a.Uid;
             }
             else
@@ -134,7 +145,7 @@ namespace DDAAPI.Services
                 {
                     ProjectName = name,
                     Description = desc.Length == 0 ? null : desc,
-                    Division = string.IsNullOrWhiteSpace(dto.Division) ? null : dto.Division.Trim(),
+                    DivisionIds = divCsv,
                     IsActive = true,
                     CreatedOn = DateTime.Now,
                     CreatedBy = a.Uid
@@ -297,5 +308,10 @@ namespace DDAAPI.Services
 
             await _db.SaveChangesAsync();
         }
+
+        private static List<int> ParseDivIds(string? csv) =>
+    (csv ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .Select(s => int.TryParse(s, out var i) ? i : (int?)null)
+        .Where(i => i.HasValue).Select(i => i!.Value).ToList();
     }
 }

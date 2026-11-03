@@ -132,6 +132,7 @@ const Login = () => {
         clientId: "",
         designation: data.designation,
         division: data.division,
+        divisionName: data.divisionName,
         isChangePasswordRequired: data.isChangePasswordRequired,
       })
     );
@@ -227,6 +228,7 @@ const Login = () => {
               clientId: "",
               designation: responseData.designation,
               division: responseData.division,
+              divisionName: responseData.divisionName,
               isChangePasswordRequired: responseData.isChangePasswordRequired,
             })
           );
@@ -357,6 +359,7 @@ const Login = () => {
               clientId: "",
               designation: responseData.designation,
               division: responseData.division,
+              divisionName: responseData.divisionName,
               isChangePasswordRequired: responseData.isChangePasswordRequired,
             })
           );
@@ -566,7 +569,7 @@ const Login = () => {
       return;
     }
     if (!division) {
-      toast.error("Please enter your Division.");
+  toast.error("Please select your Division.");
       inputDivisionRef.current?.focus();
       return;
     }
@@ -575,6 +578,8 @@ const Login = () => {
       inputDesignationRef.current?.focus();
       return;
     }
+
+    
 
     setIsLoaderActive(true);
 
@@ -675,10 +680,10 @@ const Login = () => {
       ? "thanks"
       : "register"
     : forgotPasswordClick
-    ? "forgot"
-    : isOTPSent
-    ? "otp"
-    : "signin";
+      ? "forgot"
+      : isOTPSent
+        ? "otp"
+        : "signin";
 
   const field = (id, label, control, hint) => (
     <div className="auth-field">
@@ -944,9 +949,7 @@ const Login = () => {
                         onChange={handleRegisterChange}
                       >
                         <option value="" disabled hidden>Select division</option>
-                        {divisions.map((d) => (
-                          <option key={d.divisionId} value={d.description}>{d.description}</option>
-                        ))}
+                        {divisions.map((d) => (<option key={d.divisionId} value={String(d.divisionId)}>{d.description}</option>))}
                       </select>
                     )}
                   </div>

@@ -274,7 +274,7 @@ namespace DDAAPI.Services
                     IsSuccess = true,
                     Message = "Login Success",
                     Designation = user.Designation ?? "",
-                    Division = user.Division,
+                    DivisionName = await DivisionNameAsync(user.Division),
                     UserRole = userRole != null ? userRole.RoleName : "",
                     RoleID = userRole.RoleID,
                     IsChangePasswordRequired = "No" // Usually No for Microsoft SSO
@@ -384,7 +384,7 @@ namespace DDAAPI.Services
                             authenticationResult.IsSuccess = Success;
                             authenticationResult.Message = "Login Success";
                             authenticationResult.Designation = user.Designation == null ? "" : user.Designation;
-                            authenticationResult.Division = user.Division;
+                            authenticationResult.DivisionName = await DivisionNameAsync(user.Division);
                             authenticationResult.UserRole = userRole != null ? userRole.RoleName : "";
                             authenticationResult.IsChangePasswordRequired = isChangePasswordRequired;
                             await _dbContext.SaveChangesAsync();
@@ -690,7 +690,7 @@ namespace DDAAPI.Services
                 authenticationResult.IsSuccess = Success;
                 authenticationResult.Message = "Login Success";
                 authenticationResult.Designation = user.Designation == null ? "" : user.Designation;
-                authenticationResult.Division = user.Division;
+                authenticationResult.DivisionName = await DivisionNameAsync(user.Division);
                 authenticationResult.UserRole = userRole != null ? userRole.RoleName : "";
                 authenticationResult.IsChangePasswordRequired = isChangePasswordRequired;
                 if (userinfo != null)
@@ -903,6 +903,13 @@ namespace DDAAPI.Services
                 Console.WriteLine($"Error reading login log: {ex.Message}");
             }
             return loginLogs;
+        }
+
+        private async Task<string?> DivisionNameAsync(string? division)
+        {
+            if (!int.TryParse(division?.Trim(), out var id)) return division;
+            return await _dbContext.DivisionMaster.AsNoTracking()
+                .Where(d => d.DivisionId == id).Select(d => d.Description).FirstOrDefaultAsync() ?? division;
         }
 
         private static string MaskEmails(string input)

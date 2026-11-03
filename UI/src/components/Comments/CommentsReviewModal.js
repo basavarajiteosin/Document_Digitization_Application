@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
 import { toast } from "react-toastify";
 import { FiX, FiFolder, FiFile, FiSend, FiMessageSquare } from "react-icons/fi";
@@ -9,6 +9,7 @@ const API = `${config.DDA_API_API_URL}Comments/`;
 
 const fmt = (d) => (d ? new Date(d).toLocaleString() : "-");
 const errMsg = (e, fb) => e.response?.data?.message || fb;
+const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 export const initials = (name = "") =>
   name.split(" ").filter(Boolean).slice(0, 2).map((p) => p[0].toUpperCase()).join("") || "?";
@@ -24,6 +25,94 @@ export const StatusPill = ({ status }) => (
   <span className={`sp-pill-s ${statusClass(status)}`}>{statusLabel(status)}</span>
 );
 
+/* Highlights "@Name" for every mentioned user of a comment */
+export const renderWithMentions = (text, mentions = []) => {
+  const names = [...new Set(mentions.map((m) => m.name).filter(Boolean))].sort((a, b) => b.length - a.length);
+  if (!names.length) return text;
+  const re = new RegExp(`(@(?:${names.map(escRe).join("|")}))`, "g");
+  return text.split(re).map((p, i) =>
+    i % 2 === 1 ? <span key={i} className="sp-mention-tag">{p}</span> : <React.Fragment key={i}>{p}</React.Fragment>
+  );
+};
+
+/* Textarea with Teams-style @mention suggestions (authorised users only = `people`) */
+const MentionBox = ({ value, onChange, mentions, onMentionsChange, people, rows = 2, maxLength = 2000, placeholder }) => {
+  const ref = useRef(null);
+  const [q, setQ] = useState(null); // { start, text }
+  const [idx, setIdx] = useState(0);
+
+  const matches = q
+    ? people.filter((p) => `${p.name} ${p.email}`.toLowerCase().includes(q.text.toLowerCase())).slice(0, 6)
+    : [];
+
+  const detect = (val, caret) => {
+    const before = val.slice(0, caret);
+    const at = before.lastIndexOf("@");
+    if (at < 0 || (at > 0 && !/\s/.test(before[at - 1]))) return setQ(null);
+    const t = before.slice(at + 1);
+    if (/\n/.test(t) || t.length > 30) return setQ(null);
+    setQ({ start: at, text: t });
+    setIdx(0);
+  };
+
+  const handleChange = (e) => {
+    const val = e.target.value;
+    onChange(val);
+    detect(val, e.target.selectionStart);
+    onMentionsChange(mentions.filter((m) => val.includes("@" + m.name)));
+  };
+
+  const pick = (p) => {
+    const caret = ref.current.selectionStart;
+    const ins = "@" + p.name + " ";
+    onChange(value.slice(0, q.start) + ins + value.slice(caret));
+    if (!mentions.some((m) => m.userId === p.userId)) onMentionsChange([...mentions, { userId: p.userId, name: p.name }]);
+    const pos = q.start + ins.length;
+    setQ(null);
+    requestAnimationFrame(() => { ref.current?.focus(); ref.current?.setSelectionRange(pos, pos); });
+  };
+
+  const onKeyDown = (e) => {
+    if (!q || !matches.length) return;
+    if (e.key === "ArrowDown") { e.preventDefault(); setIdx((i) => (i + 1) % matches.length); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setIdx((i) => (i <= 0 ? matches.length - 1 : i - 1)); }
+    else if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); pick(matches[idx]); }
+    else if (e.key === "Escape") { e.preventDefault(); setQ(null); }
+  };
+
+  return (
+    <div className="sp-mention-wrap">
+      <textarea
+        ref={ref} rows={rows} maxLength={maxLength} placeholder={placeholder} value={value}
+        onChange={handleChange} onKeyDown={onKeyDown} onBlur={() => setTimeout(() => setQ(null), 120)}
+      />
+      {q && (
+        <div className="sp-mention-list" role="listbox" aria-label="Mention a user">
+          {matches.length === 0 ? (
+            <div className="sp-mention-empty">
+              {people.length === 0 ? "No authorised users to mention. Share this item first." : "No matching users"}
+            </div>
+          ) : matches.map((p, i) => (
+            <div
+              key={p.userId} role="option" aria-selected={i === idx}
+              className={`sp-mention-item ${i === idx ? "active" : ""}`}
+              onMouseDown={(e) => { e.preventDefault(); pick(p); }}
+              onMouseEnter={() => setIdx(i)}
+            >
+              <Avatar name={p.name} />
+              <span className="sp-mention-txt">
+                <b>{p.name}</b>
+                <small>{p.email}</small>
+              </span>
+              <span className="sp-mention-role">{p.role}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 /** item = { docType: "Folder" | "Document", id, name } */
 const CommentsReviewModal = ({ item, initialTab = "comments", onClose }) => {
   const params = { docType: item.docType, id: item.id };
@@ -35,8 +124,10 @@ const CommentsReviewModal = ({ item, initialTab = "comments", onClose }) => {
   const [busy, setBusy] = useState(false);
 
   const [newText, setNewText] = useState("");
+  const [newMentions, setNewMentions] = useState([]);
   const [replyTo, setReplyTo] = useState(null);
   const [replyText, setReplyText] = useState("");
+  const [replyMentions, setReplyMentions] = useState([]);
   const [editId, setEditId] = useState(null);
   const [editText, setEditText] = useState("");
   const [reviewerId, setReviewerId] = useState("");
@@ -73,10 +164,12 @@ const CommentsReviewModal = ({ item, initialTab = "comments", onClose }) => {
     return false;
   };
 
-  const addComment = async (text, parentCommentId = null) => {
+  const addComment = async (text, mentions, parentCommentId = null) => {
     if (!text.trim()) return toast.error("Please type a comment.");
-    if (await post("Add", { docType: item.docType, folderOrFileId: item.id, commentText: text, parentCommentId })) {
-      setNewText(""); setReplyText(""); setReplyTo(null); loadComments();
+    const mentionedUserIds = mentions.filter((m) => text.includes("@" + m.name)).map((m) => m.userId);
+    if (await post("Add", { docType: item.docType, folderOrFileId: item.id, commentText: text, parentCommentId, mentionedUserIds },
+      mentionedUserIds.length ? "Comment posted. Mentioned users were notified." : null)) {
+      setNewText(""); setNewMentions([]); setReplyText(""); setReplyMentions([]); setReplyTo(null); loadComments();
     }
   };
   const saveEdit = async () => {
@@ -131,12 +224,14 @@ const CommentsReviewModal = ({ item, initialTab = "comments", onClose }) => {
             </div>
           </>
         ) : (
-          <div className={`sp-cm-text ${c.isDeleted ? "deleted" : ""}`}>{c.commentText}</div>
+          <div className={`sp-cm-text ${c.isDeleted ? "deleted" : ""}`}>
+            {c.isDeleted ? c.commentText : renderWithMentions(c.commentText, c.mentions)}
+          </div>
         )}
 
         {!c.isDeleted && editId !== c.commentId && (
           <div className="sp-cm-actions">
-            {!isReply && <button onClick={() => { setReplyTo(c.commentId); setReplyText(""); }}>Reply</button>}
+            {!isReply && <button onClick={() => { setReplyTo(c.commentId); setReplyText(""); setReplyMentions([]); }}>Reply</button>}
             {!isReply && <button onClick={() => toggleResolve(c)}>{c.isResolved ? "Reopen" : "Resolve"}</button>}
             {c.canEdit && <button onClick={() => { setEditId(c.commentId); setEditText(c.commentText); }}>Edit</button>}
             {c.canDelete && <button className="danger" onClick={() => deleteComment(c.commentId)}>Delete</button>}
@@ -145,9 +240,12 @@ const CommentsReviewModal = ({ item, initialTab = "comments", onClose }) => {
 
         {replyTo === c.commentId && (
           <div style={{ marginTop: 8 }}>
-            <textarea rows={2} maxLength={2000} placeholder="Write a reply..." value={replyText} onChange={(e) => setReplyText(e.target.value)} />
+            <MentionBox
+              value={replyText} onChange={setReplyText} mentions={replyMentions} onMentionsChange={setReplyMentions}
+              people={people} placeholder="Write a reply... type @ to mention"
+            />
             <div className="sp-cm-actions" style={{ marginTop: 6 }}>
-              <button disabled={busy} onClick={() => addComment(replyText, c.commentId)}>Reply</button>
+              <button disabled={busy} onClick={() => addComment(replyText, replyMentions, c.commentId)}>Reply</button>
               <button onClick={() => setReplyTo(null)}>Cancel</button>
             </div>
           </div>
@@ -193,11 +291,13 @@ const CommentsReviewModal = ({ item, initialTab = "comments", onClose }) => {
               ) : topLevel.map((c) => renderComment(c, false))}
             </div>
             <div className="sp-composer">
-              <div className="row-in">
-                <textarea rows={2} maxLength={2000} placeholder="Add a comment" value={newText} onChange={(e) => setNewText(e.target.value)} />
-              </div>
+              <MentionBox
+                value={newText} onChange={setNewText} mentions={newMentions} onMentionsChange={setNewMentions}
+                people={people} placeholder="Add a comment — type @ to mention someone"
+              />
               <div className="bar">
-                <button className="sp-btn primary" disabled={busy} onClick={() => addComment(newText)}><FiSend size={14} /> Post</button>
+                <span className="sp-hint" style={{ marginRight: "auto" }}>Mentioned users get an email and a notification.</span>
+                <button className="sp-btn primary" disabled={busy} onClick={() => addComment(newText, newMentions)}><FiSend size={14} /> Post</button>
               </div>
             </div>
           </>

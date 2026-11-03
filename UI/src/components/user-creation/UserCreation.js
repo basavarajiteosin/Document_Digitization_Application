@@ -193,26 +193,6 @@ const UserCreation = () => {
     $("#AddNewHeaderButton").click();
   };
 
-  // const handleEditTaskDetails = (userObj) => {
-
-
-  //   setemployeeId(userObj.employeeId);
-  //   setUserEmail(userObj.email);
-  //   setRoleId(userObj.roleID);
-  //   setPassword(userObj.password);
-  //   setContactNumber(userObj.contactNumber);
-  //   setdesignation(userObj.designation);
-  //   setDivision(userObj.division);
-  //   setUpdateOrDeleteId(userObj.userID);
-
-  //   setFirstName(userObj.firstName);
-  //   setLastName(userObj.lastName);
-  //   setAddress(userObj.address);
-  //   setIsActive(userObj.isActive);
-
-  //   listOfProjectsHeaderExpandButtionClick();
-  //   window.scrollTo({ top: 0, behavior: "smooth" });
-  // };
   const handleEditTaskDetails = (userObj) => {
     const [countryCode, contactNumber] = userObj.contactNumber.split('-');
 
@@ -223,7 +203,7 @@ const UserCreation = () => {
     setContactNumber(contactNumber); // Set the extracted contact number
     setCountryCode(countryCode); // Set the country code
     setdesignation(userObj.designation);
-    setDivision(userObj.division);
+    setDivision(String(userObj.division ?? ""));
     setUpdateOrDeleteId(userObj.userID);
     setFirstName(userObj.firstName);
     setLastName(userObj.lastName);
@@ -359,7 +339,7 @@ const UserCreation = () => {
       return;
     }
     if (!removeExtraSpaces(division)) {
-      toast.error("Please enter division.");
+      toast.error("Please select division.");
       inputDivisionReference.current?.focus();
       inputDivisionReference.current?.classList.add("is-invalid");
       return;
@@ -703,17 +683,13 @@ const UserCreation = () => {
                         ref={inputDivisionReference}
                         value={division}
                         onChange={(e) => setDivision(e.target.value)}
-                        placeholder="Select Division"
                       >
                         <option value="" disabled hidden>
                           Select Division
                         </option>
-                        {divisions.map((division) => (
-                          <option
-                            key={division.divisionId}
-                            value={division.description}
-                          >
-                            {division.description}
+                        {divisions.map((d) => (
+                          <option key={d.divisionId} value={String(d.divisionId)}>
+                            {d.description}
                           </option>
                         ))}
                       </select>
@@ -894,7 +870,7 @@ const UserCreation = () => {
                                   fontSize: "smaller",
                                 }}
                               >
-                                {userObj.division}
+                                {userObj.divisionName || userObj.division}
                               </td>
 
                               <td

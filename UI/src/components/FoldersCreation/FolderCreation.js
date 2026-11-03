@@ -1606,24 +1606,7 @@ const FolderCreation = () => {
           }));
 
         setShareUsers(filteredUserOptions);
-        // Department-wise sharing: group active users (excluding self) by their Division.
-        const deptMap = {};
-        response.data.data
-          .filter(
-            (u) =>
-              u.isActive &&
-              u.division &&
-              u.userID !== personalInfo.userID &&
-              u.userID !== userFilesUserID
-          )
-          .forEach((u) => {
-            (deptMap[u.division] = deptMap[u.division] || []).push(u.userID);
-          });
-        setDepartmentGroups(
-          Object.keys(deptMap)
-            .sort()
-            .map((name) => ({ name, userIds: deptMap[name] }))
-        );
+
       } else {
         console.error("Failed to fetch users:", response.data.message);
         forModal ? setModalUsers([]) : setUsers([]);
@@ -1637,10 +1620,36 @@ const FolderCreation = () => {
     }
   };
 
+  const fetchDepartmentGroups = async () => {
+    try {
+      const res = await axios.get(`${config.DDA_API_API_URL}FieldMaster/GetDepartmentWiseUsers`);
+      if (res.data.success) {
+        const me = (personalInfo.userID || "").toLowerCase();
+        const viewed = (userFilesUserID || "").toLowerCase();
+        setDepartmentGroups(
+          (res.data.data || [])
+            .map((d) => ({
+              id: d.divisionId,
+              name: d.divisionName,
+              userIds: (d.userIds || []).filter((id) => id.toLowerCase() !== me && id.toLowerCase() !== viewed),
+            }))
+            .filter((d) => d.userIds.length > 0)
+        );
+      }
+    } catch (error) {
+      console.error("Error fetching department-wise users:", error);
+    }
+  };
+
   useEffect(() => {
     fetchShareUsers();
   }, [personalInfo.userID, userFilesUserID]);
 
+
+  useEffect(() => {
+    fetchDepartmentGroups();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [personalInfo.userID, userFilesUserID]);
   // Hover tooltip helper for Cohort/Group options - resolves each member's
   // userId via the unfiltered empInfoMap (straight from GetAllEmpInfo, not
   // the isActive/exclude-self-filtered shareUsers list), so hovering a
@@ -1829,7 +1838,7 @@ const FolderCreation = () => {
   // Department-wise sharing: one option per Division. Reuses the cohort mechanism
   // (isCohort + userIds), which handleShare() already expands into individual users.
   const departmentOptions = departmentGroups.map((d) => ({
-    value: `dept-${d.name}`,
+    value: `dept-${d.id}`,
     label: `${d.name} (Department - ${d.userIds.length} users)`,
     isCohort: true,
     isDepartment: true,
@@ -3816,12 +3825,12 @@ const FolderCreation = () => {
         <CommentsReviewModal item={collabItem} onClose={() => setCollabItem(null)} />
       )}
       {tagItem && (
-  <TagsModal
-    item={tagItem}
-    onClose={() => setTagItem(null)}
-    onSaved={() => fetchFolders(currentFolderId)}
-  />
-)}
+        <TagsModal
+          item={tagItem}
+          onClose={() => setTagItem(null)}
+          onSaved={() => fetchFolders(currentFolderId)}
+        />
+      )}
       {versionFileItem && (
         <FileVersionsModal
           file={versionFileItem}

@@ -135,7 +135,7 @@ body.sp-theme .folder-container.list-view .heading-shared { display: none; }
 body.sp-theme .folder-container.list-view .list-heading-shared { color: inherit; }
 
 body.sp-theme .sp-list-header {
-  position: sticky; top: var(--sp-suite-h); z-index: 3; padding: 8px 12px; background: var(--sp-bg);
+  top: var(--sp-suite-h); z-index: 3; padding: 8px 12px; background: var(--sp-bg);
   border-bottom: 1px solid var(--sp-border-strong); border-radius: 4px 4px 0 0; font-size: 12px; font-weight: 600; color: var(--sp-text-2);
 }
 .sp-th { border: 0; background: transparent; padding: 2px 0; text-align: left; font: inherit; color: inherit; display: inline-flex; align-items: center; gap: 4px; }

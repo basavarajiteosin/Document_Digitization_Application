@@ -20,7 +20,7 @@ import {
 } from "react-icons/fi";
 import { useUpload } from "../Customhook/UploadContext";
 import wiproLogoWhite from "../assets/images/wiprologowhite.png";
-
+import CommentsReviewModal from "../components/Comments/CommentsReviewModal";
 const config = require("../services/config.json");
 const passwordRegex =
   /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
@@ -94,6 +94,8 @@ const Header = () => {
   const [sugOpen, setSugOpen] = useState(false);
   const [recents, setRecents] = useState([]);
   const [activeIdx, setActiveIdx] = useState(-1);
+  const [mentions, setMentions] = useState([]);
+  const [mentionItem, setMentionItem] = useState(null);
   const searchRef = useRef(null);
 
   const personalInfo = useSelector((state) => state.personalInformationReducer);
@@ -125,6 +127,53 @@ const Header = () => {
     setIsUploadPanelMinimized,
     clearCompletedUploads,
   } = useUpload();
+
+  const loadMentions = async () => {
+    try {
+      const res = await axios.get(`${config.DDA_API_API_URL}Comments/Notifications`);
+      if (res.data.success) setMentions(res.data.data || []);
+    } catch { /* silent */ }
+  };
+
+  useEffect(() => {
+    if (!personalInfo.userID) return undefined;
+    loadMentions();
+    const timer = setInterval(loadMentions, 30000);
+    const onVisible = () => document.visibilityState === "visible" && loadMentions();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [personalInfo.userID]);
+
+  // deep link from the mention e-mail: ?mentionDocType=Folder|Document&mentionId=..&mentionName=..
+  useEffect(() => {
+    const sp = new URLSearchParams(location.search);
+    const t = sp.get("mentionDocType");
+    const id = Number(sp.get("mentionId"));
+    if (t && id) {
+      setMentionItem({ docType: t, id, name: sp.get("mentionName") || "Item" });
+      navigate(location.pathname, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
+
+  const openMention = async (m) => {
+    setNotifOpen(false);
+    setMentionItem({ docType: m.docType, id: m.folderOrFileId, name: m.itemName });
+    if (!m.isRead) {
+      setMentions((p) => p.map((x) => (x.mentionId === m.mentionId ? { ...x, isRead: true } : x)));
+      try { await axios.post(`${config.DDA_API_API_URL}Comments/NotificationRead/${m.mentionId}`); } catch { /* ignore */ }
+    }
+  };
+
+  const markAllMentionsRead = async () => {
+    setMentions((p) => p.map((x) => ({ ...x, isRead: true })));
+    try { await axios.post(`${config.DDA_API_API_URL}Comments/NotificationsReadAll`); } catch { /* ignore */ }
+  };
+
 
   const isChangePasswordRequired = safeParse(
     localStorage.getItem("isChangePasswordRequired")
@@ -306,7 +355,8 @@ const Header = () => {
   /* ---------------- notifications = real upload-queue status ---------------- */
   const uploadingCount = uploadQueue.filter((f) => f.status === "uploading" || f.status === "queued").length;
   const failedCount = uploadQueue.filter((f) => f.status === "failed").length;
-  const badgeCount = uploadingCount + failedCount;
+  const unreadMentions = mentions.filter((m) => !m.isRead).length;
+  const badgeCount = uploadingCount + failedCount + unreadMentions;
   const recentUploads = uploadQueue.slice(-8).reverse();
 
   const openUploadPanel = () => {
@@ -436,6 +486,75 @@ const Header = () => {
             }
           >
             <div className="sp-dd-head">Notifications</div>
+            <div className="sp-dd-head">
+              <span>Notifications</span>
+              {unreadMentions > 0 && (
+                <button type="button" className="sp-link-btn" onClick={markAllMentionsRead}>Mark all read</button>
+              )}
+            </div>
+
+            {mentions.length === 0 && recentUploads.length === 0 ? (
+              <div className="sp-dd-empty">You&apos;re all caught up.</div>
+            ) : (
+              <div className="sp-dd-list">
+                {mentions.length > 0 && <div className="sp-notif-section">Mentions</div>}
+                {mentions.map((m) => (
+                  <div
+                    key={m.mentionId}
+                    className={`sp-notif-item is-mention ${m.isRead ? "" : "unread"}`}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => openMention(m)}
+                    onKeyDown={(e) => e.key === "Enter" && openMention(m)}
+                  >
+                    <span className="sp-avatar">{(m.mentionedByName || "?").charAt(0).toUpperCase()}</span>
+                    <div className="sp-notif-body">
+                      <div className="sp-notif-name">
+                        <b>{m.mentionedByName}</b> mentioned you in {m.docType === "Folder" ? "folder" : "file"} <b>{m.itemName}</b>
+                      </div>
+                      <div className="sp-notif-snippet">{m.commentText}</div>
+                      <div className="sp-notif-sub">{new Date(m.createdOn).toLocaleString()}</div>
+                    </div>
+                    <span className={`sp-notif-dot ${m.isRead ? "read" : ""}`} aria-label={m.isRead ? "Read" : "Unread"} />
+                  </div>
+                ))}
+
+                {recentUploads.length > 0 && <div className="sp-notif-section">Uploads</div>}
+                {recentUploads.map((file) => (
+                  <div className="sp-notif-item" key={file.id}>
+                    <span className={file.status === "completed" ? "sp-ok" : file.status === "failed" ? "sp-err" : ""}>
+                      {file.status === "completed" ? <FiCheckCircle size={18} /> : file.status === "failed" ? <FiAlertCircle size={18} /> : <FiUploadCloud size={18} />}
+                    </span>
+                    <div className="sp-notif-body">
+                      <div className="sp-notif-name" title={file.name}>{file.name}</div>
+                      <div className="sp-notif-sub">
+                        {file.status === "completed" ? "Upload complete"
+                          : file.status === "failed" ? "Upload failed"
+                            : file.status === "cancelled" ? "Cancelled"
+                              : file.status === "queued" ? "Waiting…"
+                                : `Uploading… ${Math.round(file.progress)}%`}
+                      </div>
+                      {file.status === "uploading" && (
+                        <div className="sp-progress"><span style={{ width: `${file.progress}%` }} /></div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {uploadQueue.length > 0 && (
+              <div className="sp-dd-foot">
+                <button type="button" className="sp-link-btn" onClick={openUploadPanel}>View upload panel</button>
+                <button
+                  type="button"
+                  className="sp-link-btn"
+                  onClick={clearCompletedUploads}
+                  disabled={uploadingCount > 0 && uploadQueue.length === uploadingCount}
+                >
+                  Clear completed
+                </button>
+              </div>
+            )}
             {recentUploads.length === 0 ? (
               <div className="sp-dd-empty">You&apos;re all caught up.</div>
             ) : (
@@ -550,6 +669,7 @@ const Header = () => {
         </div>
       </nav>
 
+
       {/* Change password modal: markup unchanged so existing custom.css still applies */}
       {showModal && (
         <div className="sp-dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="cp-title">
@@ -593,6 +713,13 @@ const Header = () => {
             </form>
           </div>
         </div>
+      )}
+      {mentionItem && (
+        <CommentsReviewModal
+          item={mentionItem}
+          initialTab="comments"
+          onClose={() => { setMentionItem(null); loadMentions(); }}
+        />
       )}
     </>
   );

@@ -286,6 +286,63 @@ namespace DDAAPI.Services
             }
         }
 
+        public async Task<bool> SendMentionNotificationMail(string toEmail, string toName, string byName, string itemType,
+    string itemName, string location, string commentText, string link)
+        {
+            try
+            {
+                var ec = _dbContext.EmailConfiguration.FirstOrDefault(k => k.IsActive && !k.IsSSL && k.ID == 1);
+                if (ec == null) throw new Exception("Email configuration not found");
+
+                string H(string? s) => WebUtility.HtmlEncode(s ?? "");
+                string subject = $"{byName} mentioned you in a comment";
+                string body = $@"
+<div style='padding:20px;font-family:Segoe UI,Arial,sans-serif;'>
+  <div style='border:1px solid #e6eaf2;border-radius:14px;padding:22px;max-width:560px;margin:auto;'>
+    <h2 style='margin:0 0 12px;color:#0f172a;'>You were mentioned</h2>
+    <p>Dear {H(toName)},</p>
+    <p><b>{H(byName)}</b> mentioned you in a comment on the {H(itemType.ToLower())} <b>'{H(itemName)}'</b>.</p>
+    <table style='border-collapse:collapse;margin:10px 0;font-size:13px;'>
+      <tr><td style='padding:3px 12px 3px 0;color:#64748b;'>Type</td><td>{H(itemType)}</td></tr>
+      <tr><td style='padding:3px 12px 3px 0;color:#64748b;'>Name</td><td>{H(itemName)}</td></tr>
+      <tr><td style='padding:3px 12px 3px 0;color:#64748b;'>Location</td><td>{H(location)}</td></tr>
+    </table>
+    <div style='background:#eaf1ff;border-left:4px solid #2563eb;border-radius:8px;padding:12px 14px;margin:12px 0;white-space:pre-wrap;color:#0f172a;'>{H(commentText)}</div>
+    <p style='margin:18px 0;'>
+      <a href='{H(link)}' style='background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:10px;font-weight:600;'>Open &amp; review</a>
+    </p>
+    <p>Regards,<br/>Wipro Admin</p>
+    <p align='center' style='font-size:10px;color:#94a3b8;'>Sensitivity: Internal &amp; Restricted</p>
+  </div>
+</div>";
+
+                using var client = new SmtpClient(ec.ServerAddress);
+                client.Port = int.Parse(ec.OutgoingPort);
+                client.EnableSsl = true;
+                client.Timeout = 60000;
+                client.UseDefaultCredentials = false;
+                client.Credentials = new NetworkCredential(ec.MailAddress, ec.Password);
+
+                using var mail = new MailMessage(ec.UserName, toEmail, subject, body)
+                {
+                    BodyEncoding = UTF8Encoding.UTF8,
+                    DeliveryNotificationOptions = DeliveryNotificationOptions.OnFailure,
+                    IsBodyHtml = true
+                };
+
+                ServicePointManager.ServerCertificateValidationCallback += (s, c, ch, e) => true;
+                await client.SendMailAsync(mail);
+
+                Log.DataLog(toEmail, $"Mention notification sent to {toEmail} by {byName} on {itemType} '{itemName}'", "Mention Mail Log");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.Error(toEmail, $"Mention/SendMail/Exception:- {ex.Message}", "Mention Mail Log");
+                return false;
+            }
+        }
+
         public async Task<bool> SendUserCreatedMailForUser(string FirstName, string LastName, string toEmail, string Password, string url)
         {
             try

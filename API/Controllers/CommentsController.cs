@@ -73,5 +73,18 @@ namespace DDAAPI.Controllers
         [HttpGet("Participants")]
         public Task<IActionResult> Participants([FromQuery] string docType, [FromQuery] int id) =>
     Run(() => _svc.GetParticipantsAsync(Emp, docType, id));
+
+
+        [HttpGet("Notifications")]
+        public Task<IActionResult> Notifications() =>
+    Run(() => _svc.GetMentionNotificationsAsync(Emp));
+
+        [HttpPost("NotificationRead/{mentionId}")]
+        public Task<IActionResult> NotificationRead(int mentionId) =>
+            Run(() => _svc.MarkMentionReadAsync(Emp, mentionId));
+
+        [HttpPost("NotificationsReadAll")]
+        public Task<IActionResult> NotificationsReadAll() =>
+            Run(() => _svc.MarkAllMentionsReadAsync(Emp));
     }
 }

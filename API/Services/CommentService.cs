@@ -21,8 +21,10 @@ namespace DDAAPI.Services
     {
         private readonly AppDbContext _db;
         private readonly IHubContext<CollabHub> _hub;
-        public CommentService(AppDbContext db, IHubContext<CollabHub> hub) { _db = db; _hub = hub; }
-
+        private readonly EmailService _email;
+        private readonly IConfiguration _cfg;
+        public CommentService(AppDbContext db, IHubContext<CollabHub> hub, EmailService email, IConfiguration cfg)
+        { _db = db; _hub = hub; _email = email; _cfg = cfg; }
         private sealed class Actor
         {
             public Guid UserId;
@@ -125,7 +127,10 @@ namespace DDAAPI.Services
             var rows = await _db.DocComments.AsNoTracking()
                 .Where(c => c.FolderOrFileId == id && c.DocType == t)
                 .OrderBy(c => c.CreatedOn).ToListAsync();
-            var names = await NamesAsync(rows.SelectMany(r => new[] { r.CreatedBy, r.ResolvedBy }));
+            var cids = rows.Select(r => r.CommentId).ToList();
+            var ments = await _db.DocMentions.AsNoTracking().Where(m => cids.Contains(m.CommentId)).ToListAsync();
+            var names = await NamesAsync(rows.SelectMany(r => new[] { r.CreatedBy, r.ResolvedBy })
+                                            .Concat(ments.Select(m => (string?)m.MentionedUserId)));
 
             return rows.Select(c => new CommentDTO
             {
@@ -140,7 +145,9 @@ namespace DDAAPI.Services
                 ResolvedByName = c.ResolvedBy == null ? null : NameOf(names, c.ResolvedBy),
                 IsDeleted = c.IsDeleted,
                 CanEdit = !c.IsDeleted && Eq(c.CreatedBy, a.Uid),
-                CanDelete = !c.IsDeleted && (Eq(c.CreatedBy, a.Uid) || a.IsGA)
+                CanDelete = !c.IsDeleted && (Eq(c.CreatedBy, a.Uid) || a.IsGA),
+                Mentions = c.IsDeleted ? new List<MentionDTO>() : ments.Where(m => m.CommentId == c.CommentId)
+                    .Select(m => new MentionDTO { UserId = m.MentionedUserId, Name = NameOf(names, m.MentionedUserId) }).ToList()
             }).ToList();
         }
 
@@ -170,6 +177,10 @@ namespace DDAAPI.Services
             _db.DocComments.Add(entity);
             await _db.SaveChangesAsync();
             Log.DataLog(a.Uid, $"{a.Name} commented on {t} ID {dto.FolderOrFileId}", "Comments Log");
+            var mentionIds = (dto.MentionedUserIds ?? new List<string>())
+    .Select(s => Guid.TryParse(s, out var g) ? g.ToString().ToLower() : null)
+    .Where(s => s != null && s != a.Uid).Select(s => s!).Distinct().ToList();
+            if (mentionIds.Count > 0) await NotifyMentionsAsync(a, t, dto.FolderOrFileId, entity, mentionIds);
             if (t == "Document")
             {
                 try
@@ -409,6 +420,125 @@ namespace DDAAPI.Services
                 var k = u.UserID.ToString().ToLower();
                 return new ParticipantDTO { UserId = k, Name = NameOf(names, k), Email = u.Email ?? "", Role = map[k] };
             }).OrderBy(p => p.Role != "Owner").ThenBy(p => p.Name).ToList();
+        }
+
+
+        // ------------------------------------------------------------ mentions
+        private async Task<string> PathAsync(string docType, int id)
+        {
+            int folderId = id;
+            if (docType == "Document")
+                folderId = await _db.FileData.AsNoTracking().Where(f => f.FileId == id).Select(f => f.FolderId).FirstOrDefaultAsync();
+            var names = new List<string>(); var cur = folderId; var guard = 0;
+            while (cur != 0 && guard++ < 25)
+            {
+                var n = await _db.FolderData.AsNoTracking().Where(x => x.FolderId == cur)
+                    .Select(x => new { x.FolderName, x.ParentFolderId }).FirstOrDefaultAsync();
+                if (n == null) break;
+                names.Add(n.FolderName); cur = n.ParentFolderId ?? 0;
+            }
+            names.Reverse(); names.Insert(0, "Home");
+            return string.Join(" / ", names);
+        }
+
+        private async Task NotifyMentionsAsync(Actor a, string t, int id, DocComment c, List<string> ids)
+        {
+            try
+            {
+                // only authorised users (owner / users the item is shared with) can be mentioned
+                var allowed = await ParticipantIdsAsync(t, id);
+                var valid = ids.Where(allowed.ContainsKey).ToList();
+                if (valid.Count == 0) return;
+
+                var itemName = await ItemNameAsync(t, id) ?? "";
+                var location = await PathAsync(t, id);
+                var guids = valid.Select(Guid.Parse).ToList();
+                var users = await _db.Users.AsNoTracking().Where(u => guids.Contains(u.UserID) && u.IsActive)
+                    .Select(u => new { u.UserID, u.Email }).ToListAsync();
+                var names = await NamesAsync(valid);
+                var now = DateTime.Now;
+
+                foreach (var u in users)
+                    _db.DocMentions.Add(new DocMention
+                    {
+                        CommentId = c.CommentId,
+                        FolderOrFileId = id,
+                        DocType = t,
+                        MentionedUserId = u.UserID.ToString().ToLower(),
+                        MentionedBy = a.Uid,
+                        CreatedOn = now
+                    });
+                await _db.SaveChangesAsync();
+
+                var site = (_cfg["SiteURL"] ?? "").TrimEnd('/');
+                var link = $"{site}/dashboard?mentionDocType={t}&mentionId={id}&mentionName={Uri.EscapeDataString(itemName)}";
+                foreach (var u in users)
+                {
+                    if (string.IsNullOrWhiteSpace(u.Email)) continue;
+                    var uid = u.UserID.ToString().ToLower();
+                    await _email.SendMentionNotificationMail(u.Email, NameOf(names, uid), a.Name, t, itemName, location, c.CommentText, link);
+                }
+                Log.DataLog(a.Uid, $"{a.Name} mentioned {users.Count} user(s) on {t} ID {id}", "Comments Log");
+            }
+            catch (Exception ex)
+            {
+                // a mention/notification failure must never break posting the comment
+                Log.Error(a.Uid, $"NotifyMentions failed: {ex.Message}", "Comments Log");
+            }
+        }
+
+        public async Task<List<MentionNotificationDTO>> GetMentionNotificationsAsync(string? emp)
+        {
+            var a = await ResolveAsync(emp);
+            var rows = await _db.DocMentions.AsNoTracking().Where(m => m.MentionedUserId == a.Uid)
+                .OrderByDescending(m => m.CreatedOn).Take(30).ToListAsync();
+            if (rows.Count == 0) return new List<MentionNotificationDTO>();
+
+            var cids = rows.Select(r => r.CommentId).ToList();
+            var comments = await _db.DocComments.AsNoTracking().Where(c => cids.Contains(c.CommentId))
+                .ToDictionaryAsync(c => c.CommentId);
+            var folderIds = rows.Where(r => r.DocType == "Folder").Select(r => r.FolderOrFileId).Distinct().ToList();
+            var fileIds = rows.Where(r => r.DocType == "Document").Select(r => r.FolderOrFileId).Distinct().ToList();
+            var folderNames = await _db.FolderData.AsNoTracking().Where(f => folderIds.Contains(f.FolderId))
+                .ToDictionaryAsync(f => f.FolderId, f => f.FolderName);
+            var fileNames = await _db.FileData.AsNoTracking().Where(f => fileIds.Contains(f.FileId))
+                .ToDictionaryAsync(f => f.FileId, f => f.FileName);
+            var names = await NamesAsync(rows.Select(r => (string?)r.MentionedBy));
+
+            return rows.Select(r =>
+            {
+                comments.TryGetValue(r.CommentId, out var c);
+                return new MentionNotificationDTO
+                {
+                    MentionId = r.MentionId,
+                    CommentId = r.CommentId,
+                    FolderOrFileId = r.FolderOrFileId,
+                    DocType = r.DocType,
+                    ItemName = (r.DocType == "Folder" ? folderNames : fileNames).GetValueOrDefault(r.FolderOrFileId) ?? "(deleted item)",
+                    CommentText = c == null || c.IsDeleted ? "This comment was deleted." : c.CommentText,
+                    MentionedByName = NameOf(names, r.MentionedBy),
+                    CreatedOn = r.CreatedOn,
+                    IsRead = r.IsRead
+                };
+            }).ToList();
+        }
+
+        public async Task<bool> MarkMentionReadAsync(string? emp, int mentionId)
+        {
+            var a = await ResolveAsync(emp);
+            var m = await _db.DocMentions.FirstOrDefaultAsync(x => x.MentionId == mentionId && x.MentionedUserId == a.Uid);
+            if (m == null) throw new KeyNotFoundException("Notification not found.");
+            if (!m.IsRead) { m.IsRead = true; m.ReadOn = DateTime.Now; await _db.SaveChangesAsync(); }
+            return true;
+        }
+
+        public async Task<bool> MarkAllMentionsReadAsync(string? emp)
+        {
+            var a = await ResolveAsync(emp);
+            var rows = await _db.DocMentions.Where(m => m.MentionedUserId == a.Uid && !m.IsRead).ToListAsync();
+            foreach (var m in rows) { m.IsRead = true; m.ReadOn = DateTime.Now; }
+            if (rows.Count > 0) await _db.SaveChangesAsync();
+            return true;
         }
     }
 }

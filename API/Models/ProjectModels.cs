@@ -9,7 +9,7 @@ namespace DDAAPI.Models
         public int ProjectId { get; set; }
         [Required, MaxLength(200)] public string ProjectName { get; set; } = "";
         [MaxLength(1000)] public string? Description { get; set; }
-        [MaxLength(200)] public string? Division { get; set; }
+        [MaxLength(500)] public string? DivisionIds { get; set; }  
         public bool IsActive { get; set; } = true;
         public DateTime CreatedOn { get; set; }
         public string? CreatedBy { get; set; }
@@ -44,7 +44,7 @@ namespace DDAAPI.Models
         public int? ProjectId { get; set; }
         public string? ProjectName { get; set; }
         public string? Description { get; set; }
-        public string? Division { get; set; }
+        public List<int>? DivisionIds { get; set; }
         public bool IsActive { get; set; } = true;
         public List<string>? UserIds { get; set; }
     }
@@ -77,7 +77,8 @@ namespace DDAAPI.Models
         public int ProjectId { get; set; }
         public string ProjectName { get; set; } = "";
         public string? Description { get; set; }
-        public string? Division { get; set; }
+        public List<int> DivisionIds { get; set; } = new();
+        public List<string> DivisionNames { get; set; } = new();
         public bool IsActive { get; set; }
         public DateTime CreatedOn { get; set; }
         public List<ProjectMemberDTO> Members { get; set; } = new();

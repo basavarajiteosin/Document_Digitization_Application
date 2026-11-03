@@ -166,3 +166,20 @@ body.sp-theme .sp-choice span { font-size: 12px; color: var(--sp-text-2); }
   body.sp-theme .sp-vactions { grid-column: 2; }
   body.sp-theme .sp-pj-grid { grid-template-columns: 1fr; }
 }
+
+
+/* ---------- ProjectMaster: multi-department picker + grouped members ---------- */
+body.sp-theme .sp-pj-form .form-group > .d-flex { gap: 4px; }
+body.sp-theme .sp-pj-form .sp-cmd { height: 32px; align-self: flex-start; border: 1px solid var(--sp-border-strong); background: var(--sp-surface); }
+body.sp-theme .sp-pj-form .sp-cmd:hover:not(:disabled) { background: var(--sp-selected); border-color: var(--sp-primary); }
+body.sp-theme .sp-pj-form [class$="-menu"] { z-index: 30; border-radius: var(--sp-radius); box-shadow: var(--sp-shadow-lg); }
+body.sp-theme .sp-pj-form [class$="-group"] { padding-top: 4px; padding-bottom: 4px; border-top: 1px solid var(--sp-border); }
+body.sp-theme .sp-pj-form [class$="-group"]:first-child { border-top: 0; }
+body.sp-theme .sp-pj-form [class$="-option"]:hover,
+body.sp-theme .sp-pj-form [class$="-option"][aria-selected="true"] { background: var(--sp-selected); color: var(--sp-text); }
+body.sp-theme .sp-pj-meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.sp-theme .sp-pj-form .sp-hint { margin-top: 4px; }
+@media (max-width: 575.98px) {
+  body.sp-theme .sp-pj-form .form-group > .d-flex { flex-direction: column; }
+  body.sp-theme .sp-pj-form .sp-cmd { align-self: stretch; justify-content: center; }
+}

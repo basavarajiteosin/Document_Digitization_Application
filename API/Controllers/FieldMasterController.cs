@@ -512,5 +512,22 @@ namespace DDAAPI.Controllers
         }
 
         #endregion
+
+
+        // GET api/FieldMaster/GetDepartmentWiseUsers
+        // GET api/FieldMaster/GetDepartmentWiseUsers?divisionIds=1,3
+        [HttpGet("GetDepartmentWiseUsers")]
+        public async Task<IActionResult> GetDepartmentWiseUsers([FromQuery] string? divisionIds = null)
+        {
+            try
+            {
+                var data = await _fieldMasterServices.GetDepartmentWiseUsers(divisionIds);
+                return Ok(new { success = true, message = "Successfully retrieved department-wise users", data });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
     }
 }

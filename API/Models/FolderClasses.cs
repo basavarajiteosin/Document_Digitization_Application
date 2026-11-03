@@ -857,4 +857,10 @@ namespace DDAAPI.Models
         public string? Remarks { get; set; }
     }
 
+    public class DepartmentUsersDTO
+    {
+        public int DivisionId { get; set; }
+        public string DivisionName { get; set; } = "";
+        public List<string> UserIds { get; set; } = new();
+    }
 }

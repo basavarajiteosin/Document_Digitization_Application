@@ -184,6 +184,9 @@ namespace DDAAPI.Services
                                   tb3.Address
                               }).ToList();
 
+                var divisionNames = _dbContext.DivisionMaster.AsNoTracking()
+    .ToDictionary(d => d.DivisionId.ToString(), d => d.Description ?? "");
+
                 List<UserWithRole> userWithRoleList = result.Select(record => new UserWithRole
                 {
                     UserID = record.UserID,
@@ -198,6 +201,7 @@ namespace DDAAPI.Services
                     RoleID = record.RoleID,
                     Designation = record.Designation,
                     Division = record.Division,
+                    DivisionName = record.Division != null && divisionNames.TryGetValue(record.Division.Trim(), out var dn) ? dn : record.Division,
                     ClientId = record.ClientId,
                     FirstName = record.FirstName,
                     LastName = record.LastName,
@@ -248,6 +252,7 @@ namespace DDAAPI.Services
                                   tb.IsActive
 
                               }).ToList();
+
                 List<UserReffdata> userList = result.Select(record => new UserReffdata
                 {
                     UserID = record.UserID,
@@ -412,6 +417,9 @@ namespace DDAAPI.Services
                                   tb.IsActive
 
                               }).ToList();
+
+                var divMap = DivisionNameMap();
+
                 List<UserReffdata> userList = result.Select(record => new UserReffdata
                 {
                     UserID = record.UserID,
@@ -421,6 +429,7 @@ namespace DDAAPI.Services
                     RoleID = record.RoleID,
                     Designation = record.Designation,
                     Division = record.Division,
+                    DivisionName = record.Division != null && divMap.TryGetValue(record.Division.Trim(), out var dnm) ? dnm : record.Division,
                     ClientId = record.ClientId,
                     FirstName = record.FirstName,
                     LastName = record.LastName,
@@ -545,7 +554,7 @@ namespace DDAAPI.Services
                     Email = userWithRole.Email.Replace(" ", ""),
                     Password = Encrypt(userWithRole.Password.Replace(" ", ""), true),
                     Designation = userWithRole.Designation,
-                    Division = userWithRole.Division,
+                    Division = await ValidateDivisionAsync(userWithRole.Division),
                     ContactNumber = userWithRole.ContactNumber,
                     ClientId = userWithRole.ClientId,
                     CreatedBy = userWithRole.CreatedBy,
@@ -687,7 +696,7 @@ namespace DDAAPI.Services
                     Email = userWithRole.Email,
                     Password = Encrypt(userWithRole.Password, true),
                     Designation = userWithRole.Designation,
-                    Division = userWithRole.Division,
+                    Division = await ValidateDivisionAsync(userWithRole.Division),
                     ContactNumber = userWithRole.ContactNumber,
                     ClientId = userWithRole.ClientId,
                     CreatedBy = userWithRole.CreatedBy ?? " ",
@@ -886,7 +895,7 @@ namespace DDAAPI.Services
                             user.Email = userWithRole.Email.Replace(" ", "");
                             user.Password = Encrypt(userWithRole.Password.Replace(" ", ""), true);
                             user.Designation = userWithRole.Designation;
-                            user.Division = userWithRole.Division;
+                            user.Division = await ValidateDivisionAsync(userWithRole.Division);
                             user.ContactNumber = userWithRole.ContactNumber;
                             user.ClientId = userWithRole.ClientId;
                             if (!user.IsActive)
@@ -2006,6 +2015,19 @@ namespace DDAAPI.Services
 
         #endregion
 
+        private async Task<string> ValidateDivisionAsync(string? division)
+        {
+            if (!int.TryParse(division?.Trim(), out var id) ||
+                !await _dbContext.DivisionMaster.AnyAsync(d => d.DivisionId == id))
+            {
+                throw new Exception("Please select a valid division.");
+            }
+            return id.ToString();
+        }
+
+        private Dictionary<string, string> DivisionNameMap() =>
+    _dbContext.DivisionMaster.AsNoTracking()
+        .ToDictionary(d => d.DivisionId.ToString(), d => d.Description ?? "");
 
         #region LogsAdditionCode
 

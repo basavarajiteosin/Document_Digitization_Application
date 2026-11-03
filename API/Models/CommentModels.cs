@@ -41,6 +41,7 @@ namespace DDAAPI.Models
         public int FolderOrFileId { get; set; }
         public string? CommentText { get; set; }
         public int? ParentCommentId { get; set; }
+        public List<string>? MentionedUserIds { get; set; }
     }
     public class EditCommentDTO { public int CommentId { get; set; } public string? CommentText { get; set; } }
     public class ResolveCommentDTO { public int CommentId { get; set; } public bool IsResolved { get; set; } }
@@ -67,6 +68,7 @@ namespace DDAAPI.Models
         public bool IsDeleted { get; set; }
         public bool CanEdit { get; set; }
         public bool CanDelete { get; set; }
+        public List<MentionDTO> Mentions { get; set; } = new();
     }
 
     public class ReviewDTO
@@ -94,5 +96,38 @@ namespace DDAAPI.Models
         public string Name { get; set; } = "";
         public string Email { get; set; } = "";
         public string Role { get; set; } = "Shared"; // Owner | Shared
+    }
+
+    public class DocMention
+    {
+        [Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+        public int MentionId { get; set; }
+        [Required] public int CommentId { get; set; }
+        [Required] public int FolderOrFileId { get; set; }
+        [Required, MaxLength(20)] public string DocType { get; set; } = string.Empty;
+        [Required, MaxLength(100)] public string MentionedUserId { get; set; } = string.Empty;
+        [Required, MaxLength(100)] public string MentionedBy { get; set; } = string.Empty;
+        [Required] public DateTime CreatedOn { get; set; }
+        public bool IsRead { get; set; }
+        public DateTime? ReadOn { get; set; }
+    }
+
+    public class MentionDTO
+    {
+        public string UserId { get; set; } = "";
+        public string Name { get; set; } = "";
+    }
+
+    public class MentionNotificationDTO
+    {
+        public int MentionId { get; set; }
+        public int CommentId { get; set; }
+        public int FolderOrFileId { get; set; }
+        public string DocType { get; set; } = "";
+        public string ItemName { get; set; } = "";
+        public string CommentText { get; set; } = "";
+        public string MentionedByName { get; set; } = "";
+        public DateTime CreatedOn { get; set; }
+        public bool IsRead { get; set; }
     }
 }

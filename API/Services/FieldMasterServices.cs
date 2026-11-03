@@ -111,6 +111,12 @@ namespace DDAAPI.Services
                 {
                     throw new Exception("DivisionMaster not found!");
                 }
+                var key = id.ToString();
+                if (await _dbContext.Users.AnyAsync(u => u.Division == key))
+                {
+                    throw new Exception("This department is assigned to users and cannot be deleted.");
+                }
+
                 Log.DataLog("System", $"DivisionMaster ID {id} deleted successfully ", "DivisionMaster Log");
 
 
@@ -772,6 +778,44 @@ namespace DDAAPI.Services
             catch (Exception ex)
             {
                 Log.Error(deletedBy, $"DeleteGroupMaster failed for ID {id}: {ex.Message}", "GroupMaster Log");
+                throw new Exception(ex.Message ?? "Network Error");
+            }
+        }
+
+        #endregion
+
+        #region Department-wise users
+
+        public async Task<List<DepartmentUsersDTO>> GetDepartmentWiseUsers(string? divisionIds = null)
+        {
+            try
+            {
+                var ids = (divisionIds ?? "")
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Select(s => int.TryParse(s, out var i) ? i : (int?)null)
+                    .Where(i => i.HasValue).Select(i => i!.Value).ToList();
+
+                var divisions = await _dbContext.DivisionMaster.AsNoTracking()
+                    .Where(d => ids.Count == 0 || ids.Contains(d.DivisionId))
+                    .OrderBy(d => d.Description).ToListAsync();
+
+                var users = await _dbContext.Users.AsNoTracking()
+                    .Where(u => u.IsActive && u.Division != null && u.Division != "")
+                    .Select(u => new { u.UserID, u.Division }).ToListAsync();
+
+                var byDivision = users
+                    .GroupBy(u => u.Division!.Trim())
+                    .ToDictionary(g => g.Key, g => g.Select(x => x.UserID.ToString().ToLower()).ToList());
+
+                return divisions.Select(d => new DepartmentUsersDTO
+                {
+                    DivisionId = d.DivisionId,
+                    DivisionName = d.Description ?? "",
+                    UserIds = byDivision.GetValueOrDefault(d.DivisionId.ToString()) ?? new List<string>()
+                }).ToList();
+            }
+            catch (Exception ex)
+            {
                 throw new Exception(ex.Message ?? "Network Error");
             }
         }

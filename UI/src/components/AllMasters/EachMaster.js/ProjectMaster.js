@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import axios from "axios";
 import Select from "react-select";
 import { toast } from "react-toastify";
@@ -19,6 +19,7 @@ const selectStyles = {
   multiValue: (s) => ({ ...s, background: "#eff6fc", borderRadius: 12 }),
   multiValueLabel: (s) => ({ ...s, color: "#323130", fontSize: 12 }),
   multiValueRemove: (s) => ({ ...s, color: "#605e5c", borderRadius: 12, ":hover": { background: "#c7e0f4", color: "#d13438" } }),
+  groupHeading: (s) => ({ ...s, fontSize: 11, fontWeight: 600, color: "#605e5c", textTransform: "none" }),
 };
 
 const ProjectMaster = () => {
@@ -26,12 +27,13 @@ const ProjectMaster = () => {
   const [projects, setProjects] = useState([]);
   const [users, setUsers] = useState([]);
   const [divisions, setDivisions] = useState([]);
+  const [deptUsers, setDeptUsers] = useState({}); // divisionId -> [userId(lowercase)]
   const [loading, setLoading] = useState(false);
 
   const [editId, setEditId] = useState(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [division, setDivision] = useState("");
+  const [selectedDepts, setSelectedDepts] = useState([]); // [{value: divisionId, label}]
   const [isActive, setIsActive] = useState(true);
   const [selected, setSelected] = useState([]);
 
@@ -58,27 +60,59 @@ const ProjectMaster = () => {
       .get(`${config.DDA_API_API_URL}FieldMaster/GetAllDivisionMasters`)
       .then((r) => setDivisions((r.data.data || []).sort((a, b) => a.description.localeCompare(b.description))))
       .catch(() => {});
+    axios
+      .get(`${config.DDA_API_API_URL}FieldMaster/GetDepartmentWiseUsers`)
+      .then((r) => {
+        const map = {};
+        (r.data.data || []).forEach((d) => { map[d.divisionId] = (d.userIds || []).map((x) => x.toLowerCase()); });
+        setDeptUsers(map);
+      })
+      .catch(() => {});
   }, []);
 
-  const userOptions = users.map((u) => ({
-    value: u.userID,
-    label: `${u.firstName} ${u.lastName} (${u.email})`,
-    division: u.division,
-  }));
+  const deptOptions = divisions.map((d) => ({ value: d.divisionId, label: d.description }));
+
+  const allUserOptions = useMemo(
+    () => users.map((u) => ({ value: u.userID, label: `${u.firstName} ${u.lastName} (${u.email})` })),
+    [users]
+  );
+
+  // Users shown below: grouped by the selected departments; all users when none selected.
+  const memberOptions = useMemo(() => {
+    if (selectedDepts.length === 0) return allUserOptions;
+    return selectedDepts
+      .map((d) => {
+        const ids = new Set(deptUsers[d.value] || []);
+        return { label: d.label, options: allUserOptions.filter((o) => ids.has(String(o.value).toLowerCase())) };
+      })
+      .filter((g) => g.options.length > 0);
+  }, [selectedDepts, deptUsers, allUserOptions]);
+
+  const handleDeptChange = (opts) => {
+    const next = opts || [];
+    setSelectedDepts(next);
+    if (next.length > 0) {
+      const allowed = new Set();
+      next.forEach((d) => (deptUsers[d.value] || []).forEach((id) => allowed.add(id)));
+      setSelected((prev) => prev.filter((s) => allowed.has(String(s.value).toLowerCase())));
+    }
+  };
 
   const reset = () => {
-    setEditId(null); setName(""); setDescription(""); setDivision(""); setIsActive(true); setSelected([]);
+    setEditId(null); setName(""); setDescription(""); setSelectedDepts([]); setIsActive(true); setSelected([]);
     nameRef.current?.classList.remove("is-invalid");
   };
 
-  const addAllFromDepartment = () => {
-    if (!division) return toast.error("Select a department first.");
-    const deptUsers = userOptions.filter((o) => o.division === division);
-    if (deptUsers.length === 0) return toast.info("No active users in this department.");
+  const addAllFromDepartments = () => {
+    if (selectedDepts.length === 0) return toast.error("Select at least one department first.");
+    const allowed = new Set();
+    selectedDepts.forEach((d) => (deptUsers[d.value] || []).forEach((id) => allowed.add(id)));
+    const toAdd = allUserOptions.filter((o) => allowed.has(String(o.value).toLowerCase()));
+    if (toAdd.length === 0) return toast.info("No active users in the selected departments.");
     const map = new Map(selected.map((s) => [s.value, s]));
-    deptUsers.forEach((o) => map.set(o.value, o));
+    toAdd.forEach((o) => map.set(o.value, o));
     setSelected([...map.values()]);
-    toast.success(`${deptUsers.length} user(s) from ${division} added.`);
+    toast.success(`${toAdd.length} user(s) added from ${selectedDepts.length} department(s).`);
   };
 
   const handleSave = async (e) => {
@@ -91,7 +125,8 @@ const ProjectMaster = () => {
     }
     try {
       const res = await axios.post(`${API}Save`, {
-        projectId: editId, projectName: name, description, division, isActive,
+        projectId: editId, projectName: name, description, isActive,
+        divisionIds: selectedDepts.map((d) => Number(d.value)),
         userIds: selected.map((s) => s.value),
       });
       if (res.data.success) {
@@ -108,10 +143,10 @@ const ProjectMaster = () => {
     setEditId(p.projectId);
     setName(p.projectName);
     setDescription(p.description || "");
-    setDivision(p.division || "");
+    setSelectedDepts((p.divisionIds || []).map((id) => deptOptions.find((o) => o.value === id)).filter(Boolean));
     setIsActive(p.isActive);
     setSelected(
-      p.members.map((m) => userOptions.find((x) => x.value === m.userId) || { value: m.userId, label: m.name })
+      p.members.map((m) => allUserOptions.find((x) => x.value === m.userId) || { value: m.userId, label: m.name })
     );
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -143,30 +178,17 @@ const ProjectMaster = () => {
 
   return (
     <div>
-      {/* ---------- Create / edit form ---------- */}
       <form className="sp-pj-form" onSubmit={handleSave}>
         <div className="sp-pj-formtitle">{editId ? "Edit project" : "New project"}</div>
         <div className="row">
-          <div className="form-group col-md-4">
+          <div className="form-group col-md-6">
             <label>Project name <span className="text-danger">*</span></label>
             <input
               type="text" ref={nameRef} className="form-control form-control-sm" maxLength={200}
               placeholder="Enter project name" value={name} onChange={(e) => setName(e.target.value)}
             />
           </div>
-          <div className="form-group col-md-4">
-            <label>Department (optional)</label>
-            <div className="d-flex">
-              <select className="form-control form-control-sm" value={division} onChange={(e) => setDivision(e.target.value)}>
-                <option value="">None</option>
-                {divisions.map((d) => <option key={d.divisionId} value={d.description}>{d.description}</option>)}
-              </select>
-              <button type="button" className="sp-cmd ml-1" onClick={addAllFromDepartment} title="Add every active user of this department">
-                <FiUsers size={16} />Add all
-              </button>
-            </div>
-          </div>
-          <div className="form-group col-md-4">
+          <div className="form-group col-md-6">
             <label>Description (optional)</label>
             <input
               type="text" className="form-control form-control-sm" maxLength={1000}
@@ -174,10 +196,31 @@ const ProjectMaster = () => {
             />
           </div>
           <div className="form-group col-md-12">
+            <label>Departments (optional, multiple)</label>
+            <div className="d-flex align-items-start">
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <Select
+                  isMulti options={deptOptions} value={selectedDepts} onChange={handleDeptChange}
+                  placeholder="Select one or more departments..." styles={selectStyles}
+                />
+              </div>
+              <button type="button" className="sp-cmd ml-1" onClick={addAllFromDepartments}
+                title="Add every active user of the selected departments">
+                <FiUsers size={16} />Add all
+              </button>
+            </div>
+            <div className="sp-hint">
+              {selectedDepts.length === 0
+                ? "No department selected: all users are listed below."
+                : "Only users of the selected departments are listed below."}
+            </div>
+          </div>
+          <div className="form-group col-md-12">
             <label>Members</label>
             <Select
-              isMulti options={userOptions} value={selected} onChange={(s) => setSelected(s || [])}
+              isMulti options={memberOptions} value={selected} onChange={(s) => setSelected(s || [])}
               placeholder="Search and select users..." styles={selectStyles}
+              noOptionsMessage={() => "No users found for the selected departments"}
             />
           </div>
         </div>
@@ -197,7 +240,6 @@ const ProjectMaster = () => {
         </div>
       </form>
 
-      {/* ---------- Project cards ---------- */}
       <div className="sp-pj-count">{loading ? "Loading..." : `${projects.length} project(s)`}</div>
 
       {loading ? (
@@ -214,7 +256,9 @@ const ProjectMaster = () => {
                 <div className="sp-pj-tile">{(p.projectName || "?").charAt(0).toUpperCase()}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="sp-pj-name" title={p.projectName}>{p.projectName}</div>
-                  <div className="sp-pj-meta">{p.division || "No department"}</div>
+                  <div className="sp-pj-meta" title={(p.divisionNames || []).join(", ")}>
+                    {(p.divisionNames || []).length ? p.divisionNames.join(", ") : "No department"}
+                  </div>
                 </div>
                 <span className="sp-pill">{p.isActive ? "Active" : "Inactive"}</span>
                 <button className="sp-icon-btn" title="Edit" aria-label="Edit" onClick={() => handleEdit(p)}><FiEdit2 size={16} /></button>

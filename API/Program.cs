@@ -125,15 +125,7 @@ var compositeProvider = new CompositeFileProvider(
 app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = compositeProvider,
-    RequestPath = "/StaticFiles",
-
-    OnPrepareResponse = ctx =>
-    {
-        // For development, "*" is fine. 
-        // For production, change "*" to your actual frontend domain, e.g., "https://my-react-app.com"
-        ctx.Context.Response.Headers.Append("Access-Control-Allow-Origin", "*");
-        ctx.Context.Response.Headers.Append("Access-Control-Allow-Methods", "GET, OPTIONS");
-    }
+    RequestPath = "/StaticFiles"
 });
 
 app.UseRouting();

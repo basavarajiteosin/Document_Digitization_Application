@@ -19,6 +19,7 @@ export const personalInformation = createSlice({
     department: "",
     designation: "",
     division: "",
+    divisionName: "",
     activeComponentName: "", 
     isChangePasswordRequired:"",
   },
@@ -39,6 +40,7 @@ export const personalInformation = createSlice({
         clientId: action.payload.clientId || state.clientId,
         designation: action.payload.designation || state.designation,
         division: action.payload.division || state.division,
+        divisionName: action.payload.divisionName || state.divisionName,
         isChangePasswordRequired: action.payload.isChangePasswordRequired || state.isChangePasswordRequired,
       };
     },

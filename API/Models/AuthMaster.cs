@@ -113,6 +113,7 @@ namespace DDAAPI.Models
         public string ContactNumber { get; set; }
         public string Designation { get; set; }
         public string Division { get; set; }
+        public string? DivisionName { get; set; }
         public string RoleName { get; set; }
         public string? ClientId { get; set; }
         public string? FirstName { get; set; }
@@ -136,6 +137,7 @@ namespace DDAAPI.Models
         public string Email { get; set; }
         public string Designation { get; set; }
         public string Division { get; set; }
+        public string? DivisionName { get; set; }
         public string RoleName { get; set; }
         public string? ClientId { get; set; }
         public string? FirstName { get; set; }
@@ -386,6 +388,7 @@ namespace DDAAPI.Models
         public string Message { get; set; }
         public string? Designation { get; set; }
         public string? Division { get; set; }
+        public string? DivisionName { get; set; }
     }
 
     public class LoginResult
@@ -405,6 +408,7 @@ namespace DDAAPI.Models
         public string Message { get; set; }
         public string? Designation { get; set; }
         public string? Division { get; set; }
+        public string? DivisionName { get; set; }
 
     }
 

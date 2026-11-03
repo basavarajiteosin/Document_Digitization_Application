@@ -69,3 +69,17 @@
 .sp-mr-name{display:flex;align-items:center;gap:8px;min-width:0;font-weight:600}
 .sp-mr-name span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media (max-width:575.98px){.sp-cr-panel{width:100vw}}
+
+
+/* ---------- @mention ---------- */
+.sp-mention-wrap{position:relative}
+.sp-mention-list{position:absolute;left:0;right:0;bottom:calc(100% + 6px);z-index:30;background:var(--sp-surface,#fff);border:1px solid var(--sp-border);border-radius:14px;box-shadow:var(--sp-shadow-lg);padding:6px;max-height:260px;overflow-y:auto}
+.sp-cr-scroll .sp-mention-list{bottom:auto;top:calc(100% + 6px)}
+.sp-mention-item{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:10px;cursor:pointer}
+.sp-mention-item.active,.sp-mention-item:hover{background:var(--sp-selected,#eaf1ff)}
+.sp-mention-txt{display:flex;flex-direction:column;min-width:0;flex:1;line-height:1.2}
+.sp-mention-txt b{font-size:13px;color:var(--sp-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sp-mention-txt small{font-size:11px;color:var(--sp-text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sp-mention-role{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--sp-primary);background:var(--sp-selected,#eaf1ff);padding:1px 8px;border-radius:999px;flex:none}
+.sp-mention-empty{padding:10px 12px;font-size:12.5px;color:var(--sp-text-2)}
+.sp-mention-tag{color:var(--sp-primary);background:var(--sp-selected,#eaf1ff);font-weight:600;border-radius:6px;padding:0 4px}
