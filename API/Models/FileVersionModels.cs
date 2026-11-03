@@ -53,4 +53,5 @@ namespace DDAAPI.Models
         public bool CanForceRelease { get; set; }
         public List<FileVersionDTO> Versions { get; set; } = new();
     }
+
 }

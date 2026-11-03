@@ -1,0 +1,32 @@
+.ude-overlay { position: fixed; inset: 0; z-index: 3000; display: flex; flex-direction: column; background: #0f172a; }
+.ude-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 16px; height: 56px; flex: none;
+  background: linear-gradient(135deg, #0d3270, #0a2350); color: #fff; box-shadow: 0 4px 18px rgba(0, 0, 0, .35); }
+.ude-title { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.ude-name { font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 38vw; }
+.ude-badge { flex: none; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 3px 10px; border-radius: 999px; color: #fff; }
+.ude-word { background: #2b579a; } .ude-cell { background: #217346; } .ude-slide { background: #c43e1c; } .ude-pdf { background: #d13438; }
+.ude-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 3px 10px; border-radius: 999px; background: rgba(255, 255, 255, .12); white-space: nowrap; }
+.ude-s-unsaved { background: rgba(245, 158, 11, .25); } .ude-s-saved { background: rgba(34, 197, 94, .25); } .ude-s-error { background: rgba(225, 29, 72, .35); }
+.ude-note { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: #fde68a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 30vw; }
+.ude-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+.ude-btn { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px; border-radius: 10px; border: 1px solid transparent; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s; }
+.ude-btn.primary { background: linear-gradient(135deg, #3b7bff, #2563eb); color: #fff; box-shadow: 0 6px 14px rgba(37, 99, 235, .4); }
+.ude-btn.primary:hover:not(:disabled) { transform: translateY(-1px); }
+.ude-btn.ghost { background: transparent; color: #dbe6fb; border-color: rgba(255, 255, 255, .25); }
+.ude-btn.ghost:hover { background: rgba(255, 255, 255, .1); }
+.ude-btn.close { background: rgba(255, 255, 255, .12); color: #fff; }
+.ude-btn.close:hover { background: #e11d48; }
+.ude-btn:disabled { opacity: .5; cursor: not-allowed; }
+.ude-body { position: relative; flex: 1; min-height: 0; background: #e9edf3; }
+.ude-holder, .ude-holder iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.ude-loading { position: absolute; inset: 0; z-index: 1; display: flex; align-items: center; justify-content: center; gap: 10px; background: #f5f7fb; color: #475569; font-size: 14px; pointer-events: none; }
+.ude-error { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #475569; background: #f5f7fb; text-align: center; padding: 24px; }
+.ude-error svg { color: #e11d48; }
+.ude-spin { animation: ude-rot 1s linear infinite; }
+@keyframes ude-rot { to { transform: rotate(360deg); } }
+@media (max-width: 767.98px) { .ude-name { max-width: 30vw; } .ude-note, .ude-badge { display: none; } }
+@media (prefers-reduced-motion: reduce) { .ude-spin { animation: none; } }
+
+.ude-holder.ude-scroll { overflow: auto; padding: 16px; background: #e9edf3; }
+.ude-holder.ude-scroll .docx-wrapper { background: transparent; padding: 0; }
+.ude-holder .x-spreadsheet { background: #fff; }

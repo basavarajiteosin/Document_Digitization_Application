@@ -34,6 +34,8 @@ import FileVersionsModal from "../FileVersions/FileVersionsModal";
 import CommentsReviewModal from "../Comments/CommentsReviewModal";
 import TagsModal from "../Tags/TagsModal";
 import ItemDetailsModal from "../ItemDetails/ItemDetailsModal";
+import UniversalDocumentEditor from "../DocumentEditor/UniversalDocumentEditor";
+import { isEditorSupported } from "../../services/editorConfigService";
 const config = require("../../services/config.json");
 
 // Static, human-readable labels for the Access Type IDs used across the app
@@ -123,6 +125,7 @@ const FolderCreation = () => {
   const [accessHistoryLoading, setAccessHistoryLoading] = useState(false);
   const [versionFileItem, setVersionFileItem] = useState(null);
   const [collabItem, setCollabItem] = useState(null);
+  const [editorFile, setEditorFile] = useState(null);
   const [tagItem, setTagItem] = useState(null);
   const [detailsItem, setDetailsItem] = useState(null);
   const [assignProjectItem, setAssignProjectItem] = useState(null);
@@ -1091,7 +1094,15 @@ const FolderCreation = () => {
   const handleZoomIn = () => setZoom((prev) => Math.min(prev + 0.2, 2.5));
   const handleZoomOut = () => setZoom((prev) => Math.max(prev - 0.2, 0.5));
 
-  const handleViewItem = (item) => {
+   const handleViewItem = (item) => {
+    const isDocument = item.docType === "Document" || !!item.fileId;
+    const editorFileId = isDocument ? (item.fileId || item.folderOrFileId) : null;
+    const editorFileName = item.fileName || item.foldeOrFileName || "";
+    if (editorFileId && isEditorSupported(editorFileName)) {
+      setEditorFile({ id: editorFileId, name: editorFileName });
+      return;
+    }
+
     let filePath;
     let idToUse;
 
@@ -3875,6 +3886,22 @@ const FolderCreation = () => {
           file={versionFileItem}
           onClose={() => setVersionFileItem(null)}
           onChanged={() => fetchFolders(currentFolderId)}
+        />
+      )}
+            {editorFile && (
+        <UniversalDocumentEditor
+          file={editorFile}
+          onClose={(modified) => {
+            setEditorFile(null);
+            fetchFolders(currentFolderIdRef.current);
+            fetchStorageData();
+            if (modified) {
+              setTimeout(() => {
+                fetchFolders(currentFolderIdRef.current);
+                fetchStorageData();
+              }, 12000);
+            }
+          }}
         />
       )}
       {assignProjectItem && (
