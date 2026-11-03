@@ -31,7 +31,8 @@ builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<SearchService>();
 builder.Services.AddScoped <CommentService>();
 builder.Services.AddScoped<FileVersionService>();
-builder.Services.AddScoped<ProjectService>(); 
+builder.Services.AddScoped<ProjectService>();
+builder.Services.AddScoped<ItemDetailsService>();
 builder.Services.AddHttpClient();
 builder.Services.AddSignalR();
 // Using this for MSSQL

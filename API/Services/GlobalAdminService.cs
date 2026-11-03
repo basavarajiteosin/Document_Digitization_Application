@@ -34,13 +34,15 @@ namespace DDAAPI.Services
         private readonly EmailService _emailService;
         private readonly SMSService _smsService;
         private readonly int _tokenTimespan;
+        private readonly IReportService _report;
 
-        public GlobalAdminService(IConfiguration configuration, AppDbContext dbContext, EmailService emailService, SMSService smsService)
+        public GlobalAdminService(IConfiguration configuration, AppDbContext dbContext, EmailService emailService, SMSService smsService, IReportService report)
         {
             _configuration = configuration;
             _dbContext = dbContext;
             _emailService = emailService ?? throw new ArgumentNullException(nameof(emailService));
             _smsService = smsService ?? throw new ArgumentNullException(nameof(smsService));
+            _report = report;
         }
 
         public async Task<IActionResult> GetAllUsersDataLimitAsync()
@@ -331,13 +333,13 @@ namespace DDAAPI.Services
         public async Task<bool> DeleteShareAccessRecordAsync(int sdaId)
         {
             var record = await _dbContext.ShareDocAccess.FirstOrDefaultAsync(s => s.SDAId == sdaId);
-
-            if (record == null)
-            {
-                return false;
-            }
+            if (record == null) return false;
 
             _dbContext.ShareDocAccess.Remove(record);
+            await _report.LogOwnershipOrAccessAsync(record.FolderOrFileId, record.DocType, "AccessRevoked", null, null,
+                record.AccessUserId,
+                record.AccessType switch { 1 => "Read-only", 2 => "Read/Write", 3 => "Read/Write/Download", _ => null },
+                "Admin", "Removed by Global Admin", saveChanges: false);
             return await _dbContext.SaveChangesAsync() > 0;
         }
 

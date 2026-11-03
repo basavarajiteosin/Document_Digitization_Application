@@ -740,3 +740,5 @@
 .sps-item:focus-within .sps-actions {
   opacity: 1;
 }
+
+.sps-head, .sps-item { grid-template-columns: minmax(220px, 3fr) minmax(140px, 1.6fr) 90px 130px 140px 208px; }

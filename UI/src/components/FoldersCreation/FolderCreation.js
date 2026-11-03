@@ -33,6 +33,7 @@ import axios from "axios";
 import FileVersionsModal from "../FileVersions/FileVersionsModal";
 import CommentsReviewModal from "../Comments/CommentsReviewModal";
 import TagsModal from "../Tags/TagsModal";
+import ItemDetailsModal from "../ItemDetails/ItemDetailsModal";
 const config = require("../../services/config.json");
 
 // Static, human-readable labels for the Access Type IDs used across the app
@@ -123,6 +124,7 @@ const FolderCreation = () => {
   const [versionFileItem, setVersionFileItem] = useState(null);
   const [collabItem, setCollabItem] = useState(null);
   const [tagItem, setTagItem] = useState(null);
+  const [detailsItem, setDetailsItem] = useState(null);
   const [assignProjectItem, setAssignProjectItem] = useState(null);
   const [departmentGroups, setDepartmentGroups] = useState([]);
 
@@ -2392,6 +2394,17 @@ const FolderCreation = () => {
     return list;
   })();
 
+
+  const openDetails = (item, tab) => {
+    const isDoc = item.docType === "Document" || (!!item.fileId && item.docType !== "Folder");
+    setDetailsItem({
+      docType: isDoc ? "Document" : "Folder",
+      id: isDoc ? (item.fileId || item.folderOrFileId) : (item.folderId || item.folderOrFileId),
+      name: item.foldeOrFileName || item.fileName || item.folderName,
+      tab,
+    });
+  };
+
   return (
     <>
       <section className="content ">
@@ -2965,6 +2978,24 @@ const FolderCreation = () => {
                                   </button>
                                 </MenuItem>
                               )}
+                            <MenuItem>
+                              <button
+                                className="dropdown-item"
+                                onClick={(e) => { e.stopPropagation(); openDetails(item, "details"); setTimeout(() => document.activeElement.blur(), 0); }}
+                              >
+                                Details
+                              </button>
+                            </MenuItem>
+                            {(roleName === "Global Admin" || activeTab !== "shared") && (
+                              <MenuItem>
+                                <button
+                                  className="dropdown-item"
+                                  onClick={(e) => { e.stopPropagation(); openDetails(item, "access"); setTimeout(() => document.activeElement.blur(), 0); }}
+                                >
+                                  Manage Access
+                                </button>
+                              </MenuItem>
+                            )}
                             <MenuItem>
                               <button
                                 className="dropdown-item"
@@ -3829,6 +3860,14 @@ const FolderCreation = () => {
           item={tagItem}
           onClose={() => setTagItem(null)}
           onSaved={() => fetchFolders(currentFolderId)}
+        />
+      )}
+      {detailsItem && (
+        <ItemDetailsModal
+          item={detailsItem}
+          initialTab={detailsItem.tab}
+          onClose={() => setDetailsItem(null)}
+          onChanged={() => fetchFolders(currentFolderId)}
         />
       )}
       {versionFileItem && (

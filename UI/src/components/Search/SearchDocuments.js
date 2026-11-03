@@ -5,6 +5,7 @@ import { toast } from "react-toastify";
 import FileVersionsModal from "../FileVersions/FileVersionsModal";
 import { useSelector } from "react-redux";
 import { getRecents, addRecent, clearRecents } from "../../common/recentSearches";
+import ItemDetailsModal from "../ItemDetails/ItemDetailsModal";
 import "./search.css";
 import TagsModal from "../Tags/TagsModal";
 const config = require("../../services/config.json");
@@ -99,6 +100,8 @@ const SearchDocuments = () => {
   const barRef = useRef(null);
   const searchUserId = useSelector((s) => s.personalInformationReducer.userID);
   const [recents, setRecents] = useState(() => getRecents(searchUserId));
+  const [detailsItem, setDetailsItem] = useState(null);
+
   const remember = (q) => {
     if (!q) return;
     setRecents(addRecent(searchUserId, q));
@@ -523,6 +526,10 @@ const SearchDocuments = () => {
                         <button type="button" className="sps-act" title="Download" aria-label={`Download ${item.name}`} onClick={() => handleDownload(item)}>
                           <i className="fas fa-download" />
                         </button>
+                        <button type="button" className="sps-act" title="Details and access" aria-label={`Details of ${item.name}`}
+                          onClick={() => setDetailsItem({ docType: item.docType, id: item.id, name: item.name, tab: "details" })}>
+                          <i className="fas fa-info-circle" />
+                        </button>
                         {item.canEditTags && (
                           <button type="button" className="sps-act" title="Add / edit tags" aria-label={`Edit tags of ${item.name}`} onClick={() => openTagModal(item)}>
                             <i className="fas fa-tag" />
@@ -579,6 +586,9 @@ const SearchDocuments = () => {
             onSaved={() => { loadTags(); setApplied((p) => ({ ...p })); }}
           />
         )}
+        {detailsItem && (
+  <ItemDetailsModal item={detailsItem} initialTab={detailsItem.tab} onClose={() => setDetailsItem(null)} />
+)}
       </div>
     </section>
   );
