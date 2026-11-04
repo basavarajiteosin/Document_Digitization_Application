@@ -220,63 +220,46 @@ namespace DDAAPI.Services
             }
         }
 
-        public async Task<bool> SendBehalfActionNotificationMail(string ownerEmail, string ownerName, string actingUserName, string itemName, string itemType, string actionType,string FolderName)
+        public async Task<bool> SendBehalfActionNotificationMail(string ownerEmail, string ownerName, string actingUserName, string itemName, string itemType, string actionType, string FolderName)
         {
-            // itemType: "Folder" | "File"
-            // actionType: "Created" | "Uploaded"
+            // itemType: "Folder" | "File", actionType: "Created" | "Uploaded"
             try
             {
                 var ec = _dbContext.EmailConfiguration.FirstOrDefault(k => k.IsActive && !k.IsSSL && k.ID == 1);
+                var ebody = _dbContext.MailBodyConfigurations.FirstOrDefault(k => k.MailType == "Behalf Action Notification");
+                if (ec == null || ebody == null)
+                    throw new Exception("Email configuration or Behalf Action Notification template not found");
 
-                if (ec != null)
+                string H(string? s) => WebUtility.HtmlEncode(s ?? "");
+                string Fill(string t) => t
+                    .Replace("@OwnerName@", H(ownerName))
+                    .Replace("@ActingUser@", H(actingUserName))
+                    .Replace("@Action@", H(actionType.ToLower()))
+                    .Replace("@ItemType@", H(itemType.ToLower()))
+                    .Replace("@ItemName@", H(itemName))
+                    .Replace("@FolderName@", H(FolderName));
+
+                using var client = new SmtpClient(ec.ServerAddress)
                 {
-                    MailMessage message = new MailMessage();
-                    string subject = $"{itemType} {actionType} in Your Shared Folder";
-                    StringBuilder sb = new StringBuilder();
+                    Port = int.Parse(ec.OutgoingPort),
+                    EnableSsl = true,
+                    Timeout = 60000,
+                    UseDefaultCredentials = false,
+                    Credentials = new NetworkCredential(ec.MailAddress, ec.Password)
+                };
 
-                    sb.Append($@"
-             <div style='padding:20px;'>
-                 <div style='border:1px solid #dbdbdb;padding:20px'>
-                     <div style='font-family: Segoe UI;'>
-                         <h2 align='center'>Wipro DMS Notification</h2>
-                         <div>
-                             <div style='border:1px solid white;background-color: white !important'>
-                                 <p>Dear {ownerName},</p>
-                                 <p><b>{actingUserName}</b> has {actionType.ToLower()} the {itemType.ToLower()} <b>'{itemName}'</b> in your shared <b>'{FolderName}'</b> folder.</p>
-                                 <p>&nbsp;</p>
-                                 <p>Regards,</p>
-                                 <p>Wipro Admin</p>
-                                 <p align='center' style='font-size:10px;'>Sensitivity: Internal &amp; Restricted</p>
-                             </div>
-                         </div>
-                     </div>
-                 </div>
-             </div>
-             ");
-
-                    SmtpClient client = new SmtpClient(ec.ServerAddress);
-                    client.Port = int.Parse(ec.OutgoingPort);
-                    client.EnableSsl = true;
-                    client.Timeout = 60000;
-                    client.UseDefaultCredentials = false;
-                    client.Credentials = new System.Net.NetworkCredential(ec.MailAddress, ec.Password);
-
-                    MailMessage reportEmail = new MailMessage(ec.UserName, ownerEmail, subject, sb.ToString());
-                    reportEmail.BodyEncoding = UTF8Encoding.UTF8;
-                    reportEmail.DeliveryNotificationOptions = DeliveryNotificationOptions.OnFailure;
-                    reportEmail.IsBodyHtml = true;
-
-                    ServicePointManager.ServerCertificateValidationCallback += (sender, certificate, chain, sslPolicyErrors) => true;
-
-                    await client.SendMailAsync(reportEmail);
-
-                    Log.DataLog(ownerEmail, $"Notified owner {ownerEmail} that {actingUserName} {actionType.ToLower()} {itemType.ToLower()} '{itemName}'", "Behalf Action Notification Log");
-                    return true;
-                }
-                else
+                using var mail = new MailMessage(ec.UserName, ownerEmail, Fill(ebody.MailSubject), Fill(ebody.MailBody))
                 {
-                    throw new Exception("Email configuration not found");
-                }
+                    BodyEncoding = UTF8Encoding.UTF8,
+                    DeliveryNotificationOptions = DeliveryNotificationOptions.OnFailure,
+                    IsBodyHtml = true
+                };
+
+                ServicePointManager.ServerCertificateValidationCallback += (s, c, ch, e) => true;
+                await client.SendMailAsync(mail);
+
+                Log.DataLog(ownerEmail, $"Notified owner {ownerEmail} that {actingUserName} {actionType.ToLower()} {itemType.ToLower()} '{itemName}'", "Behalf Action Notification Log");
+                return true;
             }
             catch (Exception ex)
             {

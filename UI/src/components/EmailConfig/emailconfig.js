@@ -1,920 +1,234 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import axios from "axios";
 import { toast } from "react-toastify";
+import { FiMail, FiServer, FiEye, FiEyeOff, FiSave, FiX, FiFileText, FiLock, FiUser, FiShield, FiHash, FiMonitor } from "react-icons/fi";
+import "./emailconfig.css";
+
 const config = require("../../services/config.json");
+const API = `${config.DDA_API_API_URL}EmailCofigureController/`;
+
+const isValidEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+
+// placeholders understood by EmailService for each template id
+const TOKENS = {
+  1: ["@DearUser@", "@LoginLink@", "@UserName@", "@Password@"],
+  2: ["@UserName@", "@ResetLink@"],
+  3: ["@DearUser@", "@LoginLink@", "@UserName@"],
+  4: ["@fromEmail@", "@toEmail@", "@docType@", "@docName@", "@siteURL@"],
+  5: ["@fromEmail@", "@toEmail@", "@docType@", "@docName@", "@siteURL@"],
+  6: ["@UserName@", "@otp@"],
+  7: ["@OwnerName@", "@ActingUser@", "@Action@", "@ItemType@", "@ItemName@", "@FolderName@"],
+};
+const SAMPLE = {
+  "@DearUser@": "Alex Morgan", "@LoginLink@": "#", "@UserName@": "alex.morgan@wipro.com", "@Password@": "••••••••",
+  "@ResetLink@": "#", "@fromEmail@": "jordan.lee@wipro.com", "@toEmail@": "alex.morgan@wipro.com", "@docType@": "Folder",
+  "@docName@": "Q3 Contracts", "@siteURL@": "#", "@otp@": "482915", "@OwnerName@": "Alex Morgan", "@ActingUser@": "Jordan Lee",
+  "@Action@": "uploaded", "@ItemType@": "file", "@ItemName@": "Invoice.pdf", "@FolderName@": "Q3 Contracts",
+};
 
 const EmailConfiguration = () => {
-  const [mailID, setmailID] = useState("");
-  const [mailPassword, setmailPassword] = useState("");
+  /* ---------------- SMTP ---------------- */
+  const [mailID, setMailID] = useState("");
+  const [mailPassword, setMailPassword] = useState("");
   const [smtpServer, setSmtpServer] = useState("");
   const [smtpPort, setSmtpPort] = useState("");
-  const [isLoaderActive, setIsLoaderActive] = useState(false);
-  const mailIDRef = useRef(null);
-  const mailPasswordRef = useRef(null);
-  const smtpServerRef = useRef(null);
-  const smtpPortRef = useRef(null);
-  const [userName, setUsername] = useState("");
+  const [userName, setUserName] = useState("");
   const [isSSL, setSsl] = useState("");
-  const usernameRef = useRef(null);
-  const sslRef = useRef(null);
-
-  useEffect(() => {
-    fetchData();
-  }, []);
+  const [showPwd, setShowPwd] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState({});
+  const refs = useRef({});
+  const reg = (k) => (el) => { refs.current[k] = el; };
 
   const fetchData = () => {
-    axios
-      .get(
-        `${config.DDA_API_API_URL}EmailCofigureController/GetMailConfiguration`
-      )
-      .then((response) => {
-        if (response.data.success === "success") {
-          const { data } = response.data;
-          setmailID(data.mailID || "");
-          setmailPassword(data.mailPassword || "");
-          setSmtpServer(data.smtpServer || "");
-          setSmtpPort(data.smtpPort || "");
-          setUsername(data.userName || "");
-          setSsl(data.isSSL === "true" ? "true" : "false");
-
-
-        } else {
-          toast.error(response.data.message);
-        }
+    axios.get(`${API}GetMailConfiguration`)
+      .then((r) => {
+        if (r.data.success === "success") {
+          const d = r.data.data || {};
+          setMailID(d.mailID || ""); setMailPassword(d.mailPassword || "");
+          setSmtpServer(d.smtpServer || ""); setSmtpPort(d.smtpPort || "");
+          setUserName(d.userName || ""); setSsl(String(d.isSSL) === "true" ? "true" : "false");
+        } else toast.error(r.data.message);
       })
-      .catch((error) => {
-        const errorMessage =
-          error.response?.data?.message ||
-          "Oops, something went wrong. Please try again later.";
-        toast.error(errorMessage);
-      });
+      .catch((e) => toast.error(e.response?.data?.message || "Oops, something went wrong. Please try again later."));
+  };
+
+  const validate = () => {
+    const e = {};
+    if (!mailID.trim()) e.mailID = "Please enter mail ID.";
+    else if (!isValidEmail(mailID)) e.mailID = "Please enter a valid mail ID.";
+    if (!mailPassword.trim()) e.mailPassword = "Please enter password.";
+    if (!smtpServer.trim()) e.smtpServer = "Please enter SMTP server.";
+    if (!String(smtpPort).trim()) e.smtpPort = "Please enter SMTP port.";
+    if (!userName.trim()) e.userName = "Please enter username.";
+    if (!isSSL.trim()) e.isSSL = "Please select SSL option.";
+    setErrors(e);
+    const first = Object.keys(e)[0];
+    if (first) { toast.error(e[first]); refs.current[first]?.focus(); }
+    return !first;
   };
 
   const handleSave = () => {
-    mailIDRef.current?.classList.remove("is-invalid");
-    mailPasswordRef.current?.classList.remove("is-invalid");
-    smtpServerRef.current?.classList.remove("is-invalid");
-    smtpPortRef.current?.classList.remove("is-invalid");
-    mailIDSubjectRef.current?.classList.remove("is-invalid");
-
-
-    const validateFields = () => {
-      if (!mailID.trim()) {
-        toast.error("Please enter mailID.");
-        mailIDRef.current?.classList.add("is-invalid");
-        mailIDRef.current?.focus();
-        return false;
-      }
-      if (!isValidEmail(mailID)) {
-        toast.error("Please enter a valid mailID.");
-        mailIDRef.current?.classList.add("is-invalid");
-        mailIDRef.current?.focus();
-        return false;
-      }
-      if (!mailPassword.trim()) {
-        toast.error("Please enter mailPassword.");
-        mailPasswordRef.current?.classList.add("is-invalid");
-        mailPasswordRef.current?.focus();
-        return false;
-      }
-      if (!smtpServer.trim()) {
-        toast.error("Please enter SMTP server.");
-        smtpServerRef.current?.classList.add("is-invalid");
-        smtpServerRef.current?.focus();
-        return false;
-      }
-      if (!smtpPort.trim()) {
-        toast.error("Please enter SMTP port.");
-        smtpPortRef.current?.classList.add("is-invalid");
-        smtpPortRef.current?.focus();
-        return false;
-      }
-      if (!userName.trim()) {
-        toast.error("Please enter userName.");
-        usernameRef.current?.classList.add("is-invalid");
-        usernameRef.current?.focus();
-        return false;
-      }
-      if (!isSSL.trim()) {
-        toast.error("Please select SSL option.");
-        sslRef.current?.classList.add("is-invalid");
-        sslRef.current?.focus();
-        return false;
-      }
-
-      return true;
-    };
-
-    if (!validateFields()) return;
-
-    setIsLoaderActive(true);
-    axios
-      .post(
-        `${config.DDA_API_API_URL}EmailCofigureController/UpdateMailConfiguration`,
-        {
-          id: 1,
-          mailID,
-          mailPassword,
-          userName,
-          smtpServer,
-          smtpPort,
-          isSSL,
-        },
-        {
-          headers: config.headers2,
-        }
-      )
-      .then((response) => {
-        if (response.data.success === "success") {
-          toast.success("Configuration saved successfully.");
-          fetchData();
-        } else {
-          toast.error(response.data.message);
-        }
-        setIsLoaderActive(false);
+    if (!validate()) return;
+    setSaving(true);
+    axios.post(`${API}UpdateMailConfiguration`, { id: 1, mailID, mailPassword, userName, smtpServer, smtpPort, isSSL }, { headers: config.headers2 })
+      .then((r) => {
+        if (r.data.success === "success") { toast.success("Configuration saved successfully."); fetchData(); }
+        else toast.error(r.data.message);
       })
-      .catch((error) => {
-        const errorMessage =
-          error.response?.data?.message ||
-          "Oops, something went wrong. Please try again later.";
-        toast.error(errorMessage);
-        setIsLoaderActive(false);
-      });
+      .catch((e) => toast.error(e.response?.data?.message || "Oops, something went wrong. Please try again later."))
+      .finally(() => setSaving(false));
   };
 
-  const handleCancel = () => {
-    setmailID("");
-    setmailPassword("");
-    setSmtpServer("");
-    setSmtpPort("");
+  const handleCancel = () => { setErrors({}); fetchData(); };
 
-  };
-
-  const isValidEmail = (mailID) => {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mailID);
-  };
-
-
-  const [mailIDSubject, setMailIDSubject] = useState("");
-  const [allEmailConfigurationList, setAllEmailConfigurationList] = useState(
-    []
-  );
-  const [emailTypes, setEmailTypes] = useState([]);
-  const [selectedEmailType, setSelectedEmailType] = useState("");
-  const mailIDSubjectRef = useRef(null);
-  const [emailConfigId, setEmailConfigId] = useState(null);
-  const inputEmailBodyReference = useRef(null);
+  /* ---------------- Templates ---------------- */
+  const [templates, setTemplates] = useState([]);       // [{ id, mailType }]
+  const [selected, setSelected] = useState(null);       // { id, mailType }
+  const [subject, setSubject] = useState("");
+  const [subjectErr, setSubjectErr] = useState(false);
+  const [loadingTpl, setLoadingTpl] = useState(false);
+  const [savingTpl, setSavingTpl] = useState(false);
+  const [preview, setPreview] = useState(null);         // html string
+  const [previewMode, setPreviewMode] = useState("desktop");
+  const subjectRef = useRef(null);
 
   useEffect(() => {
+    fetchData();
     window.initSummernoteFuncation();
+    axios.get(`${API}GetAllMailBodyConfigurations`, { headers: config.headers2 })
+      .then((r) => {
+        if (r.status === 200 && r.data.success) setTemplates((r.data.data || []).map((c) => ({ id: c.id, mailType: c.mailType })));
+        else toast.error("Failed to load email configurations.");
+      })
+      .catch(() => toast.error("Oops, something went wrong while fetching email configurations."));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    fetchEmailTypes();
-    window.initSummernoteFuncation();
-  }, []);
-
-  const fetchEmailTypes = () => {
-    axios
-      .get(
-        `${config.DDA_API_API_URL}EmailCofigureController/GetAllMailBodyConfigurations`,
-        {
-          headers: config.headers2,
-        }
-      )
-      .then((response) => {
-        if (response.status === 200 && response.data.success) {
-          const emailConfigurations = response.data.data;
-          const emailTypes = emailConfigurations.map(
-            (config) => config.mailType
-          );
-          setEmailTypes(emailTypes);
-        } else {
-          toast.error("Failed to load email configurations.");
-        }
+  const openTemplate = (t) => {
+    setLoadingTpl(true);
+    axios.get(`${API}GetMailBodyConfigurationByEmailType?emailType=${encodeURIComponent(t.mailType)}`, { headers: config.headers2 })
+      .then((r) => {
+        if (r.status === 200 && r.data.success && r.data.data) {
+          const d = r.data.data;
+          setSelected({ id: d.id, mailType: t.mailType });
+          setSubject(d.mailSubject || ""); setSubjectErr(false);
+          window.setSummerNoteValueFuncation(d.mailBody);
+        } else toast.error(r.data.message || "Template not found.");
       })
-      .catch(() => {
-        toast.error(
-          "Oops, something went wrong while fetching email configurations."
-        );
-      });
+      .catch(() => toast.error("Oops, something went wrong. Please try again later."))
+      .finally(() => setLoadingTpl(false));
   };
 
-
-  const getAllEmailConfigList = (emailType) => {
-    axios
-      .get(
-        `${config.DDA_API_API_URL
-        }EmailCofigureController/GetMailBodyConfigurationByEmailType?emailType=${encodeURIComponent(
-          emailType
-        )}`,
-        {
-          headers: config.headers2,
-        }
-      )
-      .then((response) => {
-        if (response.status === 200) {
-          if (response.data.success) {
-            const data = response.data.data;
-            if (data) {
-              setAllEmailConfigurationList(data);
-              setMailIDSubject(data.mailSubject);
-              setSelectedEmailType(emailType);
-              setEmailConfigId(data.id);
-              window.setSummerNoteValueFuncation(data.mailBody);
-            }
-          } else {
-            toast.error(response.data.message);
-          }
-        } else if (response.data.status.status === 500) {
-          toast.error("Invalid userName or password");
-        }
-      })
-      .catch((error) => {
-        toast.error("Oops, something went wrong. Please try again later.");
-      });
-  };
-
-  const handleButtonClick = (emailType) => {
-    getAllEmailConfigList(emailType);
+  const insertToken = (tk) => {
+    if (!selected || !window.$) return;
+    const $s = window.$("#summernote");
+    $s.summernote("focus");
+    $s.summernote("editor.insertText", tk);
   };
 
   const handleEmailSubmit = () => {
-    const textareaValue = window.getSummerNoteValueFuncation();
-
-    if (!mailIDSubject) {
-      toast.error("Please enter email subject.");
-      mailIDSubjectRef.current.focus();
-      mailIDSubjectRef.current.classList.add("is-invalid");
-      return;
-    }
-
-    if (!textareaValue) {
-      toast.error("Please enter email body.");
-      document.getElementById("summernote").focus();
-      return;
-    }
-
-    const postData = {
-      id: emailConfigId,
-      mailType: selectedEmailType,
-      mailBody: textareaValue,
-      mailSubject: mailIDSubject,
-    };
-    axios
-      .post(
-        `${config.DDA_API_API_URL}EmailCofigureController/UpdateMailBodyConfiguration`,
-        postData,
-        {
-          headers: {
-            ...config.headers3,
-            "Content-Type": "application/json-patch+json",
-          },
-        }
-      )
-      .then((response) => {
-        if (response.data.success) {
-          toast.success("Email configuration saved successfully.");
-
-        } else {
-          toast.error(response.data.message);
-        }
-      })
-      .catch((error) => {
-        toast.error(
-          error.response?.data?.message ||
-          "Oops, something went wrong. Please try again later."
-        );
-      });
+    if (!selected) return toast.error("Select an email template first.");
+    const body = window.getSummerNoteValueFuncation();
+    if (!subject.trim()) { setSubjectErr(true); toast.error("Please enter email subject."); subjectRef.current?.focus(); return; }
+    if (!body || body === "<p><br></p>") return toast.error("Please enter email body.");
+    setSavingTpl(true);
+    axios.post(`${API}UpdateMailBodyConfiguration`, { id: selected.id, mailType: selected.mailType, mailBody: body, mailSubject: subject },
+      { headers: { ...config.headers3, "Content-Type": "application/json-patch+json" } })
+      .then((r) => r.data.success ? toast.success("Email configuration saved successfully.") : toast.error(r.data.message))
+      .catch((e) => toast.error(e.response?.data?.message || "Oops, something went wrong. Please try again later."))
+      .finally(() => setSavingTpl(false));
   };
 
+  const openPreview = () => {
+    let html = window.getSummerNoteValueFuncation() || "";
+    (TOKENS[selected?.id] || []).forEach((t) => { html = html.split(t).join(SAMPLE[t] || t); });
+    setPreview(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#f1f5f9">${html}</body></html>`);
+  };
+
+  const tokens = useMemo(() => (selected ? TOKENS[selected.id] || [] : []), [selected]);
+
+  const err = (k) => errors[k] && <small className="ec-err">{errors[k]}</small>;
+  const cls = (k) => `ec-input ${errors[k] ? "invalid" : ""}`;
+
   return (
-    <>
-      <section className="content scroll-content">
-        <div className="container-fluid">
-          <div className="row">
-            <div className="col-md-12">
-              <div className="card card-primary card-outline">
-                <div className="card-header">
-                  <h3 className="card-title text-sm">Email Configuration</h3>
-                </div>
-                <div className="card-body text-sm">
-                  <div className="row">
-                    <div className="form-group col-md-6">
-                      <label htmlFor="mailID">
-                        Email
-                        <sup style={{ color: "red" }}>*</sup>
-                      </label>
-                      <input
-                        type="mailID"
-                        id="mailID"
-                        value={mailID}
-                        onChange={(e) => setmailID(e.target.value)}
-                        ref={mailIDRef}
-                        className="form-control form-control-sm"
-                        placeholder="Enter your mailID"
-                      />
-                    </div>
-                    <div className="form-group col-md-6">
-                      <label htmlFor="mailPasswordInput">
-                        Password<sup style={{ color: "red" }}>*</sup>
-                      </label>
-                      <input
-                        type="password"
-                        id="passwordInput"
-                        value={mailPassword}
-                        onChange={(e) => setmailPassword(e.target.value)}
-                        ref={mailPasswordRef}
-                        className="form-control form-control-sm"
-                        placeholder="Enter your mailPassword"
-                      />
-                      <span
-                        toggle="#passwordInput"
-                        class="fa fa-fw fa-eye field-icon-password toggle-password"
-                      ></span>
-                    </div>
+    <section className="content scroll-content">
+      <div className="container-fluid ec">
+        <header className="ec-hero">
+          <span className="ec-hero-ico"><FiMail size={22} /></span>
+          <div><h2>Email configuration</h2><p>Manage the outgoing mail server and the content of every system email.</p></div>
+        </header>
 
-                    <div className="form-group col-md-6">
-                      <label htmlFor="smtpServer">
-                        SMTP Server
-                        <sup style={{ color: "red" }}>*</sup>
-                      </label>
-                      <input
-                        type="text"
-                        id="smtpServer"
-                        value={smtpServer}
-                        onChange={(e) => setSmtpServer(e.target.value)}
-                        ref={smtpServerRef}
-                        className="form-control form-control-sm"
-                        placeholder="Enter SMTP server"
-                      />
-                    </div>
-                    <div className="form-group col-md-6">
-                      <label htmlFor="smtpPort">
-                        SMTP Port
-                        <sup style={{ color: "red" }}>*</sup>
-                      </label>
-                      <input
-                        type="text"
-                        id="smtpPort"
-                        value={smtpPort}
-                        onChange={(e) => setSmtpPort(e.target.value)}
-                        ref={smtpPortRef}
-                        className="form-control form-control-sm"
-                        placeholder="Enter SMTP port"
-                      />
-                    </div>
-                    <div className="form-group col-md-6">
-                      <label htmlFor="userName">
-                        Username
-                        <sup style={{ color: "red" }}>*</sup>
-                      </label>
-                      <input
-                        type="text"
-                        id="userName"
-                        value={userName}
-                        onChange={(e) => setUsername(e.target.value)}
-                        ref={usernameRef}
-                        className="form-control form-control-sm"
-                        placeholder="Enter userName"
-                      />
-                    </div>
+        {/* ---------- SMTP ---------- */}
+        <div className="ec-card">
+          <div className="ec-card-h"><span className="ec-badge"><FiServer size={15} /></span><div><h3>Mail server (SMTP)</h3><small>Credentials used to send all notifications</small></div></div>
+          <div className="ec-grid">
+            <div className="ec-f"><label htmlFor="mailID">Email<sup>*</sup></label>
+              <div className="ec-wrap"><FiMail size={14} /><input id="mailID" ref={reg("mailID")} className={cls("mailID")} value={mailID} onChange={(e) => setMailID(e.target.value)} placeholder="Enter your mail ID" /></div>{err("mailID")}</div>
+            <div className="ec-f"><label htmlFor="mailPassword">Password<sup>*</sup></label>
+              <div className="ec-wrap"><FiLock size={14} /><input id="mailPassword" ref={reg("mailPassword")} type={showPwd ? "text" : "password"} className={cls("mailPassword")} value={mailPassword} onChange={(e) => setMailPassword(e.target.value)} placeholder="Enter mail password" autoComplete="new-password" />
+                <button type="button" className="ec-eye" onClick={() => setShowPwd((v) => !v)} aria-label={showPwd ? "Hide password" : "Show password"}>{showPwd ? <FiEyeOff size={15} /> : <FiEye size={15} />}</button></div>{err("mailPassword")}</div>
+            <div className="ec-f"><label htmlFor="smtpServer">SMTP server<sup>*</sup></label>
+              <div className="ec-wrap"><FiServer size={14} /><input id="smtpServer" ref={reg("smtpServer")} className={cls("smtpServer")} value={smtpServer} onChange={(e) => setSmtpServer(e.target.value)} placeholder="smtp.example.com" /></div>{err("smtpServer")}</div>
+            <div className="ec-f"><label htmlFor="smtpPort">SMTP port<sup>*</sup></label>
+              <div className="ec-wrap"><FiHash size={14} /><input id="smtpPort" ref={reg("smtpPort")} className={cls("smtpPort")} value={smtpPort} onChange={(e) => setSmtpPort(e.target.value)} placeholder="587" inputMode="numeric" /></div>{err("smtpPort")}</div>
+            <div className="ec-f"><label htmlFor="userName">Username<sup>*</sup></label>
+              <div className="ec-wrap"><FiUser size={14} /><input id="userName" ref={reg("userName")} className={cls("userName")} value={userName} onChange={(e) => setUserName(e.target.value)} placeholder="Enter username" /></div>{err("userName")}</div>
+            <div className="ec-f"><label htmlFor="isSSL">SSL<sup>*</sup></label>
+              <div className="ec-wrap"><FiShield size={14} /><select id="isSSL" ref={reg("isSSL")} className={cls("isSSL")} value={isSSL} onChange={(e) => setSsl(e.target.value)}>
+                <option value="">Select SSL option</option><option value="true">Yes</option><option value="false">No</option></select></div>{err("isSSL")}</div>
+          </div>
+          <div className="ec-actions">
+            <button type="button" className="ec-btn" onClick={handleCancel} disabled={saving}><FiX size={14} /> Cancel</button>
+            <button type="button" className="ec-btn primary" onClick={handleSave} disabled={saving}><FiSave size={14} /> {saving ? "Saving..." : "Save & submit"}</button>
+          </div>
+        </div>
 
-                    <div className="form-group col-md-6">
-                      <label htmlFor="isSSL">
-                        SSL
-                        <sup style={{ color: "red" }}>*</sup>
-                      </label>
-                      <select
-                        id="isSSL"
-                        value={isSSL}
-                        onChange={(e) => setSsl(e.target.value)}
-                        ref={sslRef}
-                        className="form-control form-control-sm"
-                      >
-                        <option value="">Select SSL option</option>
-                        <option value="true">Yes</option>
-                        <option value="false">No</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-                <div className="card-footer" style={{ textAlign: "right" }}>
-                  <button
-                    type="button"
-                    className="btn btn-primary float-right btn-sm ml-2"
-                    onClick={handleSave}
-                    disabled={isLoaderActive}
-                  >
-                    {isLoaderActive ? "Saving..." : "Save & Submit"}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-outline-primary float-right btn-sm"
-                    onClick={handleCancel}
-                  >
-                    Cancel
-                  </button>
-                </div>
+        {/* ---------- Templates ---------- */}
+        <div className="ec-card">
+          <div className="ec-card-h"><span className="ec-badge"><FiFileText size={15} /></span><div><h3>Mail content</h3><small>Select a template, edit the subject and body, then save</small></div></div>
+          <div className="ec-pills" role="tablist">
+            {templates.map((t) => (
+              <button key={t.id} type="button" role="tab" aria-selected={selected?.id === t.id} className={`ec-pill ${selected?.id === t.id ? "active" : ""}`} onClick={() => openTemplate(t)}>{t.mailType}</button>
+            ))}
+          </div>
+
+          <div className={`ec-editor ${selected ? "" : "is-idle"}`}>
+            {!selected && <div className="ec-hint"><FiMail size={30} /><p>Choose a template above to start editing.</p></div>}
+            <div className="ec-f"><label htmlFor="mailIDSubject">Mail subject<sup>*</sup></label>
+              <input id="mailIDSubject" ref={subjectRef} className={`ec-input ${subjectErr ? "invalid" : ""}`} value={subject} disabled={!selected || loadingTpl}
+                onChange={(e) => { setSubject(e.target.value); setSubjectErr(false); }} placeholder="Enter mail subject" /></div>
+            {tokens.length > 0 && (
+              <div className="ec-tokens"><span>Placeholders</span>
+                {tokens.map((t) => <button key={t} type="button" className="ec-token" onClick={() => insertToken(t)} title="Insert at cursor">{t}</button>)}
               </div>
-              <div className="card card-primary card-outline">
-                <div className="card-header">
-                  <h3 className="card-title text-sm">Mail Content</h3>
-                </div>
-
-                <div className="card-body text-sm">
-                  <div className="mb-3">
-                    {emailTypes.map((type, index) => (
-                      <button
-                        key={index}
-                        className={`btn btn-sm mr-2 ${selectedEmailType === type
-                          ? "btn-primary"
-                          : "btn-outline-primary"
-                          }`}
-                        onClick={() => handleButtonClick(type)}
-                      >
-                        {type}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="form-group">
-                    <label htmlFor="mailIDSubject">
-                      Mail Subject
-                      <sup style={{ color: "red" }}>*</sup>
-                    </label>
-                    <textarea
-                      id="mailIDSubject"
-                      value={mailIDSubject}
-                      onChange={(e) => setMailIDSubject(e.target.value)}
-                      ref={mailIDSubjectRef}
-                      className="form-control form-control-sm"
-                      placeholder="Enter mail subject"
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label>
-                      Email Body Message
-                      <sup style={{ color: "red" }}>*</sup>
-                    </label>
-                    <textarea
-                      id="summernote"
-                      ref={inputEmailBodyReference}
-                    ></textarea>
-                  </div>
-
-                  <button
-                    className="btn btn-xs btn-primary float-right"
-                    onClick={handleEmailSubmit}
-                  >
-                    Save Email Configuration
-                  </button>
-                </div>
-              </div>
+            )}
+            <div className="ec-f"><label>Email body message<sup>*</sup></label><textarea id="summernote" /></div>
+            <div className="ec-actions">
+              <button type="button" className="ec-btn" disabled={!selected} onClick={openPreview}><FiEye size={14} /> Preview</button>
+              <button type="button" className="ec-btn primary" disabled={!selected || savingTpl} onClick={handleEmailSubmit}><FiSave size={14} /> {savingTpl ? "Saving..." : "Save email configuration"}</button>
             </div>
           </div>
         </div>
-      </section>
-    </>
+      </div>
+
+      {preview && (
+        <div className="ec-overlay" onMouseDown={(e) => e.target === e.currentTarget && setPreview(null)}>
+          <div className="ec-modal" role="dialog" aria-modal="true" aria-label="Email preview">
+            <div className="ec-modal-h">
+              <h4>Preview - {selected?.mailType}</h4>
+              <div className="ec-seg">
+                <button type="button" className={previewMode === "desktop" ? "active" : ""} onClick={() => setPreviewMode("desktop")}><FiMonitor size={14} /> Desktop</button>
+                <button type="button" className={previewMode === "mobile" ? "active" : ""} onClick={() => setPreviewMode("mobile")}>Mobile</button>
+              </div>
+              <button type="button" className="ec-x" onClick={() => setPreview(null)} aria-label="Close"><FiX size={18} /></button>
+            </div>
+            <div className="ec-modal-b"><iframe title="Email preview" srcDoc={preview} className={previewMode === "mobile" ? "is-mobile" : ""} /></div>
+          </div>
+        </div>
+      )}
+    </section>
   );
 };
 
 export default EmailConfiguration;
-
-// import React, { useState, useRef, useEffect } from "react";
-// import axios from "axios";
-// import { toast } from "react-toastify";
-// import ReactQuill from "react-quill";
-// import "react-quill/dist/quill.snow.css"; // Import the Quill CSS
-// const config = require("../../services/config.json");
-
-// const EmailConfiguration = () => {
-//   const [mailID, setMailID] = useState("");
-//   const [mailPassword, setMailPassword] = useState("");
-//   const [smtpServer, setSmtpServer] = useState("");
-//   const [smtpPort, setSmtpPort] = useState("");
-//   const [isLoaderActive, setIsLoaderActive] = useState(false);
-//   const [userName, setUsername] = useState("");
-//   const [isSSL, setSsl] = useState("");
-//   const [mailIDSubject, setMailIDSubject] = useState("");
-//   const [allEmailConfigurationList, setAllEmailConfigurationList] = useState([]);
-//   const [emailTypes, setEmailTypes] = useState([]);
-//   const [selectedEmailType, setSelectedEmailType] = useState("");
-//   const [emailConfigId, setEmailConfigId] = useState(null);
-//   const [emailBody, setEmailBody] = useState(""); // For Quill editor content
-
-//   const mailIDRef = useRef(null);
-//   const mailPasswordRef = useRef(null);
-//   const smtpServerRef = useRef(null);
-//   const smtpPortRef = useRef(null);
-//   const usernameRef = useRef(null);
-//   const sslRef = useRef(null);
-//   const mailIDSubjectRef = useRef(null);
-
-//   useEffect(() => {
-//     fetchData();
-//     fetchEmailTypes();
-//   }, []);
-
-//   const fetchData = () => {
-//     axios
-//       .get(`${config.DDA_API_API_URL}EmailCofigureController/GetMailConfiguration`)
-//       .then((response) => {
-//         if (response.data.success === "success") {
-//           const { data } = response.data;
-//           setMailID(data.mailID || "");
-//           setMailPassword(data.mailPassword || "");
-//           setSmtpServer(data.smtpServer || "");
-//           setSmtpPort(data.smtpPort || "");
-//           setUsername(data.userName || "");
-//           setSsl(data.isSSL === "true" ? "true" : "false");
-//         } else {
-//           toast.error(response.data.message);
-//         }
-//       })
-//       .catch((error) => {
-//         const errorMessage = error.response?.data?.message || "Oops, something went wrong. Please try again later.";
-//         toast.error(errorMessage);
-//       });
-//   };
-
-//   const fetchEmailTypes = () => {
-//     axios
-//       .get(`${config.DDA_API_API_URL}EmailCofigureController/GetAllMailBodyConfigurations`, {
-//         headers: config.headers2,
-//       })
-//       .then((response) => {
-//         if (response.status === 200 && response.data.success) {
-//           const emailConfigurations = response.data.data;
-//           const emailTypes = emailConfigurations.map((config) => config.mailType);
-//           setEmailTypes(emailTypes);
-//         } else {
-//           toast.error("Failed to load email configurations.");
-//         }
-//       })
-//       .catch(() => {
-//         toast.error("Oops, something went wrong while fetching email configurations.");
-//       });
-//   };
-
-//   const getAllEmailConfigList = (emailType) => {
-//     axios
-//       .get(`${config.DDA_API_API_URL}EmailCofigureController/GetMailBodyConfigurationByEmailType?emailType=${encodeURIComponent(emailType)}`, {
-//         headers: config.headers2,
-//       })
-//       .then((response) => {
-//         if (response.status === 200) {
-//           if (response.data.success) {
-//             const data = response.data.data;
-//             if (data) {
-//               setAllEmailConfigurationList(data);
-//               setMailIDSubject(data.mailSubject);
-//               setSelectedEmailType(emailType);
-//               setEmailConfigId(data.id);
-//               setEmailBody(data.mailBody); // Set email body for Quill
-//             }
-//           } else {
-//             toast.error(response.data.message);
-//           }
-//         }
-//       })
-//       .catch((error) => {
-//         toast.error("Oops, something went wrong. Please try again later.");
-//       });
-//   };
-
-//   const handleButtonClick = (emailType) => {
-//     getAllEmailConfigList(emailType);
-//   };
-
-//   const handleEmailSubmit = () => {
-//     if (!mailIDSubject) {
-//       toast.error("Please enter email subject.");
-//       mailIDSubjectRef.current.focus();
-//       mailIDSubjectRef.current.classList.add("is-invalid");
-//       return;
-//     }
-
-//     if (!emailBody) {
-//       toast.error("Please enter email body.");
-//       return;
-//     }
-
-//     const postData = {
-//       id: emailConfigId,
-//       mailType: selectedEmailType,
-//       mailBody: emailBody,
-//       mailSubject: mailIDSubject,
-//     };
-//     axios
-//       .post(`${config.DDA_API_API_URL}EmailCofigureController/UpdateMailBodyConfiguration`, postData, {
-//         headers: {
-//           ...config.headers3,
-//           "Content-Type": "application/json-patch+json",
-//         },
-//       })
-//       .then((response) => {
-//         if (response.data.success) {
-//           toast.success("Email configuration saved successfully.");
-//         } else {
-//           toast.error(response.data.message);
-//         }
-//       })
-//       .catch((error) => {
-//         toast.error(error.response?.data?.message || "Oops, something went wrong. Please try again later.");
-//       });
-//   };
-
-//   const handleSave = () => {
-//     mailIDRef.current?.classList.remove("is-invalid");
-//     mailPasswordRef.current?.classList.remove("is-invalid");
-//     smtpServerRef.current?.classList.remove("is-invalid");
-//     smtpPortRef.current?.classList.remove("is-invalid");
-//     usernameRef.current?.classList.remove("is-invalid");
-//     sslRef.current?.classList.remove("is-invalid");
-
-//     const validateFields = () => {
-//       if (!mailID.trim()) {
-//         toast.error("Please enter mailID.");
-//         mailIDRef.current?.classList.add("is-invalid");
-//         mailIDRef.current?.focus();
-//         return false;
-//       }
-//       if (!isValidEmail(mailID)) {
-//         toast.error("Please enter a valid mailID.");
-//         mailIDRef.current?.classList.add("is-invalid");
-//         mailIDRef.current?.focus();
-//         return false;
-//       }
-//       if (!mailPassword.trim()) {
-//         toast.error("Please enter mailPassword.");
-//         mailPasswordRef.current?.classList.add("is-invalid");
-//         mailPasswordRef.current?.focus();
-//         return false;
-//       }
-//       if (!smtpServer.trim()) {
-//         toast.error("Please enter SMTP server.");
-//         smtpServerRef.current?.classList.add("is-invalid");
-//         smtpServerRef.current?.focus();
-//         return false;
-//       }
-//       if (!smtpPort.trim()) {
-//         toast.error("Please enter SMTP port.");
-//         smtpPortRef.current?.classList.add("is-invalid");
-//         smtpPortRef.current?.focus();
-//         return false;
-//       }
-//       if (!userName.trim()) {
-//         toast.error("Please enter userName.");
-//         usernameRef.current?.classList.add("is-invalid");
-//         usernameRef.current?.focus();
-//         return false;
-//       }
-//       if (!isSSL.trim()) {
-//         toast.error("Please select SSL option.");
-//         sslRef.current?.classList.add("is-invalid");
-//         sslRef.current?.focus();
-//         return false;
-//       }
-
-//       return true;
-//     };
-
-//     if (!validateFields()) return;
-
-//     setIsLoaderActive(true);
-//     axios
-//       .post(`${config.DDA_API_API_URL}EmailCofigureController/UpdateMailConfiguration`, {
-//         id: 1,
-//         mailID,
-//         mailPassword,
-//         userName,
-//         smtpServer,
-//         smtpPort,
-//         isSSL,
-//       }, {
-//         headers: config.headers2,
-//       })
-//       .then((response) => {
-//         if (response.data.success === "success") {
-//           toast.success("Configuration saved successfully.");
-//           fetchData();
-//         } else {
-//           toast.error(response.data.message);
-//         }
-//         setIsLoaderActive(false);
-//       })
-//       .catch((error) => {
-//         const errorMessage = error.response?.data?.message || "Oops, something went wrong. Please try again later.";
-//         toast.error(errorMessage);
-//         setIsLoaderActive(false);
-//       });
-//   };
-
-//   const handleCancel = () => {
-//     setMailID("");
-//     setMailPassword("");
-//     setSmtpServer("");
-//     setSmtpPort("");
-//     setEmailBody(""); // Clear Quill editor content
-//   };
-
-//   const isValidEmail = (mailID) => {
-//     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mailID);
-//   };
-
-//   return (
-//     <>
-//       <section className="content scroll-content">
-//         <div className="container-fluid">
-//           <div className="row">
-//             <div className="col-md-12">
-//               <div className="card card-primary card-outline">
-//                 <div className="card-header">
-//                   <h3 className="card-title text-sm">Email Configuration</h3>
-//                 </div>
-//                 <div className="card-body text-sm">
-//                   <div className="form-group row">
-//                     <div className="col-md-6">
-//                       <label htmlFor="mailID">Mail ID</label>
-//                       <input
-//                         type="text"
-//                         className="form-control"
-//                         id="mailID"
-//                         value={mailID}
-//                         onChange={(e) => setMailID(e.target.value)}
-//                         ref={mailIDRef}
-//                       />
-//                     </div>
-//                     <div className="col-md-6">
-//                       <label htmlFor="mailPassword">Mail Password</label>
-//                       <input
-//                         type="password"
-//                         className="form-control"
-//                         id="mailPassword"
-//                         value={mailPassword}
-//                         onChange={(e) => setMailPassword(e.target.value)}
-//                         ref={mailPasswordRef}
-//                       />
-//                     </div>
-//                   </div>
-//                   <div className="form-group row">
-//                     <div className="col-md-6">
-//                       <label htmlFor="smtpServer">SMTP Server</label>
-//                       <input
-//                         type="text"
-//                         className="form-control"
-//                         id="smtpServer"
-//                         value={smtpServer}
-//                         onChange={(e) => setSmtpServer(e.target.value)}
-//                         ref={smtpServerRef}
-//                       />
-//                     </div>
-//                     <div className="col-md-6">
-//                       <label htmlFor="smtpPort">SMTP Port</label>
-//                       <input
-//                         type="text"
-//                         className="form-control"
-//                         id="smtpPort"
-//                         value={smtpPort}
-//                         onChange={(e) => setSmtpPort(e.target.value)}
-//                         ref={smtpPortRef}
-//                       />
-//                     </div>
-//                   </div>
-//                   <div className="form-group row">
-//                     <div className="col-md-6">
-//                       <label htmlFor="username">User Name</label>
-//                       <input
-//                         type="text"
-//                         className="form-control"
-//                         id="username"
-//                         value={userName}
-//                         onChange={(e) => setUsername(e.target.value)}
-//                         ref={usernameRef}
-//                       />
-//                     </div>
-//                     <div className="col-md-6">
-//                       <label htmlFor="ssl">SSL</label>
-//                       <select
-//                         className="form-control"
-//                         id="ssl"
-//                         value={isSSL}
-//                         onChange={(e) => setSsl(e.target.value)}
-//                         ref={sslRef}
-//                       >
-//                         <option value="">Select</option>
-//                         <option value="true">True</option>
-//                         <option value="false">False</option>
-//                       </select>
-//                     </div>
-//                   </div>
-//                   <div className="form-group row">
-//                     <div className="col-md-12">
-//                       <label htmlFor="mailIDSubject">Mail Subject</label>
-//                       <input
-//                         type="text"
-//                         className="form-control"
-//                         id="mailIDSubject"
-//                         value={mailIDSubject}
-//                         onChange={(e) => setMailIDSubject(e.target.value)}
-//                         ref={mailIDSubjectRef}
-//                       />
-//                     </div>
-//                   </div>
-//                   <div className="form-group row">
-//                     <div className="col-md-12">
-//                       <label htmlFor="emailBody">Email Body</label>
-//                       <ReactQuill
-//                         value={emailBody}
-//                         onChange={setEmailBody}
-//                         modules={{
-//                           toolbar: [
-//                             [{ header: [1, 2, false] }],
-//                             ['bold', 'italic', 'underline', 'strike'],
-//                             ['blockquote', 'code-block'],
-//                             ['link', 'image', 'video'],
-//                             [{ list: 'ordered' }, { list: 'bullet' }],
-//                             [{ color: [] }, { background: [] }],
-//                             [{ font: [] }, { size: [] }],
-//                             ['clean'],
-//                           ],
-//                         }}
-//                         formats={[
-//                           'header',
-//                           'font',
-//                           'size',
-//                           'bold',
-//                           'italic',
-//                           'underline',
-//                           'strike',
-//                           'blockquote',
-//                           'code-block',
-//                           'link',
-//                           'image',
-//                           'video',
-//                           'list',
-//                           'bullet',
-//                           'color',
-//                           'background',
-//                           'clean',
-//                         ]}
-//                         placeholder="Write your email body here..."
-//                       />
-//                     </div>
-//                   </div>
-//                   <div className="form-group row">
-//                     <div className="col-md-12 text-right">
-//                       <button
-//                         className="btn btn-primary mr-2"
-//                         onClick={handleEmailSubmit}
-//                       >
-//                         Save Email Template
-//                       </button>
-//                       <button
-//                         className="btn btn-secondary"
-//                         onClick={handleCancel}
-//                       >
-//                         Cancel
-//                       </button>
-//                     </div>
-//                   </div>
-//                 </div>
-//               </div>
-//               <div className="card card-primary card-outline">
-//                 <div className="card-header">
-//                   <h3 className="card-title text-sm">Email Types</h3>
-//                 </div>
-//                 <div className="card-body text-sm">
-//                   <div className="form-group row">
-//                     <div className="col-md-12">
-//                       {emailTypes.map((emailType) => (
-//                         <button
-//                           key={emailType}
-//                           className="btn btn-outline-primary m-1"
-//                           onClick={() => handleButtonClick(emailType)}
-//                         >
-//                           {emailType}
-//                         </button>
-//                       ))}
-//                     </div>
-//                   </div>
-//                   <div className="form-group row">
-//                     <div className="col-md-12 text-right">
-//                       <button className="btn btn-success" onClick={handleSave}>
-//                         Save Configuration
-//                       </button>
-//                     </div>
-//                   </div>
-//                 </div>
-//               </div>
-//             </div>
-//           </div>
-//         </div>
-//       </section>
-//     </>
-//   );
-// };
-
-// export default EmailConfiguration;

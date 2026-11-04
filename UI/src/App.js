@@ -33,17 +33,15 @@ const App = () => {
   useEffect(() => {
     onRouteChanged();
   });
-
   const onRouteChanged = () => {
+    document.querySelector(".content-wrapper")?.scrollTo(0, 0);
     window.scrollTo(0, 0);
     let flag = false;
-    fullPageLayoutRoutes.map((path) => {
-      if (location.pathname === path || location.pathname === '/404') {
-        flag = true
-      }
-    })
-    setIsFullPageLayout(flag)
-  }
+    fullPageLayoutRoutes.forEach((path) => {
+      if (location.pathname === path || location.pathname === '/404') flag = true;
+    });
+    setIsFullPageLayout(flag);
+  };
 
   return (
     <Provider store={reduxStore}>

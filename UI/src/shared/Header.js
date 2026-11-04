@@ -135,6 +135,7 @@ const Header = () => {
     } catch { /* silent */ }
   };
 
+  
   useEffect(() => {
     if (!personalInfo.userID) return undefined;
     loadMentions();
@@ -485,7 +486,6 @@ const Header = () => {
               </button>
             }
           >
-            <div className="sp-dd-head">Notifications</div>
             <div className="sp-dd-head">
               <span>Notifications</span>
               {unreadMentions > 0 && (

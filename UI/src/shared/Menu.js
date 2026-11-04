@@ -52,6 +52,7 @@ const Menu = () => {
   const personalInfo = useSelector((s) => s.personalInformationReducer);
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState({});
+  const [hasInitialized, setHasInitialized] = useState(false);
 
   // dynamic menu from Redux
   useEffect(() => {
@@ -61,7 +62,11 @@ const Menu = () => {
   // auto-collapse on mount + whenever the viewport shrinks below 992px
   useEffect(() => {
     let wasMobile = isMobile();
-    if (wasMobile) document.body.classList.remove("sidebar-open");
+
+    // Force sidebar collapse directly on body at the root render level
+    document.body.classList.remove("sidebar-open");
+    document.body.classList.add("sidebar-collapse");
+
     const onResize = () => {
       const nowMobile = isMobile();
       if (nowMobile && !wasMobile) closeSidebar();
@@ -74,10 +79,11 @@ const Menu = () => {
   // collapse after every navigation on small screens
   useEffect(() => { closeSidebar(); }, [location.pathname]);
 
+  // isActive: also highlights nested routes (e.g. /reports/xyz)
   const isActive = useCallback((path, appName) => {
     const sp = new URLSearchParams(location.search);
     if (appName === "Create Folder" && sp.get("userFilesUserID") && sp.get("userName")) return false;
-    return location.pathname === path;
+    return location.pathname === path || location.pathname.startsWith(path + "/");
   }, [location.pathname, location.search]);
 
   const all = [HOME_ITEM, ...items.filter((m) => m.appRoute !== "/home")];
@@ -92,8 +98,14 @@ const Menu = () => {
 
   // auto-expand the submenu that contains the current page
   useEffect(() => {
+
+    if (!hasInitialized) {
+      setHasInitialized(true);
+      return; // Keeps submenus collapsed on page load
+    }
+    
     sections.forEach((g) => {
-      if (g.collapsible && g.list.some((m) => m.appRoute === location.pathname)) {
+      if (g.collapsible && g.list.some((m) => isActive(m.appRoute, m.appName))) {
         setOpen((p) => (p[g.key] ? p : { ...p, [g.key]: true }));
       }
     });
@@ -112,12 +124,13 @@ const Menu = () => {
       <Link
         key={m.appRoute}
         to={m.appRoute}
+        title={m.appName}
         className={`sf-link ${active ? "active" : ""}`}
         aria-current={active ? "page" : undefined}
         onClick={() => onNav(m.appName)}
       >
         <Icon className="sf-ico" />
-        <span>{m.appName}</span>
+        <span className="sf-txt">{m.appName}</span>
       </Link>
     );
   };
@@ -125,9 +138,9 @@ const Menu = () => {
   return (
     <>
       <aside className="main-sidebar sf-side elevation-0" aria-label="Main navigation">
-        <button type="button" className="sf-brand" onClick={() => { navigate("/home"); closeSidebar(); }}>
+        <button type="button" className="sf-brand" title="Home" onClick={() => { navigate("/home"); closeSidebar(); }}>
           <span className="sf-brand-tile"><FiPenTool size={20} /></span>
-          <span>
+          <span className="sf-brand-txt">
             <span className="sf-brand-name">Document Digitization</span>
             <span className="sf-brand-sub">{personalInfo.userRole || "Workspace"}</span>
           </span>
@@ -139,24 +152,25 @@ const Menu = () => {
               if (!g.collapsible) {
                 return (
                   <div key={g.key}>
-                    <div className="sf-hint">{g.title}</div>
+                    <div className="sf-hint"><span>{g.title}</span></div>
                     {g.list.map(renderLink)}
                   </div>
                 );
               }
               const GIcon = g.icon;
               const isOpen = !!open[g.key];
-              const hasActive = g.list.some((m) => m.appRoute === location.pathname);
+              const hasActive = g.list.some((m) => isActive(m.appRoute, m.appName));
               return (
                 <div key={g.key} className="sf-group">
                   <button
                     type="button"
+                    title={g.title}
                     className={`sf-link sf-group-btn ${hasActive ? "has-active" : ""}`}
                     aria-expanded={isOpen}
                     onClick={() => setOpen((p) => ({ ...p, [g.key]: !p[g.key] }))}
                   >
                     <GIcon className="sf-ico" />
-                    <span>{g.title}</span>
+                    <span className="sf-txt">{g.title}</span>
                     <FiChevronDown className={`sf-chev ${isOpen ? "open" : ""}`} />
                   </button>
                   <div className={`sf-collapse ${isOpen ? "open" : ""}`}>

@@ -463,3 +463,73 @@ body.sp-theme .sp-notif-item.is-mention .sp-notif-name{white-space:normal}
   }
   body.sp-theme .main-sidebar.sf-side { transition: margin-left .22s ease; }
 }
+
+/* ===== Sticky shell: header + sidebar fixed, only .content-wrapper scrolls ===== */
+:root { --sf-rail-w: 72px; }
+
+body.sp-theme .wrapper { height: 100vh; overflow: hidden; }
+body.sp-theme .content-wrapper { height: 100%; min-height: 0 !important; overflow-y: auto; overflow-x: hidden; }
+body.sp-theme .sp-list-header { top: 0; }
+body.sp-theme .sps-refine { top: 12px; }
+
+/* text pieces (needed for icon-only mode) */
+.sf-txt, .sf-brand-txt { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sf-brand-txt { display: flex; flex-direction: column; flex: 1; }
+.sf-group-btn .sf-txt { flex: 1; }
+.sf-hint span { display: block; white-space: nowrap; overflow: hidden; }
+
+/* ===== Desktop collapsed = icon rail, expands on hover ===== */
+@media (min-width: 992px) {
+  body.sp-theme.sidebar-collapse .main-sidebar.sf-side {
+    margin-left: 0 !important;
+    width: var(--sf-rail-w);
+    overflow: hidden;
+    transition: width .22s ease, box-shadow .22s ease;
+  }
+  body.sp-theme.sidebar-collapse .main-sidebar.sf-side:hover {
+    width: var(--sf-side-w);
+    box-shadow: 14px 0 40px rgba(8, 28, 64, .35) !important;
+  }
+
+  /* content + header follow the rail width (hover overlays, no layout shift) */
+  body.sp-theme.sidebar-collapse .content-wrapper,
+  body.sp-theme.sidebar-collapse .main-footer { margin-left: var(--sf-rail-w) !important; }
+  body.sp-theme.sidebar-collapse .main-header.sp-suitebar { left: var(--sf-rail-w); }
+  body.sp-theme .content-wrapper, body.sp-theme .main-header.sp-suitebar { transition: margin-left .22s ease, left .22s ease; }
+
+  /* icon-only state */
+  body.sp-theme.sidebar-collapse .sf-side:not(:hover) .sf-brand { justify-content: center; padding: 16px 0 10px; }
+  body.sp-theme.sidebar-collapse .sf-side:not(:hover) .sf-brand-txt,
+  body.sp-theme.sidebar-collapse .sf-side:not(:hover) .sf-txt,
+  body.sp-theme.sidebar-collapse .sf-side:not(:hover) .sf-chev { display: none; }
+  body.sp-theme.sidebar-collapse .sf-side:not(:hover) .sf-scroll { padding: 2px 12px 18px; overflow-x: hidden; }
+  body.sp-theme.sidebar-collapse .sf-side:not(:hover) .sf-link {
+    justify-content: center; gap: 0; width: 48px; height: 44px; padding: 0; margin: 4px auto;
+  }
+  body.sp-theme.sidebar-collapse .sf-side:not(:hover) .sf-ico { font-size: 20px; opacity: 1; }
+  body.sp-theme.sidebar-collapse .sf-side:not(:hover) .sf-hint {
+    height: 1px; padding: 0; margin: 10px 14px; background: rgba(255, 255, 255, .14);
+  }
+  body.sp-theme.sidebar-collapse .sf-side:not(:hover) .sf-hint span { display: none; }
+  body.sp-theme.sidebar-collapse .sf-side:not(:hover) .sf-collapse { grid-template-rows: 0fr !important; }
+  body.sp-theme.sidebar-collapse .sf-side:not(:hover) .sf-children { border-left: 0; margin-left: 0; padding-left: 0; }
+  body.sp-theme.sidebar-collapse .sf-side:not(:hover) .sf-group-btn.has-active {
+    background: linear-gradient(135deg, #3b7bff, #2563eb); box-shadow: 0 8px 18px rgba(37, 99, 235, .42);
+  }
+
+  /* hovered/expanded: full text + section labels */
+  body.sp-theme.sidebar-collapse .sf-side:hover .sf-brand-txt,
+  body.sp-theme.sidebar-collapse .sf-side:hover .sf-txt { display: block; }
+  body.sp-theme.sidebar-collapse .sf-side:hover .sf-brand-txt { display: flex; }
+  body.sp-theme.sidebar-collapse .sf-side:hover .sf-chev { display: block; }
+}
+
+/* ===== Mobile: sidebar fully hidden, slides in on toggle, closes on navigate ===== */
+@media (max-width: 991.98px) {
+  body.sp-theme .content-wrapper { margin-left: 0 !important; }
+  body.sp-theme .main-sidebar.sf-side { width: var(--sf-side-w); margin-left: calc(-1 * var(--sf-side-w)) !important; }
+  body.sp-theme.sidebar-open .main-sidebar.sf-side { margin-left: 0 !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  body.sp-theme .main-sidebar.sf-side, body.sp-theme .content-wrapper, body.sp-theme .main-header.sp-suitebar { transition: none; }
+}
