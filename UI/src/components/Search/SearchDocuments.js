@@ -1,13 +1,21 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSelector } from "react-redux";
 import axios from "axios";
 import { toast } from "react-toastify";
+import { Menu, MenuItem, MenuButton, MenuDivider } from "@szhsin/react-menu";
+import "@szhsin/react-menu/dist/index.css";
+import {
+  FiFolder, FiFile, FiSearch, FiX, FiFilter, FiMoreVertical, FiExternalLink, FiMapPin, FiDownload,
+  FiInfo, FiShield, FiTag, FiClock, FiMessageSquare, FiLink, FiTrash2, FiBriefcase, FiArrowUp, FiArrowDown,
+} from "react-icons/fi";
 import FileVersionsModal from "../FileVersions/FileVersionsModal";
-import { useSelector } from "react-redux";
-import { getRecents, addRecent, clearRecents } from "../../common/recentSearches";
 import ItemDetailsModal from "../ItemDetails/ItemDetailsModal";
-import "./search.css";
 import TagsModal from "../Tags/TagsModal";
+import CommentsReviewModal from "../Comments/CommentsReviewModal";
+import AssignProjectModal from "../Projects/AssignProjectModal";
+import "./searchResults.css";
+
 const config = require("../../services/config.json");
 const API = `${config.DDA_API_API_URL}Search/`;
 
@@ -16,55 +24,35 @@ const emptyFilters = {
   fromDate: "", toDate: "", minSizeMB: "", maxSizeMB: "",
 };
 
-const formatSize = (bytes) => {
-  if (bytes === null || bytes === undefined) return "-";
-  if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(2) + " GB";
-  if (bytes >= 1048576) return (bytes / 1048576).toFixed(2) + " MB";
-  if (bytes >= 1024) return (bytes / 1024).toFixed(1) + " KB";
-  return bytes + " B";
+const formatSize = (b) => {
+  if (b === null || b === undefined) return "—";
+  if (b >= 1073741824) return (b / 1073741824).toFixed(2) + " GB";
+  if (b >= 1048576) return (b / 1048576).toFixed(2) + " MB";
+  if (b >= 1024) return (b / 1024).toFixed(1) + " KB";
+  return b + " B";
 };
+const fmtDate = (d) =>
+  d ? new Date(d).toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
-const fmtDate = (d) => {
-  if (!d) return "-";
-  const dt = new Date(d);
-  return dt.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+const TYPE_COLOR = {
+  pdf: "#d13438", doc: "#2b579a", docx: "#2b579a", xls: "#217346", xlsx: "#217346", csv: "#217346",
+  ppt: "#c43e1c", pptx: "#c43e1c", png: "#038387", jpg: "#038387", jpeg: "#038387", gif: "#038387",
+  zip: "#8a6d00", rar: "#8a6d00", txt: "#605e5c",
 };
+const colorFor = (i) =>
+  i.docType === "Folder"
+    ? (i.folderColor && /^#|rgb/i.test(i.folderColor) ? i.folderColor : "#e3a008")
+    : TYPE_COLOR[i.extension] || "#8a8886";
 
-// SharePoint-like file type icons/colours
-const TYPE_STYLE = {
-  pdf: ["fa-file-pdf", "#d13438"], doc: ["fa-file-word", "#2b579a"], docx: ["fa-file-word", "#2b579a"],
-  xls: ["fa-file-excel", "#217346"], xlsx: ["fa-file-excel", "#217346"], csv: ["fa-file-csv", "#217346"],
-  ppt: ["fa-file-powerpoint", "#c43e1c"], pptx: ["fa-file-powerpoint", "#c43e1c"],
-  png: ["fa-file-image", "#038387"], jpg: ["fa-file-image", "#038387"], jpeg: ["fa-file-image", "#038387"],
-  gif: ["fa-file-image", "#038387"], zip: ["fa-file-archive", "#8a6d00"], rar: ["fa-file-archive", "#8a6d00"],
-  txt: ["fa-file-alt", "#605e5c"],
-};
-const iconFor = (item) =>
-  item.docType === "Folder"
-    ? ["fa-folder", item.folderColor && /^#|rgb/i.test(item.folderColor) ? item.folderColor : "#e3a008"]
-    : TYPE_STYLE[item.extension] || ["fa-file", "#8a8886"];
-
-const initials = (n) =>
-  (n || "?").split(" ").filter(Boolean).slice(0, 2).map((x) => x[0].toUpperCase()).join("") || "?";
-
+const initials = (n) => (n || "?").split(" ").filter(Boolean).slice(0, 2).map((x) => x[0].toUpperCase()).join("") || "?";
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const Highlight = ({ text, terms }) => {
   if (!text || !terms.length) return <>{text}</>;
   const re = new RegExp(`(${terms.map(escapeRe).join("|")})`, "ig");
-  return (
-    <>
-      {String(text).split(re).map((part, i) =>
-        i % 2 === 1 ? <mark key={i} className="sps-hl">{part}</mark> : <React.Fragment key={i}>{part}</React.Fragment>
-      )}
-    </>
-  );
+  return <>{String(text).split(re).map((p, i) => (i % 2 === 1 ? <mark key={i} className="ssr-hl">{p}</mark> : <React.Fragment key={i}>{p}</React.Fragment>))}</>;
 };
-
-// Mirrors the API query syntax: words, "exact phrases", tag:x ext:x by:x (operators are not highlighted)
 const parseTerms = (q) => {
-  const out = [];
-  const re = /\w+:(?:"[^"]+"|\S+)|"([^"]+)"|(\S+)/g;
-  let m;
+  const out = []; const re = /\w+:(?:"[^"]+"|\S+)|"([^"]+)"|(\S+)/g; let m;
   while ((m = re.exec(q || "")) !== null) {
     if (m[1]) out.push(m[1]);
     else if (m[2] && !/^(tag|ext|type|by|owner):/i.test(m[2])) out.push(m[2]);
@@ -72,68 +60,43 @@ const parseTerms = (q) => {
   return out.slice(0, 6);
 };
 
-
-const TIPS = [
-  ['"purchase order"', "Exact phrase"],
-  ["tag:finance", "Has tag"],
-  ["ext:pdf", "File type"],
-  ["by:john", "Created by"],
-];
-
 const SORTS = { name: "Name", created: "Created", size: "Size", type: "Type" };
 
 const SearchDocuments = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const [versionItem, setVersionItem] = useState(null);
   const urlQuery = searchParams.get("q") || "";
+  const me = useSelector((s) => s.personalInformationReducer);
+  const myId = (me.userID || "").toLowerCase();
+  const isAdmin = me.userRole === "Administrator" || me.userRole === "Global Admin";
 
-  const [query, setQuery] = useState(urlQuery);
-  const [draft, setDraft] = useState(emptyFilters);          // refiner pane values (applied with "Apply")
-  const [applied, setApplied] = useState({ q: urlQuery, ...emptyFilters, sortBy: "created", sortDir: "desc", page: 1 });
+  const [draft, setDraft] = useState(emptyFilters);
+  const [applied, setApplied] = useState({ q: urlQuery, ...emptyFilters, sortBy: "name", sortDir: "asc", page: 1 });
   const [results, setResults] = useState({ items: [], totalCount: 0, totalPages: 0, folderCount: 0, fileCount: 0, extensions: [] });
   const [loading, setLoading] = useState(false);
   const [popularTags, setPopularTags] = useState([]);
-  const [tagModal, setTagModal] = useState(null); // { item, tags: [], input: "" }
-  const requestSeq = useRef(0);
-  const [focused, setFocused] = useState(false);
-  const barRef = useRef(null);
-  const searchUserId = useSelector((s) => s.personalInformationReducer.userID);
-  const [recents, setRecents] = useState(() => getRecents(searchUserId));
+  const [showFilters, setShowFilters] = useState(false);
+  const seq = useRef(0);
+
+  const [versionItem, setVersionItem] = useState(null);
+  const [tagModal, setTagModal] = useState(null);
   const [detailsItem, setDetailsItem] = useState(null);
+  const [collabItem, setCollabItem] = useState(null);
+  const [assignItem, setAssignItem] = useState(null);
 
-  const remember = (q) => {
-    if (!q) return;
-    setRecents(addRecent(searchUserId, q));
-  };
-  useEffect(() => {
-    const close = (e) => barRef.current && !barRef.current.contains(e.target) && setFocused(false);
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
-  }, []);
-
-
-
-  useEffect(() => {
-    if (urlQuery) setRecents(addRecent(searchUserId, urlQuery));
-  }, [urlQuery, searchUserId]);
-
-  useEffect(() => {
-    setQuery(urlQuery);
-    setApplied((p) => ({ ...p, q: urlQuery, page: 1 }));
-  }, [urlQuery]);
+  useEffect(() => { setApplied((p) => ({ ...p, q: urlQuery, page: 1 })); }, [urlQuery]);
 
   const loadTags = useCallback(async () => {
     try {
-      const res = await axios.get(`${API}Tags`);
-      if (res.data.success) setPopularTags(res.data.data || []);
-    } catch (e) { /* suggestions are optional */ }
+      const r = await axios.get(`${API}Tags`);
+      if (r.data.success) setPopularTags(r.data.data || []);
+    } catch (e) { /* optional */ }
   }, []);
   useEffect(() => { loadTags(); }, [loadTags]);
 
   useEffect(() => {
-    const run = async () => {
-      const seq = ++requestSeq.current;
+    (async () => {
+      const id = ++seq.current;
       setLoading(true);
       try {
         const params = {
@@ -144,56 +107,34 @@ const SearchDocuments = () => {
         };
         Object.keys(params).forEach((k) => (params[k] === "" || params[k] === undefined) && delete params[k]);
         const res = await axios.get(`${API}Documents`, { params });
-        if (seq !== requestSeq.current) return;
+        if (id !== seq.current) return;
         if (res.data.success) setResults(res.data.data);
         else toast.error(res.data.message || "Search failed");
       } catch (e) {
-        if (seq !== requestSeq.current) return;
-        toast.error(e.response?.data?.message || "Error while searching");
+        if (id === seq.current) toast.error(e.response?.data?.message || "Error while searching");
       } finally {
-        if (seq === requestSeq.current) setLoading(false);
+        if (id === seq.current) setLoading(false);
       }
-    };
-    run();
+    })();
   }, [applied]);
 
   const terms = useMemo(() => parseTerms(applied.q), [applied.q]);
+  const refresh = () => setApplied((p) => ({ ...p }));
 
-  const apply = (patch = {}, nextDraft) => {
-    const d = nextDraft || draft;
-    setApplied((p) => ({ ...p, q: query.trim(), ...d, ...patch, page: 1 }));
-  };
-
-  const submit = (e) => { e.preventDefault(); setFocused(false); remember(query.trim()); apply(); };
-
-  const runQuery = (q) => {
-    setQuery(q);
-    setFocused(false);
-    remember(q);
-    setApplied((p) => ({ ...p, q, page: 1 }));
-  };
-
-  const setDraftAndApply = (patch) => {
-    const d = { ...draft, ...patch };
-    setDraft(d);
-    apply({}, d);
-  };
+  const applyDraft = (patch = {}, d = draft) => setApplied((p) => ({ ...p, ...d, ...patch, page: 1 }));
+  const setDraftAndApply = (patch) => { const d = { ...draft, ...patch }; setDraft(d); applyDraft({}, d); };
 
   const validateAndApply = () => {
-    if (draft.fromDate && draft.toDate && draft.toDate < draft.fromDate)
-      return toast.error("'Created to' cannot be before 'Created from'.");
+    if (draft.fromDate && draft.toDate && draft.toDate < draft.fromDate) return toast.error("'To' date cannot be before 'From' date.");
     if (draft.minSizeMB !== "" && draft.maxSizeMB !== "" && Number(draft.maxSizeMB) < Number(draft.minSizeMB))
       return toast.error("Maximum size cannot be less than minimum size.");
     if ((draft.minSizeMB !== "" && Number(draft.minSizeMB) < 0) || (draft.maxSizeMB !== "" && Number(draft.maxSizeMB) < 0))
       return toast.error("Size cannot be negative.");
-    apply();
+    applyDraft(); setShowFilters(false);
   };
 
-  const resetAll = () => {
-    setQuery("");
-    setDraft(emptyFilters);
-    setApplied({ q: "", ...emptyFilters, sortBy: "created", sortDir: "desc", page: 1 });
-  };
+  const resetFilters = () => { setDraft(emptyFilters); setApplied((p) => ({ ...p, ...emptyFilters, page: 1 })); };
+  const clearSearch = () => { resetFilters(); navigate("/dashboard"); };
 
   const toggleSort = (col) =>
     setApplied((p) => ({
@@ -201,9 +142,9 @@ const SearchDocuments = () => {
       sortDir: p.sortBy === col ? (p.sortDir === "asc" ? "desc" : "asc") : col === "name" || col === "type" ? "asc" : "desc",
     }));
 
-  const activeChips = [
+  const chips = [
     applied.docType !== "All" && ["docType", applied.docType === "Folder" ? "Folders" : "Files"],
-    applied.extension && ["extension", `.${applied.extension.replace(/^\./, "")}`],
+    applied.extension && ["extension", `.${applied.extension}`],
     applied.tag && ["tag", `Tag: ${applied.tag}`],
     applied.owner !== "All" && ["owner", applied.owner === "Me" ? "Created by me" : "Created by others"],
     applied.fromDate && ["fromDate", `From ${applied.fromDate}`],
@@ -212,153 +153,175 @@ const SearchDocuments = () => {
     applied.maxSizeMB !== "" && ["maxSizeMB", `≤ ${applied.maxSizeMB} MB`],
   ].filter(Boolean);
 
-  const removeChip = (key) => {
-    const d = { ...draft, [key]: emptyFilters[key] };
-    setDraft(d);
-    setApplied((p) => ({ ...p, [key]: emptyFilters[key], page: 1 }));
-  };
+  const removeChip = (k) => { setDraft((d) => ({ ...d, [k]: emptyFilters[k] })); setApplied((p) => ({ ...p, [k]: emptyFilters[k], page: 1 })); };
 
   /* ---------- actions ---------- */
-  const handleView = (item) => {
-    if (!item.serverPath) return toast.error("No file path available");
-    window.open(item.serverPath, "_blank", "noopener");
-  };
+  const handleView = (i) => (i.serverPath ? window.open(i.serverPath, "_blank", "noopener") : toast.error("No file path available"));
 
-  const handleDownload = (item) => {
-    const url =
-      item.docType === "Folder"
-        ? `${config.DDA_API_API_URL}FolderData/DownloadFolder?folderId=${item.id}`
-        : `${config.DDA_API_API_URL}FolderData/DownloadFile?fileId=${item.id}`;
-    const a = document.createElement("a");
-    a.href = url; a.target = "_self"; a.download = "";
+  const handleDownload = (i) => {
+    const url = i.docType === "Folder"
+      ? `${config.DDA_API_API_URL}FolderData/DownloadFolder?folderId=${i.id}`
+      : `${config.DDA_API_API_URL}FolderData/DownloadFile?fileId=${i.id}`;
+    const a = document.createElement("a"); a.href = url; a.target = "_self"; a.download = "";
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
   };
 
-  // open a folder (or a file's location) in the main library view, with full breadcrumb
-  const openLocation = (item, { parent = false } = {}) => {
-    let path = item.path || [];
+  const openLocation = (i, { parent = false } = {}) => {
+    let path = i.path || [];
     if (parent) path = path.slice(0, -1);
     if (path.length === 0) {
-      if (parent || item.docType === "Folder") {
-        if (item.docType === "Folder" && !parent) return toast.error("You don't have a navigable path to this folder.");
-        navigate("/dashboard");   // top level
-        return;
+      if (parent || i.docType === "Document") {
+        if (i.docType === "Document" && !parent) return toast.error("This item was shared directly with you, so its folder isn't browsable.");
+        return navigate("/dashboard");
       }
-      return toast.error("This item was shared directly with you, so its folder isn't browsable.");
+      return toast.error("You don't have a navigable path to this folder.");
     }
     const last = path[path.length - 1];
     const p = new URLSearchParams({
-      openFolderId: String(last.folderId),
-      folderName: last.folderName,
-      tab: item.navTab || "current",
-      crumbs: JSON.stringify(path),
+      openFolderId: String(last.folderId), folderName: last.folderName,
+      tab: i.navTab || "current", crumbs: JSON.stringify(path),
     });
-    if (item.navAccessType) p.set("accessType", String(item.navAccessType));
-    if (item.navOwnerId) p.set("ownerId", item.navOwnerId);
+    if (i.navAccessType) p.set("accessType", String(i.navAccessType));
+    if (i.navOwnerId) p.set("ownerId", i.navOwnerId);
     navigate(`/dashboard?${p.toString()}`);
   };
 
-  const copyLink = async (item) => {
+  const copyLink = async (i) => {
     const base = `${window.location.origin}${window.location.pathname.replace(/\/search$|\/dashboard$/, "")}`;
-    const url = item.docType === "Folder" || item.path?.length
-      ? `${base}/dashboard?openFolderId=${item.containerFolderId}&folderName=${encodeURIComponent(item.path?.slice(-1)[0]?.folderName || "Folder")}`
-      : window.location.href;
-    try { await navigator.clipboard.writeText(url); toast.success("Link copied"); }
-    catch (e) { toast.info(url); }
+    const url = `${base}/dashboard?openFolderId=${i.containerFolderId}&folderName=${encodeURIComponent(i.path?.slice(-1)[0]?.folderName || "Folder")}`;
+    try { await navigator.clipboard.writeText(url); toast.success("Link copied"); } catch (e) { toast.info(url); }
   };
 
-  const openItem = (item) => (item.docType === "Folder" ? openLocation(item) : handleView(item));
+  const deleteItem = async (i) => {
+    if (!window.confirm(`Delete ${i.docType === "Folder" ? "folder" : "file"} "${i.name}"? This cannot be undone.`)) return;
+    try {
+      const res = i.docType === "Folder"
+        ? await axios.post(`${config.DDA_API_API_URL}FolderData/DeleteFolder`, { folderId: i.id, folderName: i.name, deletedBy: me.userID })
+        : await axios.post(`${config.DDA_API_API_URL}FolderData/DeleteFile/${i.id}`);
+      if (res.data.success) { toast.success("Deleted successfully"); refresh(); }
+      else toast.error(res.data.message || "Delete failed");
+    } catch (e) { toast.error(e.response?.data?.message || "Delete failed"); }
+  };
 
-  const openTagModal = (item) => setTagModal({ docType: item.docType, id: item.id, name: item.name });
+  const openItem = (i) => (i.docType === "Folder" ? openLocation(i) : handleView(i));
+  const asRef = (i) => ({ docType: i.docType, id: i.id, name: i.name });
+  const isOwner = (i) => (i.createdById || "").toLowerCase() === myId;
+  const hasPath = (i) => (i.path?.length || 0) > 0;
+
+  const RowMenu = ({ item }) => (
+    <Menu
+      portal
+      align="end"
+      menuClassName="ssr-menu"
+      menuButton={<MenuButton className="ssr-dots" aria-label={`Actions for ${item.name}`}><FiMoreVertical size={18} /></MenuButton>}
+    >
+      <MenuItem onClick={() => openItem(item)}><FiExternalLink /> {item.docType === "Folder" ? "Open folder" : "Open file"}</MenuItem>
+      {(item.docType === "Document" ? hasPath(item) : true) && (
+        <MenuItem onClick={() => openLocation(item, { parent: item.docType === "Folder" })}><FiMapPin /> Open file location</MenuItem>
+      )}
+      <MenuItem onClick={() => handleDownload(item)}><FiDownload /> Download</MenuItem>
+      <MenuDivider />
+      <MenuItem onClick={() => setDetailsItem({ ...asRef(item), tab: "details" })}><FiInfo /> Details</MenuItem>
+      <MenuItem onClick={() => setDetailsItem({ ...asRef(item), tab: "access" })}><FiShield /> Details and access</MenuItem>
+      <MenuItem onClick={() => setTagModal(asRef(item))}><FiTag /> {item.canEditTags ? "Add / edit tags" : "View tags"}</MenuItem>
+      <MenuItem onClick={() => setCollabItem(asRef(item))}><FiMessageSquare /> Comments &amp; Review</MenuItem>
+      {item.docType === "Document" && (
+        <MenuItem onClick={() => setVersionItem({ id: item.id, name: item.name })}><FiClock /> Version history</MenuItem>
+      )}
+      {isAdmin && (
+        <MenuItem onClick={() => setAssignItem(asRef(item))}><FiBriefcase /> Assign to Project</MenuItem>
+      )}
+      {hasPath(item) && <MenuItem onClick={() => copyLink(item)}><FiLink /> Copy link</MenuItem>}
+      {(isOwner(item) || me.userRole === "Global Admin") && (
+        <>
+          <MenuDivider />
+          <MenuItem className="ssr-danger" onClick={() => deleteItem(item)}><FiTrash2 /> Delete</MenuItem>
+        </>
+      )}
+    </Menu>
+  );
 
   const tabs = [
     ["All", "All", results.folderCount + results.fileCount],
     ["Document", "Files", results.fileCount],
     ["Folder", "Folders", results.folderCount],
   ];
-
-  const sortArrow = (col) =>
-    applied.sortBy === col ? <i className={`fas fa-arrow-${applied.sortDir === "asc" ? "up" : "down"}`} style={{ fontSize: 10 }} /> : null;
+  const arrow = (c) => applied.sortBy === c && (applied.sortDir === "asc" ? <FiArrowUp size={12} /> : <FiArrowDown size={12} />);
 
   return (
     <section className="content scroll-content">
-      <div className="sp-search-page">
-        {/* search bar */}
-        <form onSubmit={submit} role="search" className="d-flex" style={{ gap: 8 }}>
-          <div className="sps-barwrap flex-grow-1" ref={barRef}>
-            <div className="sps-bar">
-              <i className="fas fa-search" />
-              <input
-                type="search"
-                aria-label="Search keywords"
-                placeholder='Search files, folders, tags or people  —  try tag:finance ext:pdf by:john'
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onFocus={() => setFocused(true)}
-                onKeyDown={(e) => e.key === "Escape" && setFocused(false)}
-                maxLength={200}
-                autoFocus
-              />
-              {query && (
-                <button type="button" className="sps-clear" onClick={() => setRecents(clearRecents(searchUserId))}>Clear</button>
+      <div className="ssr-page">
+        {/* summary header */}
+        <div className="ssr-hero">
+          <div>
+            <h2>{applied.q ? <>Results for “{applied.q}”</> : "All documents"}</h2>
+            <p aria-live="polite">
+              {loading ? "Searching…" : `${results.totalCount} item${results.totalCount === 1 ? "" : "s"} found`}
+              {applied.q && (
+                <button type="button" className="ssr-linkbtn" onClick={clearSearch}>
+                  <FiX size={13} /> Clear search
+                </button>
               )}
-            </div>
-            {focused && (
-              <div className="sps-suggest" role="listbox">
-                {recents.length > 0 && (
-                  <>
-                    <div className="sps-sg-h">
-                      Recent
-                      <button type="button" className="sps-clear" onClick={() => { setRecents([]); }}>Clear</button>
-                    </div>
-                    {recents.map((r) => (
-                      <button key={r} type="button" className="sps-sg-i" role="option" onClick={() => runQuery(r)}>
-                        <i className="fas fa-history" /> {r}
-                      </button>
-                    ))}
-                  </>
-                )}
-                <div className="sps-sg-h">Search tips</div>
-                <div className="sps-sg-tips">
-                  {TIPS.map(([t, d]) => (
-                    <button key={t} type="button" className="sps-sg-tip"
-                      onClick={() => setQuery((q) => (q.trim() ? q.trim() + " " : "") + t)}>
-                      <code>{t}</code><span>{d}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+            </p>
           </div>
-          <button type="submit" className="sps-btn">Search</button>
-        </form>
-
-        {/* type tabs with live counts */}
-        <div className="sps-tabs" role="tablist">
-          {tabs.map(([key, label, n]) => (
-            <button
-              key={key} type="button" role="tab" aria-selected={applied.docType === key}
-              className={`sps-tab ${applied.docType === key ? "active" : ""}`}
-              onClick={() => setDraftAndApply({ docType: key, extension: key === "Folder" ? "" : draft.extension })}
-            >
-              {label}<span className="n">{n}</span>
-            </button>
-          ))}
+          <div className="ssr-stats">
+            <div className="ssr-stat"><FiFolder /><b>{results.folderCount}</b><span>Folders</span></div>
+            <div className="ssr-stat"><FiFile /><b>{results.fileCount}</b><span>Files</span></div>
+          </div>
         </div>
 
-        <div className="sps-layout">
-          {/* refiners */}
-          <aside className="sps-refine" aria-label="Refine results">
+        {/* toolbar */}
+        <div className="ssr-toolbar">
+          <div className="ssr-tabs" role="tablist">
+            {tabs.map(([k, l, n]) => (
+              <button key={k} type="button" role="tab" aria-selected={applied.docType === k}
+                className={applied.docType === k ? "active" : ""}
+                onClick={() => setDraftAndApply({ docType: k, extension: k === "Folder" ? "" : draft.extension })}>
+                {l}<span>{n}</span>
+              </button>
+            ))}
+          </div>
+          <div className="ssr-tools">
+            <label className="ssr-sort">
+              <span>Sort</span>
+              <select value={applied.sortBy} onChange={(e) => toggleSort(e.target.value)} aria-label="Sort by">
+                {Object.entries(SORTS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+              </select>
+              <button type="button" className="ssr-iconbtn" title="Toggle direction"
+                onClick={() => setApplied((p) => ({ ...p, sortDir: p.sortDir === "asc" ? "desc" : "asc", page: 1 }))}>
+                {applied.sortDir === "asc" ? <FiArrowUp size={14} /> : <FiArrowDown size={14} />}
+              </button>
+            </label>
+            <button type="button" className={`ssr-btn ghost ssr-filter-toggle ${showFilters ? "on" : ""}`} onClick={() => setShowFilters((v) => !v)}>
+              <FiFilter size={14} /> Filters{chips.length > 0 && <span className="ssr-count">{chips.length}</span>}
+            </button>
+          </div>
+        </div>
+
+        {chips.length > 0 && (
+          <div className="ssr-chips">
+            {chips.map(([k, l]) => (
+              <span key={k} className="ssr-chip">{l}<button type="button" aria-label={`Remove ${l}`} onClick={() => removeChip(k)}><FiX size={12} /></button></span>
+            ))}
+            <button type="button" className="ssr-linkbtn" onClick={resetFilters}>Clear all</button>
+          </div>
+        )}
+
+        <div className="ssr-layout">
+          {/* refine panel */}
+          <aside className={`ssr-refine ${showFilters ? "open" : ""}`} aria-label="Refine results">
+            <div className="ssr-refine-head">
+              <b>Refine results</b>
+              <button type="button" className="ssr-iconbtn ssr-refine-close" onClick={() => setShowFilters(false)} aria-label="Close filters"><FiX size={16} /></button>
+            </div>
+
             {results.extensions.length > 0 && (
               <>
                 <h6>File type</h6>
                 {results.extensions.map((x) => (
-                  <button
-                    key={x.key} type="button"
-                    className={`sps-facet ${applied.extension === x.key ? "active" : ""}`}
-                    onClick={() => setDraftAndApply({ extension: applied.extension === x.key ? "" : x.key, docType: applied.docType === "Folder" ? "All" : applied.docType })}
-                  >
-                    <span>.{x.key}</span><span className="c">{x.count}</span>
+                  <button key={x.key} type="button" className={`ssr-facet ${applied.extension === x.key ? "active" : ""}`}
+                    onClick={() => setDraftAndApply({ extension: applied.extension === x.key ? "" : x.key, docType: applied.docType === "Folder" ? "All" : applied.docType })}>
+                    <span>.{x.key}</span><em>{x.count}</em>
                   </button>
                 ))}
               </>
@@ -366,229 +329,128 @@ const SearchDocuments = () => {
 
             <h6>Created by</h6>
             {[["All", "Anyone"], ["Me", "Me"], ["Others", "Others"]].map(([v, l]) => (
-              <label key={v} className="sps-radio">
-                <input type="radio" name="owner" checked={draft.owner === v} onChange={() => setDraftAndApply({ owner: v })} />
-                {l}
+              <label key={v} className="ssr-radio">
+                <input type="radio" name="ssr-owner" checked={draft.owner === v} onChange={() => setDraftAndApply({ owner: v })} /> {l}
               </label>
             ))}
 
             <h6>Created date</h6>
-            <label htmlFor="sps-from">From</label>
-            <input id="sps-from" type="date" className="sps-input" value={draft.fromDate}
-              onChange={(e) => setDraft({ ...draft, fromDate: e.target.value })} />
-            <label htmlFor="sps-to">To</label>
-            <input id="sps-to" type="date" className="sps-input" min={draft.fromDate} value={draft.toDate}
-              onChange={(e) => setDraft({ ...draft, toDate: e.target.value })} />
+            <div className="ssr-row">
+              <input type="date" className="ssr-input" aria-label="From date" value={draft.fromDate} onChange={(e) => setDraft({ ...draft, fromDate: e.target.value })} />
+              <input type="date" className="ssr-input" aria-label="To date" min={draft.fromDate} value={draft.toDate} onChange={(e) => setDraft({ ...draft, toDate: e.target.value })} />
+            </div>
 
             <h6>File size (MB)</h6>
-            <div className="sps-row">
-              <input type="number" min="0" step="any" className="sps-input" placeholder="Min" value={draft.minSizeMB}
-                onChange={(e) => setDraft({ ...draft, minSizeMB: e.target.value })} aria-label="Minimum size in MB" />
-              <input type="number" min="0" step="any" className="sps-input" placeholder="Max" value={draft.maxSizeMB}
-                onChange={(e) => setDraft({ ...draft, maxSizeMB: e.target.value })} aria-label="Maximum size in MB" />
+            <div className="ssr-row">
+              <input type="number" min="0" step="any" className="ssr-input" placeholder="Min" value={draft.minSizeMB} onChange={(e) => setDraft({ ...draft, minSizeMB: e.target.value })} />
+              <input type="number" min="0" step="any" className="ssr-input" placeholder="Max" value={draft.maxSizeMB} onChange={(e) => setDraft({ ...draft, maxSizeMB: e.target.value })} />
             </div>
 
             <h6>Tag</h6>
-            <input type="text" className="sps-input mb-2" placeholder="Type a tag" maxLength={30} value={draft.tag}
-              onChange={(e) => setDraft({ ...draft, tag: e.target.value })} aria-label="Tag" />
+            <input type="text" className="ssr-input" placeholder="Type a tag" maxLength={30} value={draft.tag} onChange={(e) => setDraft({ ...draft, tag: e.target.value })} />
             {popularTags.length > 0 && (
-              <div className="sps-tagcloud">
+              <div className="ssr-tagcloud">
                 {popularTags.slice(0, 12).map((t) => (
-                  <button
-                    key={t.tag} type="button"
-                    className={`sps-pill ${applied.tag === t.tag ? "active" : ""}`}
-                    onClick={() => setDraftAndApply({ tag: applied.tag === t.tag ? "" : t.tag })}
-                  >
+                  <button key={t.tag} type="button" className={`ssr-pill ${applied.tag === t.tag ? "active" : ""}`}
+                    onClick={() => setDraftAndApply({ tag: applied.tag === t.tag ? "" : t.tag })}>
                     {t.tag} <small>{t.count}</small>
                   </button>
                 ))}
               </div>
             )}
 
-            <div className="d-flex mt-3" style={{ gap: 8 }}>
-              <button type="button" className="sps-btn flex-grow-1" onClick={validateAndApply}>Apply</button>
-              <button type="button" className="sps-btn ghost" onClick={resetAll}>Reset</button>
+            <div className="ssr-refine-actions">
+              <button type="button" className="ssr-btn" onClick={validateAndApply}>Apply</button>
+              <button type="button" className="ssr-btn ghost" onClick={resetFilters}>Reset</button>
             </div>
           </aside>
+          {showFilters && <div className="ssr-backdrop" onClick={() => setShowFilters(false)} />}
 
-          {/* results */}
-          <div className="sps-main">
-            <div className="sps-summary">
-              <span aria-live="polite">
-                {loading ? "Searching…" : (
-                  <>
-                    <strong>{results.totalCount}</strong> result{results.totalCount === 1 ? "" : "s"}
-                    {applied.q && <> for “{applied.q}”</>}
-                  </>
-                )}
-              </span>
-              <span>
-                Sort by{" "}
-                <select
-                  className="sps-input d-inline-block" style={{ width: 120 }} aria-label="Sort by"
-                  value={applied.sortBy} onChange={(e) => toggleSort(e.target.value) || undefined}
-                >
-                  {Object.entries(SORTS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-                </select>
-                <button type="button" className="sps-act" title="Toggle sort direction"
-                  onClick={() => setApplied((p) => ({ ...p, sortDir: p.sortDir === "asc" ? "desc" : "asc", page: 1 }))}>
-                  <i className={`fas fa-sort-amount-${applied.sortDir === "asc" ? "up" : "down"}`} />
-                </button>
-              </span>
-            </div>
+          {/* results table */}
+          <div className="ssr-main">
+            <div className="ssr-tablewrap">
+              <table className="ssr-table">
+                <thead>
+                  <tr>
+                    <th><button type="button" onClick={() => toggleSort("name")}>Name {arrow("name")}</button></th>
+                    <th>Location</th>
+                    <th><button type="button" onClick={() => toggleSort("size")}>Size {arrow("size")}</button></th>
+                    <th>Created by</th>
+                    <th><button type="button" onClick={() => toggleSort("created")}>Created {arrow("created")}</button></th>
+                    <th className="ssr-th-act" aria-label="Actions" />
+                  </tr>
+                </thead>
+                <tbody style={{ opacity: loading && results.items.length ? 0.55 : 1 }}>
+                  {loading && results.items.length === 0 &&
+                    [0, 1, 2, 3, 4].map((i) => (
+                      <tr key={i} className="ssr-skelrow"><td colSpan={6}><span className="ssr-skel" /></td></tr>
+                    ))}
 
-            {activeChips.length > 0 && (
-              <div className="sps-chips">
-                {activeChips.map(([key, label]) => (
-                  <span key={key} className="sps-chip">
-                    {label}
-                    <button type="button" aria-label={`Remove ${label}`} onClick={() => removeChip(key)}>×</button>
-                  </span>
-                ))}
-                <button type="button" className="sps-clear" onClick={resetAll} style={{ fontSize: 12 }}>Clear all</button>
-              </div>
-            )}
-
-            <div className="sps-list">
-              <div className="sps-head" role="row">
-                <button type="button" className="sps-sort" onClick={() => toggleSort("name")}>Name {sortArrow("name")}</button>
-                <span>Location</span>
-                <button type="button" className="sps-sort" onClick={() => toggleSort("size")}>Size {sortArrow("size")}</button>
-                <span>Created by</span>
-                <button type="button" className="sps-sort" onClick={() => toggleSort("created")}>Created {sortArrow("created")}</button>
-                <span />
-              </div>
-
-              {loading && results.items.length === 0 &&
-                [0, 1, 2, 3, 4].map((i) => <div key={i} className="sps-skel" />)}
-
-              {!loading && results.items.length === 0 && (
-                <div className="sps-empty">
-                  <div className="big"><i className="fas fa-search" /></div>
-                  <h5>No results found</h5>
-                  <div>Check the spelling, try fewer keywords, or clear some filters.</div>
-                  {(activeChips.length > 0 || applied.q) && (
-                    <button type="button" className="sps-btn ghost mt-3" onClick={resetAll}>Clear search and filters</button>
+                  {!loading && results.items.length === 0 && (
+                    <tr><td colSpan={6}>
+                      <div className="ssr-empty">
+                        <FiSearch size={40} />
+                        <h5>No results found</h5>
+                        <p>Check the spelling, try fewer keywords, or clear some filters.</p>
+                        {(chips.length > 0 || applied.q) && <button type="button" className="ssr-btn ghost" onClick={clearSearch}>Clear search and filters</button>}
+                      </div>
+                    </td></tr>
                   )}
-                </div>
-              )}
 
-              <div style={{ opacity: loading && results.items.length ? 0.55 : 1, transition: "opacity .15s" }}>
-                {results.items.map((item) => {
-                  const [ico, color] = iconFor(item);
-                  const tags = item.tags ? item.tags.split(",").filter(Boolean) : [];
-                  return (
-                    <div key={`${item.docType}-${item.id}`} className="sps-item" role="row">
-                      <div className="sps-name">
-                        <span className="sps-ico" style={{ background: color }}><i className={`fas ${ico}`} /></span>
-                        <div style={{ minWidth: 0 }}>
-                          <div className="sps-title" title={item.name}>
-                            <button type="button" onClick={() => openItem(item)}
-                              title={item.docType === "Folder" ? "Open folder" : "Open file"}>
-                              <Highlight text={item.name} terms={terms} />
-                            </button>
-                            {item.isHide && <span className="sps-hide">Hidden</span>}
+                  {results.items.map((item) => {
+                    const tags = item.tags ? item.tags.split(",").filter(Boolean) : [];
+                    const Icon = item.docType === "Folder" ? FiFolder : FiFile;
+                    return (
+                      <tr key={`${item.docType}-${item.id}`}>
+                        <td data-label="Name">
+                          <div className="ssr-name">
+                            <span className="ssr-ico" style={{ background: colorFor(item) }}><Icon size={16} /></span>
+                            <div className="ssr-namebox">
+                              <button type="button" className="ssr-title" title={item.name} onClick={() => openItem(item)}>
+                                <Highlight text={item.name} terms={terms} />
+                              </button>
+                              {item.isHide && <span className="ssr-hide">Hidden</span>}
+                              <div className="ssr-sub">
+                                {item.docType === "Folder" ? "Folder" : (item.extension || "file").toUpperCase()} · {item.source}
+                                {tags.slice(0, 3).map((t) => <span key={t} className="ssr-pill static"><Highlight text={t} terms={terms} /></span>)}
+                                {tags.length > 3 && <span className="ssr-pill static">+{tags.length - 3}</span>}
+                              </div>
+                            </div>
                           </div>
-                          <div className="sps-sub">
-                            {item.docType === "Folder" ? "Folder" : (item.extension || "file").toUpperCase()} · {item.source}
-                            {tags.map((t) => (
-                              <span key={t} className="sps-pill static ml-1" style={{ fontSize: 11, padding: "0 7px" }}>
-                                <Highlight text={t} terms={terms} />
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="sps-loc" title={item.location}>
-                        {item.path?.length > 0 || item.docType === "Folder" ? (
-                          <button type="button" className="sps-link" onClick={() => openLocation(item, { parent: item.docType === "Folder" })}>
-                            {item.location}
-                          </button>
-                        ) : item.location}
-                      </div>
-                      <div className="sps-meta-hide">{item.docType === "Folder" ? "—" : formatSize(item.size)}</div>
-                      <div className="sps-by sps-meta-hide" title={item.createdByName}>
-                        <span className="sps-av">{initials(item.createdByName)}</span>
-                        <span className="sps-loc">{item.createdByName}</span>
-                      </div>
-                      <div className="sps-meta-hide">{fmtDate(item.createdOn)}</div>
-                      <div className="sps-actions">
-                        <button type="button" className="sps-act" title={item.docType === "Folder" ? "Open folder" : "Open file"}
-                          aria-label={`Open ${item.name}`} onClick={() => openItem(item)}>
-                          <i className={`fas ${item.docType === "Folder" ? "fa-folder-open" : "fa-external-link-alt"}`} />
-                        </button>
-                        {item.docType === "Document" && item.path?.length > 0 && (
-                          <button type="button" className="sps-act" title="Open file location" aria-label={`Open location of ${item.name}`}
-                            onClick={() => openLocation(item)}>
-                            <i className="fas fa-folder-open" />
-                          </button>
-                        )}
-                        <button type="button" className="sps-act" title="Download" aria-label={`Download ${item.name}`} onClick={() => handleDownload(item)}>
-                          <i className="fas fa-download" />
-                        </button>
-                        <button type="button" className="sps-act" title="Details and access" aria-label={`Details of ${item.name}`}
-                          onClick={() => setDetailsItem({ docType: item.docType, id: item.id, name: item.name, tab: "details" })}>
-                          <i className="fas fa-info-circle" />
-                        </button>
-                        {item.canEditTags && (
-                          <button type="button" className="sps-act" title="Add / edit tags" aria-label={`Edit tags of ${item.name}`} onClick={() => openTagModal(item)}>
-                            <i className="fas fa-tag" />
-                          </button>
-                        )}
-                        {!item.canEditTags && (
-                          <button type="button" className="sps-act" title="View tags" aria-label={`View tags of ${item.name}`} onClick={() => openTagModal(item)}>
-                            <i className="fas fa-tags" />
-                          </button>
-                        )}
-                        {item.docType === "Document" && (
-                          <button type="button" className="sps-act" title="Version history & co-authoring" aria-label={`Versions of ${item.name}`}
-                            onClick={() => setVersionItem({ id: item.id, name: item.name })}>
-                            <i className="fas fa-history" />
-                          </button>
-                        )}
-                        {item.path?.length > 0 && (
-                          <button type="button" className="sps-act" title="Copy link" aria-label={`Copy link to ${item.name}`} onClick={() => copyLink(item)}>
-                            <i className="fas fa-link" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                        </td>
+                        <td data-label="Location" className="ssr-loc" title={item.location}>
+                          {hasPath(item) || item.docType === "Folder" ? (
+                            <button type="button" className="ssr-link" onClick={() => openLocation(item, { parent: item.docType === "Folder" })}>{item.location}</button>
+                          ) : item.location}
+                        </td>
+                        <td data-label="Size">{item.docType === "Folder" ? "—" : formatSize(item.size)}</td>
+                        <td data-label="Created by">
+                          <span className="ssr-by"><span className="ssr-av">{initials(item.createdByName)}</span><span>{item.createdByName}</span></span>
+                        </td>
+                        <td data-label="Created">{fmtDate(item.createdOn)}</td>
+                        <td className="ssr-td-act"><RowMenu item={item} /></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
 
             {results.totalPages > 1 && (
-              <div className="sps-pager">
-                <button type="button" className="sps-btn ghost" disabled={applied.page <= 1}
-                  onClick={() => setApplied((p) => ({ ...p, page: p.page - 1 }))}>Previous</button>
+              <div className="ssr-pager">
+                <button type="button" className="ssr-btn ghost" disabled={applied.page <= 1} onClick={() => setApplied((p) => ({ ...p, page: p.page - 1 }))}>Previous</button>
                 <span>Page {applied.page} of {results.totalPages}</span>
-                <button type="button" className="sps-btn ghost" disabled={applied.page >= results.totalPages}
-                  onClick={() => setApplied((p) => ({ ...p, page: p.page + 1 }))}>Next</button>
+                <button type="button" className="ssr-btn ghost" disabled={applied.page >= results.totalPages} onClick={() => setApplied((p) => ({ ...p, page: p.page + 1 }))}>Next</button>
               </div>
             )}
           </div>
         </div>
 
-        {versionItem && (
-          <FileVersionsModal
-            file={versionItem}
-            onClose={() => setVersionItem(null)}
-            onChanged={() => setApplied((p) => ({ ...p }))}
-          />
-        )}
-
-        {/* tag editor */}
-        {tagModal && (
-          <TagsModal
-            item={tagModal}
-            onClose={() => setTagModal(null)}
-            onSaved={() => { loadTags(); setApplied((p) => ({ ...p })); }}
-          />
-        )}
-        {detailsItem && (
-  <ItemDetailsModal item={detailsItem} initialTab={detailsItem.tab} onClose={() => setDetailsItem(null)} />
-)}
+        {versionItem && <FileVersionsModal file={versionItem} onClose={() => setVersionItem(null)} onChanged={refresh} />}
+        {tagModal && <TagsModal item={tagModal} onClose={() => setTagModal(null)} onSaved={() => { loadTags(); refresh(); }} />}
+        {detailsItem && <ItemDetailsModal item={detailsItem} initialTab={detailsItem.tab} onClose={() => setDetailsItem(null)} onChanged={refresh} />}
+        {collabItem && <CommentsReviewModal item={collabItem} onClose={() => setCollabItem(null)} />}
+        {assignItem && <AssignProjectModal item={assignItem} onClose={() => setAssignItem(null)} />}
       </div>
     </section>
   );
