@@ -17,6 +17,13 @@ const emptyForm = {
   countryCode: "", contactNumber: "", designation: "", division: "", isActive: "true", address: "",
 };
 
+const Field = ({ id, label, children, className = "col-md-4" }) => (
+  <div className={`form-group ${className}`}>
+    <label htmlFor={id}>{label}<sup>*</sup></label>
+    {children}
+  </div>
+);
+
 const UserCreation = () => {
   const personalInfo = useSelector((s) => s.personalInformationReducer);
   const { showLoader, hideLoader } = useLoader();
@@ -61,10 +68,10 @@ const UserCreation = () => {
       .catch(() => toast.error("Failed to load roles"));
     axios.get(`${config.DDA_API_API_URL}FieldMaster/GetAllDivisionMasters`, { headers: config.headers2 })
       .then((r) => r.data.success && setDivisions([...r.data.data].sort((a, b) => a.description.localeCompare(b.description))))
-      .catch(() => {});
+      .catch(() => { });
     axios.get(`${config.DDA_API_API_URL}FieldMaster/GetAllEmailDomains`, { headers: config.headers2 })
       .then((r) => setEmailDomains(r.data.data || []))
-      .catch(() => {});
+      .catch(() => { });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -184,7 +191,7 @@ const UserCreation = () => {
       ),
     },
     {
-      key: "actions", label: "Actions", sortable: false, noExport: true,
+      key: "actions", label: "Actions", sortable: false, noExport: true, className: "dg-sticky-actions",
       render: (u) => (
         <div className="dg-actions">
           <button type="button" className="btn bg-gradient-warning btn-xs" title="Edit" onClick={() => handleEdit(u)}><FiEdit2 size={13} /></button>
@@ -194,13 +201,6 @@ const UserCreation = () => {
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [users]);
-
-  const Field = ({ id, label, children, className = "col-md-4" }) => (
-    <div className={`form-group ${className}`}>
-      <label htmlFor={id}>{label}<sup>*</sup></label>
-      {children}
-    </div>
-  );
 
   return (
     <>

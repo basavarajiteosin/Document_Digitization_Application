@@ -1,5 +1,5 @@
 /* ===== Home dashboard ===== */
-.sp-home { max-width: 1240px; margin: 0 auto; padding: 8px 0 32px; }
+.sp-home { max-width: 1740px; margin: 0 auto; padding: 8px 0 32px; }
 .sp-hero { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
 .sp-hero h2 { font-size: 26px; font-weight: 800; margin: 0; }
 .sp-hero p { margin: 2px 0 0; color: var(--sp-text-2); font-size: 13px; }

@@ -1,7 +1,5 @@
 ﻿using DDAAPI.DbContexts;
-//using DDAAPI.Helpers;
 using DDAAPI.Models;
-using DDAAPI.Services;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
@@ -18,11 +16,121 @@ namespace DDAAPI.Services
         private readonly IConfiguration _configuration;
         private readonly AppDbContext _dbContext;
 
+        // MailBodyConfigurations IDs
+        private const int TPL_USER_CREATION = 1;
+        private const int TPL_RESET_PASSWORD = 2;
+        private const int TPL_USER_ACTIVATION = 3;
+        private const int TPL_FILE_ACCESS_INTERNAL = 4;
+        private const int TPL_FILE_ACCESS_EXTERNAL = 5;
+        private const int TPL_DOC_ACCESS_OTP = 6;
+        private const int TPL_BEHALF_ACTION = 8;
+
+        // New templates are looked up by MailType
+        private const string TPL_MFA_OTP = "MFA OTP";
+        private const string TPL_REGISTRATION_REQUEST = "User Registration Request";
+        private const string TPL_MENTION = "Mention Notification";
+
         public EmailService(IConfiguration configuration, AppDbContext dbContext)
         {
             _configuration = configuration;
             _dbContext = dbContext;
         }
+
+        #region Shared helpers
+
+        private static string H(string? s) => WebUtility.HtmlEncode(s ?? "");
+
+        private async Task LogMailAsync(string mailType, string? toEmail, string? subject, bool success, string? error = null)
+        {
+            try
+            {
+                _dbContext.MailLogs.Add(new MailLog
+                {
+                    MailType = mailType,
+                    ToEmail = toEmail,
+                    Subject = subject != null && subject.Length > 500 ? subject.Substring(0, 500) : subject,
+                    Status = success ? "Sent" : "Failed",
+                    ErrorMessage = error != null && error.Length > 2000 ? error.Substring(0, 2000) : error,
+                    CreatedOn = DateTime.Now
+                });
+                await _dbContext.SaveChangesAsync();
+            }
+            catch { /* mail logging must never break the mail flow */ }
+        }
+
+        private EmailConfiguration GetEmailConfig()
+        {
+            return _dbContext.EmailConfiguration.FirstOrDefault(k => k.IsActive && !k.IsSSL && k.ID == 1)
+                   ?? throw new Exception("Email configuration not found");
+        }
+
+        private MailBodyConfiguration GetTemplate(int id)
+        {
+            return _dbContext.MailBodyConfigurations.FirstOrDefault(k => k.ID == id)
+                   ?? throw new Exception($"Mail template (ID {id}) not found in MailBodyConfigurations");
+        }
+
+        private MailBodyConfiguration GetTemplate(string mailType)
+        {
+            return _dbContext.MailBodyConfigurations.FirstOrDefault(k => k.MailType == mailType)
+                   ?? throw new Exception($"Mail template '{mailType}' not found in MailBodyConfigurations");
+        }
+
+        /// <summary>
+        /// Fills the template placeholders (subject + body), sends the mail and returns the final subject.
+        /// useVaultPassword = true  -> SMTP password comes from the STMPDetails table (EMailDetails)
+        /// useVaultPassword = false -> SMTP password comes from EmailConfiguration
+        /// </summary>
+        private async Task<string> SendFromTemplateAsync(EmailConfiguration ec, MailBodyConfiguration tpl, string toEmail,
+            IDictionary<string, string> tokens, bool useVaultPassword)
+        {
+            string Fill(string text)
+            {
+                foreach (var kv in tokens) text = text.Replace(kv.Key, kv.Value ?? "");
+                return text;
+            }
+
+            string subject = Fill(tpl.MailSubject ?? "");
+            string body = Fill(tpl.MailBody ?? "");
+
+            NetworkCredential credentials;
+            if (useVaultPassword)
+            {
+                var smtpCfg = _configuration.GetSection("STMPDetails");
+                EMailDetails details = GetEMailDetails(ec.UserName, smtpCfg["EmailContext"], smtpCfg["TableName"]);
+                credentials = new NetworkCredential(ec.UserName, details.Password);
+            }
+            else
+            {
+                credentials = new NetworkCredential(ec.MailAddress, ec.Password);
+            }
+
+            using var message = new MailMessage();
+            message.From = new MailAddress(ec.MailAddress);
+            message.To.Add(new MailAddress(toEmail));
+            message.Subject = subject;
+            message.Body = body;
+            message.IsBodyHtml = true;
+            message.BodyEncoding = UTF8Encoding.UTF8;
+            message.DeliveryNotificationOptions = DeliveryNotificationOptions.OnFailure;
+
+            using var smtp = new SmtpClient(ec.ServerAddress);
+            smtp.Port = int.Parse(ec.OutgoingPort);
+            smtp.EnableSsl = true;
+            smtp.Timeout = 60000;
+            smtp.UseDefaultCredentials = false;
+            smtp.Credentials = credentials;
+            smtp.DeliveryMethod = SmtpDeliveryMethod.Network;
+
+            ServicePointManager.ServerCertificateValidationCallback += (s, c, ch, e) => true;
+            await smtp.SendMailAsync(message);
+
+            return subject;
+        }
+
+        #endregion
+
+        #region SendInitializationMail (unchanged)
 
         public async Task<bool> SendInitializationMail(string FirstName, string LastName, string toEmail, string Password, string url)
         {
@@ -116,342 +224,210 @@ namespace DDAAPI.Services
             }
         }
 
+        #endregion
+
+        #region MFA OTP  (template: MailType "MFA OTP")  tokens: @UserName@ @otp@
 
         public async Task<bool> SendMFAOtpForAuthentivcationMail(string otp, string UserName, string toEmail)
         {
             try
             {
-                var ec = _dbContext.EmailConfiguration.FirstOrDefault(k => k.IsActive && !k.IsSSL && k.ID == 1);
+                var ec = GetEmailConfig();
+                var tpl = GetTemplate(TPL_MFA_OTP);
 
-                var STMPDetailsConfig = _configuration.GetSection("STMPDetails");
-                string tableName = STMPDetailsConfig["TableName"];
-                string connectionString = STMPDetailsConfig["EmailContext"];
-
-                EMailDetails details = GetEMailDetails(ec.UserName, connectionString, tableName);
-
-                if (ec != null)
+                var subject = await SendFromTemplateAsync(ec, tpl, toEmail, new Dictionary<string, string>
                 {
-                    MailMessage message = new MailMessage();
+                    ["@UserName@"] = H(UserName),
+                    ["@otp@"] = H(otp)
+                }, useVaultPassword: true);
 
-                    using (SmtpClient smtp = new SmtpClient(ec.ServerAddress))
-                    {
-                        message.From = new MailAddress(ec.MailAddress);
-                        message.To.Add(new MailAddress(toEmail));
-                        message.Subject = "OTP for Login";
-                        message.IsBodyHtml = true;
-
-                        message.Body = $@" <html> <head> <style> /* CSS styles for responsive email */ @media only screen and (max-width: 600px) {{ /* Responsive styles here */ .container {{ width: 100%; padding: 10px; }} }} </style> </head> <body> <div style='border: 1px solid #dbdbdb;'> <div style='padding: 20px 20px; background-color: #fff06769; text-align: center; font-family: Segoe UI;'> <h2>Wipro User Authentication </h2> </div> <div style='background-color: #f8f7f7; padding: 20px 20px; font-family: Segoe UI;'> <div style='padding: 20px 20px; border: 1px solid white; background-color: white !important;'> <p>Dear {UserName},</p> <p>Your One-Time Password (OTP) for login is: <strong>{otp}</strong></p> <p>Please use this OTP to proceed with your login.</p> <p><em>This OTP will expire in 5 minutes.</em></p> <p>Regards,<br/>Admin</p> </div> </div> </div> </body> </html> ";
-
-                        smtp.Port = int.Parse(ec.OutgoingPort);
-                        smtp.EnableSsl = true;
-                        smtp.Timeout = 60000;
-                        smtp.UseDefaultCredentials = false;
-                        smtp.Credentials = new NetworkCredential(ec.UserName, details.Password);
-                        smtp.DeliveryMethod = SmtpDeliveryMethod.Network;
-
-                        message.BodyEncoding = UTF8Encoding.UTF8;
-                        message.DeliveryNotificationOptions = DeliveryNotificationOptions.OnFailure;
-
-                        ServicePointManager.ServerCertificateValidationCallback +=
-                            (sender, certificate, chain, sslPolicyErrors) => true;
-
-                        await smtp.SendMailAsync(message);
-
-                        Log.DataLog(
-                            toEmail,
-                            $"OTP has been sent successfully to {toEmail}",
-                            "MFA OTP Mail Log");
-                    }
-                }
-                else
-                {
-                    throw new Exception("Email configuration not found.");
-                }
-
+                Log.DataLog(toEmail, $"OTP has been sent successfully to {toEmail}", "MFA OTP Mail Log");
+                await LogMailAsync("MFA OTP", toEmail, subject, true);
                 return true;
             }
             catch (SmtpFailedRecipientsException ex)
             {
+                await LogMailAsync("MFA OTP", toEmail, null, false, ex.Message);
                 for (int i = 0; i < ex.InnerExceptions.Length; i++)
                 {
                     SmtpStatusCode status = ex.InnerExceptions[i].StatusCode;
-
-                    if (status == SmtpStatusCode.MailboxBusy ||
-                        status == SmtpStatusCode.MailboxUnavailable)
+                    if (status == SmtpStatusCode.MailboxBusy || status == SmtpStatusCode.MailboxUnavailable)
                     {
-                        Log.Error(
-                            toEmail,
-                            $"MFAOtp/SendMail/MailboxBusy/MailboxUnavailable/SmtpFailedRecipientsException: {ex.Message}",
-                            "MFA OTP Mail Log");
+                        Log.Error(toEmail, $"MFAOtp/SendMail/MailboxBusy/MailboxUnavailable/SmtpFailedRecipientsException: {ex.Message}", "MFA OTP Mail Log");
                     }
                     else
                     {
-                        Log.Error(
-                            toEmail,
-                            $"MFAOtp/SendMail/SmtpFailedRecipientsException: {ex.Message}",
-                            "MFA OTP Mail Log");
+                        Log.Error(toEmail, $"MFAOtp/SendMail/SmtpFailedRecipientsException: {ex.Message}", "MFA OTP Mail Log");
                     }
                 }
-
-                Log.Error(
-                    toEmail,
-                    $"MFAOtp/SendMail/SmtpFailedRecipientsException: {ex.Message}",
-                    "MFA OTP Mail Log");
-
+                Log.Error(toEmail, $"MFAOtp/SendMail/SmtpFailedRecipientsException: {ex.Message}", "MFA OTP Mail Log");
                 return false;
             }
             catch (SmtpException ex)
             {
-                Log.Error(
-                    toEmail,
-                    $"MFAOtp/SendMail/SmtpException: {ex.Message}",
-                    "MFA OTP Mail Log");
-
+                await LogMailAsync("MFA OTP", toEmail, null, false, ex.Message);
+                Log.Error(toEmail, $"MFAOtp/SendMail/SmtpException: {ex.Message}", "MFA OTP Mail Log");
                 return false;
             }
             catch (Exception ex)
             {
-                Log.Error(
-                    toEmail,
-                    $"MFAOtp/SendMail/Exception: {ex.Message}",
-                    "MFA OTP Mail Log");
-
+                await LogMailAsync("MFA OTP", toEmail, null, false, ex.Message);
+                Log.Error(toEmail, $"MFAOtp/SendMail/Exception: {ex.Message}", "MFA OTP Mail Log");
                 return false;
             }
         }
+
+        #endregion
+
+        #region Behalf action (ID 8)
 
         public async Task<bool> SendBehalfActionNotificationMail(string ownerEmail, string ownerName, string actingUserName, string itemName, string itemType, string actionType, string FolderName)
         {
             // itemType: "Folder" | "File", actionType: "Created" | "Uploaded"
             try
             {
-                var ec = _dbContext.EmailConfiguration.FirstOrDefault(k => k.IsActive && !k.IsSSL && k.ID == 1);
-                var ebody = _dbContext.MailBodyConfigurations.FirstOrDefault(k => k.MailType == "Behalf Action Notification");
-                if (ec == null || ebody == null)
-                    throw new Exception("Email configuration or Behalf Action Notification template not found");
+                var ec = GetEmailConfig();
+                var tpl = GetTemplate(TPL_BEHALF_ACTION);
 
-                string H(string? s) => WebUtility.HtmlEncode(s ?? "");
-                string Fill(string t) => t
-                    .Replace("@OwnerName@", H(ownerName))
-                    .Replace("@ActingUser@", H(actingUserName))
-                    .Replace("@Action@", H(actionType.ToLower()))
-                    .Replace("@ItemType@", H(itemType.ToLower()))
-                    .Replace("@ItemName@", H(itemName))
-                    .Replace("@FolderName@", H(FolderName));
-
-                using var client = new SmtpClient(ec.ServerAddress)
+                var subject = await SendFromTemplateAsync(ec, tpl, ownerEmail, new Dictionary<string, string>
                 {
-                    Port = int.Parse(ec.OutgoingPort),
-                    EnableSsl = true,
-                    Timeout = 60000,
-                    UseDefaultCredentials = false,
-                    Credentials = new NetworkCredential(ec.MailAddress, ec.Password)
-                };
-
-                using var mail = new MailMessage(ec.UserName, ownerEmail, Fill(ebody.MailSubject), Fill(ebody.MailBody))
-                {
-                    BodyEncoding = UTF8Encoding.UTF8,
-                    DeliveryNotificationOptions = DeliveryNotificationOptions.OnFailure,
-                    IsBodyHtml = true
-                };
-
-                ServicePointManager.ServerCertificateValidationCallback += (s, c, ch, e) => true;
-                await client.SendMailAsync(mail);
+                    ["@OwnerName@"] = H(ownerName),
+                    ["@ActingUser@"] = H(actingUserName),
+                    ["@Action@"] = H(actionType.ToLower()),
+                    ["@ItemType@"] = H(itemType.ToLower()),
+                    ["@ItemName@"] = H(itemName),
+                    ["@FolderName@"] = H(FolderName)
+                }, useVaultPassword: false);
 
                 Log.DataLog(ownerEmail, $"Notified owner {ownerEmail} that {actingUserName} {actionType.ToLower()} {itemType.ToLower()} '{itemName}'", "Behalf Action Notification Log");
+                await LogMailAsync("Behalf Action Notification", ownerEmail, subject, true);
                 return true;
             }
             catch (Exception ex)
             {
                 // Never let a notification failure break the create/upload flow.
+                await LogMailAsync("Behalf Action Notification", ownerEmail, null, false, ex.Message);
                 Log.Error(ownerEmail, $"Behalf/SendBehalfActionNotificationMail/Exception:- {ex.Message}", "Behalf Action Notification Log");
                 return false;
             }
         }
 
+        #endregion
+
+        #region Mention (template: MailType "Mention Notification")
+        // tokens: @UserName@ @ByName@ @ItemType@ @ItemName@ @Location@ @Comment@ @Link@
+
         public async Task<bool> SendMentionNotificationMail(string toEmail, string toName, string byName, string itemType,
-    string itemName, string location, string commentText, string link)
+            string itemName, string location, string commentText, string link)
         {
             try
             {
-                var ec = _dbContext.EmailConfiguration.FirstOrDefault(k => k.IsActive && !k.IsSSL && k.ID == 1);
-                if (ec == null) throw new Exception("Email configuration not found");
+                var ec = GetEmailConfig();
+                var tpl = GetTemplate(TPL_MENTION);
 
-                string H(string? s) => WebUtility.HtmlEncode(s ?? "");
-                string subject = $"{byName} mentioned you in a comment";
-                string body = $@"
-<div style='padding:20px;font-family:Segoe UI,Arial,sans-serif;'>
-  <div style='border:1px solid #e6eaf2;border-radius:14px;padding:22px;max-width:560px;margin:auto;'>
-    <h2 style='margin:0 0 12px;color:#0f172a;'>You were mentioned</h2>
-    <p>Dear {H(toName)},</p>
-    <p><b>{H(byName)}</b> mentioned you in a comment on the {H(itemType.ToLower())} <b>'{H(itemName)}'</b>.</p>
-    <table style='border-collapse:collapse;margin:10px 0;font-size:13px;'>
-      <tr><td style='padding:3px 12px 3px 0;color:#64748b;'>Type</td><td>{H(itemType)}</td></tr>
-      <tr><td style='padding:3px 12px 3px 0;color:#64748b;'>Name</td><td>{H(itemName)}</td></tr>
-      <tr><td style='padding:3px 12px 3px 0;color:#64748b;'>Location</td><td>{H(location)}</td></tr>
-    </table>
-    <div style='background:#eaf1ff;border-left:4px solid #2563eb;border-radius:8px;padding:12px 14px;margin:12px 0;white-space:pre-wrap;color:#0f172a;'>{H(commentText)}</div>
-    <p style='margin:18px 0;'>
-      <a href='{H(link)}' style='background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:10px;font-weight:600;'>Open &amp; review</a>
-    </p>
-    <p>Regards,<br/>Wipro Admin</p>
-    <p align='center' style='font-size:10px;color:#94a3b8;'>Sensitivity: Internal &amp; Restricted</p>
-  </div>
-</div>";
-
-                using var client = new SmtpClient(ec.ServerAddress);
-                client.Port = int.Parse(ec.OutgoingPort);
-                client.EnableSsl = true;
-                client.Timeout = 60000;
-                client.UseDefaultCredentials = false;
-                client.Credentials = new NetworkCredential(ec.MailAddress, ec.Password);
-
-                using var mail = new MailMessage(ec.UserName, toEmail, subject, body)
+                var subject = await SendFromTemplateAsync(ec, tpl, toEmail, new Dictionary<string, string>
                 {
-                    BodyEncoding = UTF8Encoding.UTF8,
-                    DeliveryNotificationOptions = DeliveryNotificationOptions.OnFailure,
-                    IsBodyHtml = true
-                };
-
-                ServicePointManager.ServerCertificateValidationCallback += (s, c, ch, e) => true;
-                await client.SendMailAsync(mail);
+                    ["@UserName@"] = H(toName),
+                    ["@ByName@"] = H(byName),
+                    ["@ItemType@"] = H(itemType),
+                    ["@ItemName@"] = H(itemName),
+                    ["@Location@"] = H(location),
+                    ["@Comment@"] = H(commentText),
+                    ["@Link@"] = H(link)
+                }, useVaultPassword: false);
 
                 Log.DataLog(toEmail, $"Mention notification sent to {toEmail} by {byName} on {itemType} '{itemName}'", "Mention Mail Log");
+                await LogMailAsync("Mention Notification", toEmail, subject, true);
                 return true;
             }
             catch (Exception ex)
             {
+                await LogMailAsync("Mention Notification", toEmail, null, false, ex.Message);
                 Log.Error(toEmail, $"Mention/SendMail/Exception:- {ex.Message}", "Mention Mail Log");
                 return false;
             }
         }
 
+        #endregion
+
+        #region User Creation (ID 1)
+
         public async Task<bool> SendUserCreatedMailForUser(string FirstName, string LastName, string toEmail, string Password, string url)
         {
             try
             {
-                var ec = _dbContext.EmailConfiguration.FirstOrDefault(k => k.IsActive && !k.IsSSL && k.ID == 1);
-                var ebody = _dbContext.MailBodyConfigurations.FirstOrDefault(k => k.ID == 1);
-                var STMPDetailsConfig = _configuration.GetSection("STMPDetails");
-                string tableName = STMPDetailsConfig["TableName"];
-                string connectionString = STMPDetailsConfig["EmailContext"];
-                EMailDetails details = GetEMailDetails(ec.UserName, connectionString, tableName);
-                if (ec != null && ebody != null)
+                var ec = GetEmailConfig();
+                var tpl = GetTemplate(TPL_USER_CREATION);
+
+                var subject = await SendFromTemplateAsync(ec, tpl, toEmail, new Dictionary<string, string>
                 {
-                    MailMessage message = new MailMessage();
-                    using (SmtpClient smtp = new SmtpClient(ec.ServerAddress))
-                    {
-                        message.From = new MailAddress(ec.MailAddress);
-                        message.To.Add(new MailAddress(toEmail));
-                        message.Subject = ebody.MailSubject;
-                        message.IsBodyHtml = false; //to make message body as html
-                        message.Body = ebody.MailBody;
-                        message.Body = message.Body.Replace("@LoginLink@", url);
-                        message.Body = message.Body.Replace("@DearUser@", FirstName + " " + LastName);
-                        message.Body = message.Body.Replace("@UserName@", toEmail);
-                        message.Body = message.Body.Replace("@Password@", Password);
-                        smtp.Port = int.Parse(ec.OutgoingPort);
-                        smtp.EnableSsl = true;
-                        smtp.Timeout = 60000;
-                        smtp.UseDefaultCredentials = false;
-                        smtp.Credentials = new NetworkCredential(ec.UserName, details.Password);
-                        smtp.DeliveryMethod = SmtpDeliveryMethod.Network;
-                        message.BodyEncoding = UTF8Encoding.UTF8;
-                        message.DeliveryNotificationOptions = DeliveryNotificationOptions.OnFailure;
-                        message.IsBodyHtml = true;
-                        ServicePointManager.ServerCertificateValidationCallback += (sender, certificate, chain, sslPolicyErrors) => true;
-                        await smtp.SendMailAsync(message);
-                        Log.DataLog(toEmail, $"User credentials has been shared successfully to the mail {toEmail}", "Email Log");
-                    }
-                }
-                else
-                {
-                    throw new Exception("Email configuration or Invoice details not found");
-                }
-                //  WriteLog.AddMailWriteLog($"Registration link has been sent successfully to {toEmail}", toEmail);
+                    ["@LoginLink@"] = url,
+                    ["@DearUser@"] = FirstName + " " + LastName,
+                    ["@UserName@"] = toEmail,
+                    ["@Password@"] = Password
+                }, useVaultPassword: true);
+
+                Log.DataLog(toEmail, $"User credentials has been shared successfully to the mail {toEmail}", "Email Log");
+                await LogMailAsync("User Created", toEmail, subject, true);
                 return true;
             }
             catch (SmtpFailedRecipientsException ex)
             {
+                await LogMailAsync("User Created", toEmail, null, false, ex.Message);
                 for (int i = 0; i < ex.InnerExceptions.Length; i++)
                 {
                     SmtpStatusCode status = ex.InnerExceptions[i].StatusCode;
                     if (status == SmtpStatusCode.MailboxBusy || status == SmtpStatusCode.MailboxUnavailable)
                     {
                         Log.Error(toEmail, $"UserCreatedMailForUser/SendMail/MailboxBusy/MailboxUnavailable/SmtpFailedRecipientsException:Inner {ex.Message}", "Email Log");
-                        //ErrorLog.AddMailErrorLog($"UserCreatedMailForUser/SendMail/MailboxBusy/MailboxUnavailable/SmtpFailedRecipientsException:Inner-", ex.Message);
                     }
                     else
                     {
                         Log.Error(toEmail, $"UserCreatedMailForUser/SendMail/SmtpFailedRecipientsException:Inner - {ex.Message}", "Email Log");
-
-                        // ErrorLog.AddMailErrorLog($"UserCreatedMailForUser/SendMail/SmtpFailedRecipientsException:Inner- ", ex.Message);
                     }
                 }
                 Log.Error(toEmail, $"UserCreatedMailForUser/SendMail/SmtpFailedRecipientsException:- {ex.Message}", "Email Log");
-                //ErrorLog.AddMailErrorLog($"UserCreatedMailForUser/SendMail/SmtpFailedRecipientsException:-", ex.Message);
                 return false;
             }
             catch (SmtpException ex)
             {
+                await LogMailAsync("User Created", toEmail, null, false, ex.Message);
                 Log.Error(toEmail, $"UserCreatedMailForUser/SendMail/SmtpException:- {ex.Message}", "Email Log");
-                //ErrorLog.AddMailErrorLog($"UserCreatedMailForUser/SendMail/SmtpException:-", ex.Message);
                 return false;
             }
             catch (Exception ex)
             {
+                await LogMailAsync("User Created", toEmail, null, false, ex.Message);
                 Log.Error(toEmail, $"UserCreatedMailForUser/SendMail/Exception:- {ex.Message}", "Email Log");
-                //ErrorLog.AddMailErrorLog($"UserCreatedMailForUser/SendMail/Exception:-", ex.Message);
                 return false;
             }
         }
+
+        #endregion
+
+        #region User Activation (ID 3)
+
         public async Task<bool> SendSignUpUserCreatedMailForViewUser(string FirstName, string LastName, string toEmail, string Password, string url)
         {
             try
             {
-                var ec = _dbContext.EmailConfiguration.FirstOrDefault(k => k.IsActive && !k.IsSSL && k.ID == 1);
-                var ebody = _dbContext.MailBodyConfigurations.FirstOrDefault(k => k.ID == 3);
-                var STMPDetailsConfig = _configuration.GetSection("STMPDetails");
-                string tableName = STMPDetailsConfig["TableName"];
-                string connectionString = STMPDetailsConfig["EmailContext"];
-                EMailDetails details = GetEMailDetails(ec.UserName, connectionString, tableName);
-                if (ec != null && ebody != null)
+                var ec = GetEmailConfig();
+                var tpl = GetTemplate(TPL_USER_ACTIVATION);
+
+                var subject = await SendFromTemplateAsync(ec, tpl, toEmail, new Dictionary<string, string>
                 {
-                    MailMessage message = new MailMessage();
-                    using (SmtpClient smtp = new SmtpClient(ec.ServerAddress))
-                    {
-                        message.From = new MailAddress(ec.MailAddress);
-                        message.To.Add(new MailAddress(toEmail));
-                        message.Subject = ebody.MailSubject;
-                        message.IsBodyHtml = false; //to make message body as html
-                        message.Body = ebody.MailBody;
-                        message.Body = message.Body.Replace("@LoginLink@", url);
-                        message.Body = message.Body.Replace("@DearUser@", FirstName + " " + LastName);
-                        message.Body = message.Body.Replace("@UserName@", toEmail);
-                        // message.Body = message.Body.Replace("@Password@", Password);
-                        smtp.Port = int.Parse(ec.OutgoingPort);
-                        smtp.EnableSsl = true;
-                        smtp.Timeout = 60000;
-                        smtp.UseDefaultCredentials = false;
-                        smtp.Credentials = new NetworkCredential(ec.UserName, details.Password);
-                        smtp.DeliveryMethod = SmtpDeliveryMethod.Network;
-                        message.BodyEncoding = UTF8Encoding.UTF8;
-                        message.DeliveryNotificationOptions = DeliveryNotificationOptions.OnFailure;
-                        message.IsBodyHtml = true;
-                        ServicePointManager.ServerCertificateValidationCallback += (sender, certificate, chain, sslPolicyErrors) => true;
-                        await smtp.SendMailAsync(message);
-                    }
-                }
-                else
-                {
-                    throw new Exception("Email configuration or Invoice details not found");
-                }
+                    ["@LoginLink@"] = url,
+                    ["@DearUser@"] = FirstName + " " + LastName,
+                    ["@UserName@"] = toEmail
+                }, useVaultPassword: true);
+
                 Log.DataLog(toEmail, $"User Registration mail has been sent successfully to {toEmail}", "User Credentils Share Log");
-                //WriteLog.AddMailWriteLog($"Registration link has been sent successfully to {toEmail}", toEmail);
+                await LogMailAsync("Registration Approved", toEmail, subject, true);
                 return true;
             }
             catch (SmtpFailedRecipientsException ex)
             {
+                await LogMailAsync("Registration Approved", toEmail, null, false, ex.Message);
                 for (int i = 0; i < ex.InnerExceptions.Length; i++)
                 {
                     SmtpStatusCode status = ex.InnerExceptions[i].StatusCode;
@@ -462,743 +438,213 @@ namespace DDAAPI.Services
                     else
                     {
                         Log.Error(toEmail, $"SignUpUserCreatedMailForViewUser/SendMail/SmtpFailedRecipientsException:Inner- {ex.Message}", "User Credentils Share Log");
-
-                        //ErrorLog.AddMailErrorLog($"SignUpUserCreatedMailForViewUser/SendMail/SmtpFailedRecipientsException:Inner-", ex.Message);
                     }
                 }
                 Log.Error(toEmail, $"SignUpUserCreatedMailForViewUser/SendMail/SmtpFailedRecipientsException:- {ex.Message}", "User Credentils Share Log");
-
-                //ErrorLog.AddMailErrorLog($"SignUpUserCreatedMailForViewUser/SendMail/SmtpFailedRecipientsException:- ", ex.Message);
                 return false;
             }
             catch (SmtpException ex)
             {
+                await LogMailAsync("Registration Approved", toEmail, null, false, ex.Message);
                 Log.Error(toEmail, $"SignUpUserCreatedMailForViewUser/SendMail/SmtpException:- {ex.Message}", "User Credentils Share Log");
-
-                //ErrorLog.AddMailErrorLog($"SignUpUserCreatedMailForViewUser/SendMail/SmtpException:- ", ex.Message);
                 return false;
             }
             catch (Exception ex)
             {
+                await LogMailAsync("Registration Approved", toEmail, null, false, ex.Message);
                 Log.Error(toEmail, $"SignUpUserCreatedMailForViewUser/SendMail/Exception:- {ex.Message}", "User Credentils Share Log");
-
-                //ErrorLog.AddMailErrorLog($"SignUpUserCreatedMailForViewUser/SendMail/Exception:- ", ex.Message);
                 return false;
             }
         }
+
+        #endregion
+
+        #region Reset Password (ID 2)
 
         public async Task<bool> SendMailForUserResetPasswordMail(string code, string UserName, string toEmail, string userID, string siteURL)
         {
             try
             {
-                var ec = _dbContext.EmailConfiguration.FirstOrDefault(k => k.IsActive && !k.IsSSL && k.ID == 1);
-                var ebody = _dbContext.MailBodyConfigurations.FirstOrDefault(k => k.ID == 2);
-                var STMPDetailsConfig = _configuration.GetSection("STMPDetails");
-                string tableName = STMPDetailsConfig["TableName"];
-                string connectionString = STMPDetailsConfig["EmailContext"];
-                EMailDetails details = GetEMailDetails(ec.UserName, connectionString, tableName);
-                if (ec != null && ebody != null)
+                var ec = GetEmailConfig();
+                var tpl = GetTemplate(TPL_RESET_PASSWORD);
+
+                var subject = await SendFromTemplateAsync(ec, tpl, toEmail, new Dictionary<string, string>
                 {
-                    MailMessage message = new MailMessage();
-                    using (SmtpClient smtp = new SmtpClient(ec.ServerAddress))
-                    {
-                        message.From = new MailAddress(ec.MailAddress);
-                        message.To.Add(new MailAddress(toEmail));
-                        message.Subject = ebody.MailSubject;
-                        message.IsBodyHtml = false; //to make message body as html
-                        message.Body = ebody.MailBody;
-                        message.Body = message.Body.Replace("@ResetLink@", siteURL + "?token=" + code + "&Id=" + userID);
-                        message.Body = message.Body.Replace("@UserName@", UserName);
-                        smtp.Port = int.Parse(ec.OutgoingPort);
-                        smtp.EnableSsl = true;
-                        smtp.Timeout = 60000;
-                        smtp.UseDefaultCredentials = false;
-                        smtp.Credentials = new NetworkCredential(ec.UserName, details.Password);
-                        smtp.DeliveryMethod = SmtpDeliveryMethod.Network;
-                        message.BodyEncoding = UTF8Encoding.UTF8;
-                        message.DeliveryNotificationOptions = DeliveryNotificationOptions.OnFailure;
-                        message.IsBodyHtml = true;
-                        ServicePointManager.ServerCertificateValidationCallback += (sender, certificate, chain, sslPolicyErrors) => true;
-                        await smtp.SendMailAsync(message);
-                        Log.DataLog(toEmail, $"Password Reset link has been sent successfully to the user email {toEmail}", "Password Reset mail Log");
-                    }
-                }
-                else
-                {
-                    throw new Exception("Email configuration or Invoice details not found");
-                }
-                // WriteLog.AddMailWriteLog($"Registration link has been sent successfully to {toEmail}", toEmail);
+                    ["@ResetLink@"] = siteURL + "?token=" + code + "&Id=" + userID,
+                    ["@UserName@"] = UserName
+                }, useVaultPassword: true);
+
+                Log.DataLog(toEmail, $"Password Reset link has been sent successfully to the user email {toEmail}", "Password Reset mail Log");
+                await LogMailAsync("Password Reset Link", toEmail, subject, true);
                 return true;
             }
             catch (SmtpFailedRecipientsException ex)
             {
+                await LogMailAsync("Password Reset Link", toEmail, null, false, ex.Message);
                 for (int i = 0; i < ex.InnerExceptions.Length; i++)
                 {
                     SmtpStatusCode status = ex.InnerExceptions[i].StatusCode;
                     if (status == SmtpStatusCode.MailboxBusy || status == SmtpStatusCode.MailboxUnavailable)
                     {
-
-                        Log.Error(toEmail, $"UserResetPassword/SendMail/MailboxBusy/MailboxUnavailable/SmtpFailedRecipientsException:Inner- {ex.Message}",
-                         "Password Reset mail Log");
-                        //ErrorLog.AddMailErrorLog($"UserResetPassword/SendMail/MailboxBusy/MailboxUnavailable/SmtpFailedRecipientsException:Inner-", ex.Message);
+                        Log.Error(toEmail, $"UserResetPassword/SendMail/MailboxBusy/MailboxUnavailable/SmtpFailedRecipientsException:Inner- {ex.Message}", "Password Reset mail Log");
                     }
                     else
                     {
-                        Log.Error(toEmail, $"UserResetPassword/SendMail/SmtpFailedRecipientsException:Inner- {ex.Message}",
-                      "Password Reset mail Log");
-                        //ErrorLog.AddMailErrorLog($"UserResetPassword/SendMail/SmtpFailedRecipientsException:Inner- ", ex.Message);
+                        Log.Error(toEmail, $"UserResetPassword/SendMail/SmtpFailedRecipientsException:Inner- {ex.Message}", "Password Reset mail Log");
                     }
                 }
-                Log.Error(toEmail, $"UserResetPassword/SendMail/SmtpFailedRecipientsException:- {ex.Message}",
-                    "Password Reset mail Log");
-                //ErrorLog.AddMailErrorLog($"UserResetPassword/SendMail/SmtpFailedRecipientsException:-", ex.Message);
+                Log.Error(toEmail, $"UserResetPassword/SendMail/SmtpFailedRecipientsException:- {ex.Message}", "Password Reset mail Log");
                 return false;
             }
             catch (SmtpException ex)
             {
-                Log.Error(toEmail, $"UserResetPassword/SendMail/SmtpException {ex.Message}",
-                   "Password Reset mail Log");
-                //ErrorLog.AddMailErrorLog($"UserResetPassword/SendMail/SmtpException:- ", ex.Message);
+                await LogMailAsync("Password Reset Link", toEmail, null, false, ex.Message);
+                Log.Error(toEmail, $"UserResetPassword/SendMail/SmtpException {ex.Message}", "Password Reset mail Log");
                 return false;
             }
             catch (Exception ex)
             {
-                Log.Error(toEmail, $"UserResetPassword/SendMail/Exception {ex.Message}",
-                  "Password Reset mail Log");
-                //ErrorLog.AddMailErrorLog($"UserResetPassword/SendMail/Exception:- ", ex.Message);
+                await LogMailAsync("Password Reset Link", toEmail, null, false, ex.Message);
+                Log.Error(toEmail, $"UserResetPassword/SendMail/Exception {ex.Message}", "Password Reset mail Log");
                 return false;
             }
         }
 
+        #endregion
 
-        //public async Task<bool> SendOtpForDocAuthentivcationMail(string otp, string UserName, string toEmail)
-        //{
-        //    try
-        //    {
-        //        var ec = _dbContext.EmailConfiguration.FirstOrDefault(k => k.IsActive && !k.IsSSL && k.ID == 1);
-
-        //        if (ec != null)
-        //        {
-        //            // Prepare email message
-        //            MailMessage message = new MailMessage();
-        //            message.From = new MailAddress(ec.MailAddress); // Sender's email and name
-        //            message.To.Add(new MailAddress(toEmail)); // Recipient's email
-        //            message.Subject = "OTP for Access the Document"; // Email subject
-
-        //            // Generate HTML content for the email
-        //            string htmlBody = $@"
-        //        <html>
-        //        <head>
-        //            <style>
-        //                /* CSS styles for responsive email */
-        //                @media only screen and (max-width: 600px) {{
-        //                    /* Responsive styles here */
-        //                    .container {{
-        //                        width: 100%;
-        //                        padding: 10px;
-        //                    }}
-        //                }}
-        //            </style>
-        //        </head>
-        //        <body>
-        //            <div style='border: 1px solid #dbdbdb;'>
-        //                <div style='padding: 20px 20px; background-color: #fff06769; text-align: center; font-family: Segoe UI;'>
-        //                    <h2>Wipro User Authentication </h2>
-        //                </div>
-        //                <div style='background-color: #f8f7f7; padding: 20px 20px; font-family: Segoe UI;'>
-        //                    <div style='padding: 20px 20px; border: 1px solid white; background-color: white !important;'>
-        //                        <p>Dear {UserName},</p>
-        //                        <p>Your One-Time Password (OTP) for login is: <strong>{otp}</strong></p>
-        //                        <p>Please use this OTP to proceed access your document.</p>
-        //                        <p><em>This OTP will expire in 5 minutes.</em></p>
-        //                        <p>Regards,<br/>Admin</p>
-        //                    </div>
-        //                </div>
-        //            </div>
-        //        </body>
-        //        </html>
-        //    ";
-
-        //            message.Body = htmlBody;
-        //            message.IsBodyHtml = true;
-
-        //            // Configure SMTP client
-        //            SmtpClient client = new SmtpClient(ec.ServerAddress);
-        //            client.Port = int.Parse(ec.OutgoingPort);
-        //            client.EnableSsl = true;
-        //            client.Timeout = 60000;
-        //            client.UseDefaultCredentials = false;
-        //            client.Credentials = new System.Net.NetworkCredential(ec.MailAddress, ec.Password);
-
-        //            // Send email asynchronously
-        //            await client.SendMailAsync(message);
-
-        //            ErrorLog.AddMailErrorLog(toEmail, $"OTP for Login has been sent successfully to {UserName}.");
-        //            return true;
-        //        }
-        //        else
-        //        {
-        //            throw new Exception("Email configuration not found");
-        //        }
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        ErrorLog.AddMailErrorLog($"UserResetPassword/SendMail/Exception:- ", ex.Message);
-        //        return false;
-        //    }
-        //}
+        #region Document access OTP (ID 6)
 
         public async Task<bool> SendOtpForDocAuthentivcationMail(string otp, string UserName, string toEmail)
         {
             try
             {
-                var ec = _dbContext.EmailConfiguration.FirstOrDefault(k => k.IsActive && !k.IsSSL && k.ID == 1);
-                var ebody = _dbContext.MailBodyConfigurations.FirstOrDefault(k => k.ID == 6);
-                var STMPDetailsConfig = _configuration.GetSection("STMPDetails");
-                string tableName = STMPDetailsConfig["TableName"];
-                string connectionString = STMPDetailsConfig["EmailContext"];
-                EMailDetails details = GetEMailDetails(ec.UserName, connectionString, tableName);
-                if (ec != null && ebody != null)
+                var ec = GetEmailConfig();
+                var tpl = GetTemplate(TPL_DOC_ACCESS_OTP);
+
+                var subject = await SendFromTemplateAsync(ec, tpl, toEmail, new Dictionary<string, string>
                 {
-                    MailMessage message = new MailMessage();
-                    using (SmtpClient smtp = new SmtpClient(ec.ServerAddress))
-                    {
-                        message.From = new MailAddress(ec.MailAddress);
-                        message.To.Add(new MailAddress(toEmail));
-                        message.Subject = ebody.MailSubject;
-                        message.IsBodyHtml = false; //to make message body as html
-                        message.Body = ebody.MailBody;
-                        message.Body = message.Body.Replace("@UserName@", UserName);
-                        message.Body = message.Body.Replace("@otp@", otp);
-                        smtp.Port = int.Parse(ec.OutgoingPort);
-                        smtp.EnableSsl = true;
-                        smtp.Timeout = 60000;
-                        smtp.UseDefaultCredentials = false;
-                        smtp.Credentials = new NetworkCredential(ec.UserName, details.Password);
-                        smtp.DeliveryMethod = SmtpDeliveryMethod.Network;
-                        message.BodyEncoding = UTF8Encoding.UTF8;
-                        message.DeliveryNotificationOptions = DeliveryNotificationOptions.OnFailure;
-                        message.IsBodyHtml = true;
-                        ServicePointManager.ServerCertificateValidationCallback += (sender, certificate, chain, sslPolicyErrors) => true;
-                        await smtp.SendMailAsync(message);
-                        Log.DataLog(toEmail, $"OTP for Login has been sent successfully to {UserName}.", "FolderorFileAccess OTP Log");
-                        //ErrorLog.AddMailErrorLog(toEmail, $"OTP for Login has been sent successfully to {UserName}.");
-                        return true;
-                    }
-                }
-                else
-                {
-                    throw new Exception("Email configuration not found");
-                }
+                    ["@UserName@"] = UserName,
+                    ["@otp@"] = otp
+                }, useVaultPassword: true);
+
+                Log.DataLog(toEmail, $"OTP for Login has been sent successfully to {UserName}.", "FolderorFileAccess OTP Log");
+                await LogMailAsync("Document Access OTP", toEmail, subject, true);
+                return true;
             }
             catch (Exception ex)
             {
+                await LogMailAsync("Document Access OTP", toEmail, null, false, ex.Message);
                 Log.Error(toEmail, $"While sharing otp to {UserName} following error occured : {ex.Message}.", "FolderorFileAccess OTP Log");
-                //ErrorLog.AddMailErrorLog($"UserResetPassword/SendMail/Exception:- ", ex.Message);
                 return false;
             }
         }
 
-        //public async Task<bool> SendMailForInternalDocAccessMail(string toEmail, string fromEmail, string docType, string docName, string siteURL)
-        //{
-        //    try
-        //    {
-        //        var ec = _dbContext.EmailConfiguration.FirstOrDefault(k => k.IsActive && !k.IsSSL && k.ID == 1);
+        #endregion
 
-        //        if (ec != null)
-        //        {
-        //            MailMessage message = new MailMessage();
-        //            string subject = "File Access Invitation";
-        //            StringBuilder sb = new StringBuilder();
-        //            sb.Append($@"
-        //<html>
-        //<head>
-        //    <meta charset=""UTF-8"">
-        //    <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
-        //    <title>File Access Invitation</title>
-        //    <link href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css' rel='stylesheet'/>
-        //    <style>
-        //        /* CSS styles for responsive email */
-        //        @media only screen and (max-width: 600px) {{
-        //            .container {{
-        //                width: 100%;
-        //                padding: 10px;
-        //            }}
-        //            .email-content {{
-        //                max-width: 90%; /* More responsive on small screens */
-        //            }}
-        //            .button {{
-        //                font-size: 14px; /* Adjust button text size for smaller screens */
-        //                padding: 12px; /* Adjust padding for a better touch target */
-        //            }}
-        //        }}
-        //        body {{
-        //            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-        //            background-color: #f3f2f1; 
-        //            margin: 0; 
-        //            padding: 0;
-        //        }}
-        //    </style>
-        //</head>
-        //<body>
-        //    <div style='border: 1px solid #dbdbdb;'>
-        //        <div style='padding: 20px 20px; background-color: #fff06769; text-align: center; font-family: Segoe UI;'>
-        //            <h2>File Access Invitation</h2>
-        //        </div>
-        //        <div style='background-color: #f8f7f7; padding: 20px 20px; font-family: Segoe UI;'>
-        //            <div style='padding: 20px 20px; border: 1px solid white; background-color: white !important; text-align: center;'>
-        //                <h1 style='font-size: 20px; margin: 0; margin-bottom: 20px;'>
-        //                    @fromEmail@ invited you to access a file
-        //                </h1>
-        //                <p style='font-size: 14px; margin: 0; margin-bottom: 20px;'>
-        //                    File Type: 
-        //                    <span style='background-color: yellow; padding: 2px 4px; border-radius: 4px;'>@docType@</span>.
-        //                </p>
-        //                <div style='border: 1px solid #e1e1e1; border-radius: 8px; padding: 10px; display: flex; align-items: center; justify-content: center; margin-bottom: 20px;'>
-        //                    <i class='fas fa-folder icon' style='font-size: 40px; color: #2b579a; margin-right: 10px;'></i>
-        //                    <span style='font-size: 16px;'>@docName@ - Copy</span>
-        //                </div>
-        //                <p style='font-size: 14px; color: #107c10; margin-bottom: 20px;'>
-        //                    This <span style='color: #107c10; font-weight: bold;'>link</span> will work for anyone.
-        //                </p>
-        //                <div style='text-align: center; margin-bottom: 20px;'>
-        //                    <a href='@siteURL@'>
-        //                        <button style='width: 120px; height: 36px; background-color: #0078d4; color: #ffffff; border: none; border-radius: 4px; cursor: pointer; font-size: 16px;'>Open</button>
-        //                    </a>
-        //                </div>
-        //                <div class='footer' style='font-size: 12px; color: #767676; margin-top: 20px; text-align: center;'>
-        //                    <i class='fab fa-microsoft' style='font-size: 20px; vertical-align: middle;'></i>
-        //                    <a href='#' style='color: #767676; text-decoration: none;'>Privacy Statement</a>
-        //                </div>
-        //            </div>
-        //        </div>
-        //    </div>
-        //</body>
-        //</html>");
-
-
-        //            // Create a MailMessage object
-        //            SmtpClient client = new SmtpClient(ec.ServerAddress);
-        //            client.Port = int.Parse(ec.OutgoingPort);
-        //            client.EnableSsl = true;
-        //            client.Timeout = 60000;
-        //            client.UseDefaultCredentials = false;
-        //            client.Credentials = new System.Net.NetworkCredential(ec.MailAddress, ec.Password);
-
-        //            MailMessage reportEmail = new MailMessage(ec.UserName, toEmail, subject, sb.ToString());
-        //            reportEmail.BodyEncoding = UTF8Encoding.UTF8;
-        //            reportEmail.DeliveryNotificationOptions = DeliveryNotificationOptions.OnFailure;
-        //            reportEmail.IsBodyHtml = true;
-
-        //            ServicePointManager.ServerCertificateValidationCallback += (sender, certificate, chain, sslPolicyErrors) => true;
-
-        //            // Send email asynchronously
-        //            await client.SendMailAsync(reportEmail);
-
-        //            // Log success
-        //            WriteLog.AddMailWriteLog($" For internal User Mail. Email sent successfully to: {toEmail}", toEmail);
-
-        //            return true;
-        //        }
-        //        else
-        //        {
-        //            throw new Exception("Email configuration not found");
-        //        }
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        // Log error
-        //        ErrorLog.AddMailErrorLog($"Error sending email to {toEmail}: ", ex.Message);
-        //        return false;
-        //    }
-        //}
-
+        #region File access - internal (ID 4)
 
         public async Task<bool> SendMailForInternalDocAccessMail(string toEmail, string fromEmail, string docType, string docName, string siteURL)
         {
             try
             {
-                var ec = _dbContext.EmailConfiguration.FirstOrDefault(k => k.IsActive && !k.IsSSL && k.ID == 1);
+                var ec = GetEmailConfig();
+                var tpl = GetTemplate(TPL_FILE_ACCESS_INTERNAL);
 
-                var ebody = _dbContext.MailBodyConfigurations.FirstOrDefault(k => k.ID == 4);
-                var STMPDetailsConfig = _configuration.GetSection("STMPDetails");
-                string tableName = STMPDetailsConfig["TableName"];
-                string connectionString = STMPDetailsConfig["EmailContext"];
-                EMailDetails details = GetEMailDetails(ec.UserName, connectionString, tableName);
-                if (ec != null && ebody != null)
+                var subject = await SendFromTemplateAsync(ec, tpl, toEmail, new Dictionary<string, string>
                 {
-                    MailMessage message = new MailMessage();
-                    using (SmtpClient smtp = new SmtpClient(ec.ServerAddress))
-                    {
-                        message.From = new MailAddress(ec.MailAddress);
-                        message.To.Add(new MailAddress(toEmail));
-                        message.Subject = ebody.MailSubject;
-                        message.IsBodyHtml = false; //to make message body as html
-                        message.Body = ebody.MailBody;
-                        message.Body = message.Body.Replace("@toEmail@", toEmail);
-                        message.Body = message.Body.Replace("@fromEmail@", fromEmail);
-                        message.Body = message.Body.Replace("@docType@", docType);
-                        message.Body = message.Body.Replace("@docName@", docName);
-                        message.Body = message.Body.Replace("@siteURL@", siteURL);
-                        smtp.Port = int.Parse(ec.OutgoingPort);
-                        smtp.EnableSsl = true;
-                        smtp.Timeout = 60000;
-                        smtp.UseDefaultCredentials = false;
-                        smtp.Credentials = new NetworkCredential(ec.UserName, details.Password);
-                        smtp.DeliveryMethod = SmtpDeliveryMethod.Network;
-                        message.BodyEncoding = UTF8Encoding.UTF8;
-                        message.DeliveryNotificationOptions = DeliveryNotificationOptions.OnFailure;
-                        message.IsBodyHtml = true;
-                        ServicePointManager.ServerCertificateValidationCallback += (sender, certificate, chain, sslPolicyErrors) => true;
-                        await smtp.SendMailAsync(message);
-                    }
-                }
-                else
-                {
-                    throw new Exception("Email configuration or Invoice details not found");
-                }
+                    ["@toEmail@"] = toEmail,
+                    ["@fromEmail@"] = fromEmail,
+                    ["@docType@"] = docType,
+                    ["@docName@"] = docName,
+                    ["@siteURL@"] = siteURL
+                }, useVaultPassword: true);
+
                 Log.DataLog(toEmail, $"To access the files or folders for internal user mail {toEmail} has beensent successfully ", "Internal Share Access maillog");
-                //WriteLog.AddMailWriteLog($" For internal User Mail. Email sent successfully to: {toEmail}", toEmail);
+                await LogMailAsync("Internal Share Access", toEmail, subject, true);
                 return true;
             }
             catch (Exception ex)
             {
+                await LogMailAsync("Internal Share Access", toEmail, null, false, ex.Message);
                 Log.Error(toEmail, $"To access the files or folders for internal user mail {toEmail} following error occured {ex.Message} ", "Internal Share Access maillog");
-                //ErrorLog.AddMailErrorLog($"Error sending email to {toEmail}: ", ex.Message);
                 return false;
             }
         }
+
+        #endregion
+
+        #region Registration request to admins (template: MailType "User Registration Request")
+        // tokens: @FirstName@ @LastName@ @EmployeeMail@ @EmployeeId@ @LoginLink@
+
         public async Task<bool> SendSignUpUserRequestMailFromAdmin(string firstName, string lastName, string toEmail, string createdUser, string EmployeeMail)
         {
             try
             {
-                var ec = _dbContext.EmailConfiguration.FirstOrDefault(k => k.IsActive && !k.IsSSL && k.ID == 1);
+                var ec = GetEmailConfig();
+                var tpl = GetTemplate(TPL_REGISTRATION_REQUEST);
 
-                if (ec != null)
+                var subject = await SendFromTemplateAsync(ec, tpl, toEmail, new Dictionary<string, string>
                 {
-                    MailMessage message = new MailMessage();
-                    string subject = "User Creation";
-                    StringBuilder sb = new StringBuilder();
-                    string logingurl = _configuration["SiteURL"];
-                    sb.Append($@"
-                   <div style='font-family:Segoe UI; padding:20px;'>
-                       <h3 style=""text-align: center;"">User Registration Notification</h3>
-                       <p>A new user has registered on the portal.<br/> Please log in to the DMS Portal to review and activate their account.</p>
-                       <table style='border-collapse:collapse; margin-top:10px;'>
-                           <tr><td><b>Name:</b></td><td>{firstName} {lastName}</td></tr>
-                           <tr><td><b>Email:</b></td><td>{EmployeeMail}</td></tr>
-                           <tr><td><b>Employee ID : </b></td><td>{createdUser}</td></tr>
-                       </table>
-                       <p style='margin-top:20px;'>
-                           <a href='{logingurl}' style='color:#fff; background-color:#007bff; padding:10px 20px; text-decoration:none; border-radius:5px;'>Login</a>
-                       </p>
-                       <p>Regards,</p>
-                       <p>Wipro Admin</p>
-  
+                    ["@FirstName@"] = H(firstName),
+                    ["@LastName@"] = H(lastName),
+                    ["@EmployeeMail@"] = H(EmployeeMail),
+                    ["@EmployeeId@"] = H(createdUser),
+                    ["@LoginLink@"] = H(_configuration["SiteURL"])
+                }, useVaultPassword: false);
 
-                         <div style=""font-size: 14px; font-family: Arial; margin-top: 10px;"">
-                         <p style=""text-align: center;"">Sensitivity: Internal &amp; Restricted</p>
-                           <p>
-                             'The information contained in this electronic message and any attachments to this message 
-                             are intended for the exclusive use of the addressee(s) and may contain proprietary, 
-                             confidential or privileged information. If you are not the intended recipient, you should 
-                             not disseminate, distribute or copy this e-mail. Please notify the sender immediately and 
-                             destroy all copies of this message and any attachments. 
-                           
-                             WARNING: Computer viruses can be transmitted via email. The recipient should check this 
-                             email and any attachments for the presence of viruses. The company accepts no liability 
-                             for any damage caused by any virus transmitted by this email. 
-                             <a href=""https://www.wipro.com"" target=""_blank"">www.wipro.com</a>
-                           </p>
-                         </div>
-                                               </div>
-               ");
-
-
-                    SmtpClient client = new SmtpClient(ec.ServerAddress);
-                    client.Port = int.Parse(ec.OutgoingPort);
-                    client.EnableSsl = true;
-                    client.Timeout = 60000;
-                    client.UseDefaultCredentials = false;
-                    client.Credentials = new System.Net.NetworkCredential(ec.MailAddress, ec.Password);
-
-                    MailMessage reportEmail = new MailMessage(ec.UserName, toEmail, subject, sb.ToString());
-                    reportEmail.BodyEncoding = UTF8Encoding.UTF8;
-                    reportEmail.DeliveryNotificationOptions = DeliveryNotificationOptions.OnFailure;
-                    reportEmail.IsBodyHtml = true;
-
-                    ServicePointManager.ServerCertificateValidationCallback += (sender, certificate, chain, sslPolicyErrors) => true;
-
-                    await client.SendMailAsync(reportEmail);
-                    Log.DataLog(toEmail, $"User registered with the the mail {toEmail} details has been shared successfully to the admins", "Email Log");
-
-                    //WriteLog.AddWriteLog($"Registration link has been sent successfully to {toEmail}", toEmail);
-                    return true;
-                }
-                else
-                {
-                    Log.Error(toEmail, $"Email configuration not found", "Email Log");
-
-                    throw new Exception("Email configuration not found");
-                }
+                Log.DataLog(toEmail, $"User registered with the the mail {toEmail} details has been shared successfully to the admins", "Email Log");
+                await LogMailAsync("Registration Request (Admin)", toEmail, subject, true);
+                return true;
             }
             catch (SmtpException ex)
             {
-                // Log exception or handle appropriately
+                await LogMailAsync("Registration Request (Admin)", toEmail, null, false, ex.Message);
+                Log.Error(toEmail, $"SignUpUserRequestMailFromAdmin/SendMail/SmtpException:- {ex.Message}", "Email Log");
                 return false;
             }
             catch (Exception ex)
             {
-                // Log exception or handle appropriately
+                await LogMailAsync("Registration Request (Admin)", toEmail, null, false, ex.Message);
+                Log.Error(toEmail, $"SignUpUserRequestMailFromAdmin/SendMail/Exception:- {ex.Message}", "Email Log");
                 return false;
             }
         }
 
+        #endregion
 
-
-        //public async Task<bool> SendSignUpUserRequestMailFromAdmin(string FirstName, string LastName, string toEmail, string CreatedUser)
-        //{
-        //    try
-        //    {
-        //        var ec = _dbContext.EmailConfiguration.FirstOrDefault(k => k.IsActive && !k.IsSSL && k.ID == 1);
-        //        var ebody = _dbContext.MailBodyConfigurations.FirstOrDefault(k => k.ID == 3);
-        //        var STMPDetailsConfig = _configuration.GetSection("STMPDetails");
-        //        string tableName = STMPDetailsConfig["TableName"];
-        //        string connectionString = STMPDetailsConfig["EmailContext"];
-        //        EMailDetails details = GetEMailDetails(ec.UserName, connectionString, tableName);
-
-
-        //        if (ec != null && ebody != null)
-        //        {
-        //            MailMessage message = new MailMessage();
-        //            using (SmtpClient smtp = new SmtpClient(ec.ServerAddress))
-        //            {
-        //                message.From = new MailAddress(ec.MailAddress);
-        //                message.To.Add(new MailAddress(toEmail));
-        //                message.Subject = ebody.MailSubject;
-        //                message.IsBodyHtml = false; //to make message body as html
-        //                message.Body = ebody.MailBody;
-        //                message.Body = message.Body.Replace("@DearUser@", FirstName + " " + LastName);
-        //                message.Body = message.Body.Replace("@CreatedUserName@", CreatedUser);
-        //                message.Body = message.Body.Replace("@LoginLink@", CreatedUser);
-        //                smtp.Port = int.Parse(ec.OutgoingPort);
-        //                smtp.EnableSsl = true;
-        //                smtp.Timeout = 60000;
-        //                smtp.UseDefaultCredentials = false;
-        //                smtp.Credentials = new NetworkCredential(ec.UserName, details.Password);
-        //                smtp.DeliveryMethod = SmtpDeliveryMethod.Network;
-        //                message.BodyEncoding = UTF8Encoding.UTF8;
-        //                message.DeliveryNotificationOptions = DeliveryNotificationOptions.OnFailure;
-        //                message.IsBodyHtml = true;
-        //                ServicePointManager.ServerCertificateValidationCallback += (sender, certificate, chain, sslPolicyErrors) => true;
-        //                await smtp.SendMailAsync(message);
-        //            }
-        //        }
-        //        else
-        //        {
-        //            throw new Exception("Email configuration or Invoice details not found");
-        //        }
-        //        //WriteLog.WriteToFile($"Registration link has been sent successfully to {toEmail}");
-        //        return true;
-        //    }
-        //    catch (SmtpFailedRecipientsException ex)
-        //    {
-        //        for (int i = 0; i < ex.InnerExceptions.Length; i++)
-        //        {
-        //            SmtpStatusCode status = ex.InnerExceptions[i].StatusCode;
-        //            if (status == SmtpStatusCode.MailboxBusy || status == SmtpStatusCode.MailboxUnavailable)
-        //            {
-        //                //WriteLog.WriteToFile($"UserRequestMailFromAdmin/SendMail/MailboxBusy/MailboxUnavailable/SmtpFailedRecipientsException:Inner- {ex.InnerExceptions[i].Message}");
-        //            }
-        //            else
-        //            {
-        //                //WriteLog.WriteToFile($"UserRequestMailFromAdmin/SendMail/SmtpFailedRecipientsException:Inner- {ex.InnerExceptions[i].Message}");
-        //            }
-        //        }
-        //        //WriteLog.WriteToFile($"UserRequestMailFromAdmin/SendMail/SmtpFailedRecipientsException:- {ex.Message}", ex);
-        //        return false;
-        //    }
-        //    catch (SmtpException ex)
-        //    {
-        //       // WriteLog.WriteToFile($"UserRequestMailFromAdmin/SendMail/SmtpException:- {ex.Message}", ex);
-        //        return false;
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        //WriteLog.WriteToFile($"UserRequestMailFromAdmin/SendMail/Exception:- {ex.Message}", ex);
-        //        return false;
-        //    }
-        //}
-
-
-        //        public async Task<bool> SendMailForDocAccessMail(string token, int docID, string toEmail, string fromEmail, string docName, string docType, string comments, string siteURL)
-        //        {
-        //            try
-        //            {
-        //                var ec = _dbContext.EmailConfiguration.FirstOrDefault(k => k.IsActive && !k.IsSSL && k.ID == 1);
-
-        //                if (ec != null)
-        //                {
-        //                    string subject = "File Access Invitation";
-
-        //                    // Construct the HTML body using the provided template
-        //                    string htmlBody = $@"
-        //<html>
-        //<head>
-        //    <meta charset=""UTF-8"">
-        //    <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
-        //    <title>File Access Invitation</title>
-        //    <link href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css' rel='stylesheet'/>
-        //    <style>
-        //        /* CSS styles for responsive email */
-        //        @media only screen and (max-width: 600px) {{
-        //            .container {{
-        //                width: 100%;
-        //                padding: 10px;
-        //            }}
-        //            .email-content {{
-        //                max-width: 90%; /* More responsive on small screens */
-        //            }}
-        //            .button {{
-        //                font-size: 14px; /* Adjust button text size for smaller screens */
-        //                padding: 12px; /* Adjust padding for a better touch target */
-        //            }}
-        //        }}
-        //        body {{
-        //            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-        //            background-color: #f3f2f1; 
-        //            margin: 0; 
-        //            padding: 0;
-        //        }}
-        //    </style>
-        //</head>
-        //<body>
-        //    <div style='border: 1px solid #dbdbdb;'>
-        //        <div style='padding: 20px 20px; background-color: #fff06769; text-align: center; font-family: Segoe UI;'>
-        //            <h2>File Access Invitation</h2>
-        //        </div>
-        //        <div style='background-color: #f8f7f7; padding: 20px 20px; font-family: Segoe UI;'>
-        //            <div style='padding: 20px 20px; border: 1px solid white; background-color: white !important; text-align: center;'>
-        //                <h1 style='font-size: 20px; margin: 0; margin-bottom: 20px;'>
-        //                    {fromEmail} invited you to access a file
-        //                </h1>
-        //                <p style='font-size: 14px; margin: 0; margin-bottom: 20px;'>
-        //                    File Type: 
-        //                    <span style='background-color: yellow; padding: 2px 4px; border-radius: 4px;'>{docType}</span>.
-        //                </p>
-        //                <div style='border: 1px solid #e1e1e1; border-radius: 8px; padding: 10px; display: flex; align-items: center; justify-content: center; margin-bottom: 20px;'>
-        //                    <i class='fas fa-folder icon' style='font-size: 40px; color: #2b579a; margin-right: 10px;'></i>
-        //                    <span style='font-size: 16px;'>{docName} - Copy</span>
-        //                </div>
-        //                <p style='font-size: 14px; color: #107c10; margin-bottom: 20px;'>
-        //                    This <span style='color: #107c10; font-weight: bold;'>link</span> will work for anyone.
-        //                </p>
-        //                <div style='text-align: center; margin-bottom: 20px;'>
-        //                    <a href='{siteURL}externalAccess?token={token}&EmailId={HttpUtility.UrlEncode(toEmail)}&ESAID={docID}'>
-        //                        <button style='width: 120px; height: 36px; background-color: #0078d4; color: #ffffff; border: none; border-radius: 4px; cursor: pointer; font-size: 16px;'>Open</button>
-        //                    </a>
-        //                </div>
-        //                <div class='footer' style='font-size: 12px; color: #767676; margin-top: 20px; text-align: center;'>
-        //                    <i class='fab fa-microsoft' style='font-size: 20px; vertical-align: middle;'></i>
-        //                    <a href='#' style='color: #767676; text-decoration: none;'>Privacy Statement</a>
-        //                </div>
-        //            </div>
-        //        </div>
-        //    </div>
-        //</body>
-        //</html>";
-
-        //                    // Create a MailMessage object
-        //                    MailMessage message = new MailMessage(ec.MailAddress, toEmail, subject, htmlBody)
-        //                    {
-        //                        IsBodyHtml = true
-        //                    };
-
-        //                    // Configure SMTP client
-        //                    SmtpClient client = new SmtpClient(ec.ServerAddress)
-        //                    {
-        //                        Port = int.Parse(ec.OutgoingPort),
-        //                        EnableSsl = true,
-        //                        Timeout = 60000,
-        //                        UseDefaultCredentials = false,
-        //                        Credentials = new System.Net.NetworkCredential(ec.MailAddress, ec.Password)
-        //                    };
-
-        //                    // Send email asynchronously
-        //                    await client.SendMailAsync(message);
-
-        //                    // Log success
-        //                    WriteLog.AddMailWriteLog($" For internal User Mail. Email sent successfully to: {toEmail}", toEmail);
-
-        //                    return true;
-        //                }
-        //                else
-        //                {
-        //                    throw new Exception("Email configuration not found");
-        //                }
-        //            }
-        //            catch (Exception ex)
-        //            {
-        //                // Log error
-        //                ErrorLog.AddMailErrorLog($"Error sending email to {toEmail}: ", ex.Message);
-        //                return false;
-        //            }
-        //        }
+        #region File access - external (ID 5)
 
         public async Task<bool> SendMailForDocAccessMail(string token, int docID, string toEmail, string fromEmail, string docName, string docType, string comments, string siteURL)
         {
             try
             {
-                var ec = _dbContext.EmailConfiguration.FirstOrDefault(k => k.IsActive && !k.IsSSL && k.ID == 1);
+                var ec = GetEmailConfig();
+                var tpl = GetTemplate(TPL_FILE_ACCESS_EXTERNAL);
 
-                var ebody = _dbContext.MailBodyConfigurations.FirstOrDefault(k => k.ID == 5);
-                var STMPDetailsConfig = _configuration.GetSection("STMPDetails");
-                string tableName = STMPDetailsConfig["TableName"];
-                string connectionString = STMPDetailsConfig["EmailContext"];
-                EMailDetails details = GetEMailDetails(ec.UserName, connectionString, tableName);
-                if (ec != null && ebody != null)
+                var subject = await SendFromTemplateAsync(ec, tpl, toEmail, new Dictionary<string, string>
                 {
-                    MailMessage message = new MailMessage();
-                    using (SmtpClient smtp = new SmtpClient(ec.ServerAddress))
-                    {
-                        message.From = new MailAddress(ec.MailAddress);
-                        message.To.Add(new MailAddress(toEmail));
-                        message.Subject = ebody.MailSubject;
-                        message.IsBodyHtml = false; //to make message body as html
-                        message.Body = ebody.MailBody;
-                        message.Body = message.Body.Replace("@siteURL@", siteURL + "/externalAccess?token=" + token + "&EmailId=" + HttpUtility.UrlEncode(toEmail) + "&ESAID=" + docID);
-                        message.Body = message.Body.Replace("@toEmail@", toEmail);
-                        message.Body = message.Body.Replace("@fromEmail@", fromEmail);
-                        message.Body = message.Body.Replace("@docType@", docType);
-                        message.Body = message.Body.Replace("@docName@", docName);
-                        smtp.Port = int.Parse(ec.OutgoingPort);
-                        smtp.EnableSsl = true;
-                        smtp.Timeout = 60000;
-                        smtp.UseDefaultCredentials = false;
-                        smtp.Credentials = new NetworkCredential(ec.UserName, details.Password);
-                        smtp.DeliveryMethod = SmtpDeliveryMethod.Network;
-                        message.BodyEncoding = UTF8Encoding.UTF8;
-                        message.DeliveryNotificationOptions = DeliveryNotificationOptions.OnFailure;
-                        message.IsBodyHtml = true;
-                        ServicePointManager.ServerCertificateValidationCallback += (sender, certificate, chain, sslPolicyErrors) => true;
-                        await smtp.SendMailAsync(message);
-                    }
-                }
-                else
-                {
-                    throw new Exception("Email configuration or Invoice details not found");
-                }
+                    ["@siteURL@"] = siteURL + "/externalAccess?token=" + token + "&EmailId=" + HttpUtility.UrlEncode(toEmail) + "&ESAID=" + docID,
+                    ["@toEmail@"] = toEmail,
+                    ["@fromEmail@"] = fromEmail,
+                    ["@docType@"] = docType,
+                    ["@docName@"] = docName
+                }, useVaultPassword: true);
+
                 Log.DataLog(toEmail, $"To access the files or folders for internal user mail {toEmail} has beensent successfully ", "Share Access maillog");
+                await LogMailAsync("External Share Access", toEmail, subject, true);
                 return true;
             }
             catch (Exception ex)
             {
-                // Log error
+                await LogMailAsync("External Share Access", toEmail, null, false, ex.Message);
                 Log.Error(toEmail, $"To access the files or folders for  user mail {toEmail} following error occured {ex.Message} ", "Share Access maillog");
                 return false;
             }
         }
 
+        #endregion
+
+        #region Password reset OTP (no template configured - logging added)
 
         public async Task<string> GenerateAndSendOTP(string email)
         {
@@ -1253,7 +699,7 @@ namespace DDAAPI.Services
 
                     await smtp.SendMailAsync(message);
                     Log.DataLog(email, $"OTP {generatedOtp} has been sent to the usere email {email} to reset the password", "OTP Log");
-                    //WriteLog.AddMailWriteLog($"Sent email to user {{0}} successfully\" to {email}", email);
+                    await LogMailAsync("Password Reset OTP", email, message.Subject, true);
                     return generatedOtp;
                 }
                 else
@@ -1263,12 +709,13 @@ namespace DDAAPI.Services
             }
             catch (Exception ex)
             {
-                // Handle exceptions when sending email
-                //ErrorLog.AddMailErrorLog("GenrateOtpSent", ex.Message);
+                await LogMailAsync("Password Reset OTP", email, "Password Reset OTP", false, ex.Message);
                 Log.Error(email, $"While sending or generating otp to send the mail for the user email {email} following error occured", "OTP Log");
                 throw new Exception("Failed to send OTP via email", ex);
             }
         }
+
+        #endregion
 
         #region  GetMailConfigurationPassword
 
@@ -1281,11 +728,9 @@ namespace DDAAPI.Services
                 string JSONString = JsonConvert.SerializeObject(table);
                 var result = JsonConvert.DeserializeObject<List<EMailDetails>>(JSONString);
                 return result[0];
-                //WriteLog.AddMailWriteLog($"Result Get Sucess For {username}", query);
             }
             catch (Exception ex)
             {
-                //Erro/rLog.AddMailErrorLog("VendorOnBoardingRepository/GetEMailDetails/Exception:- ", ex.Message);
                 throw ex;
             }
         }
@@ -1308,7 +753,6 @@ namespace DDAAPI.Services
             }
             catch (Exception ex)
             {
-                //ErrorLog.AddMailErrorLog("GetEmailCredientalFromTableData:", ex.Message);
                 return null;
             }
         }
@@ -1320,8 +764,5 @@ namespace DDAAPI.Services
         }
 
         #endregion
-
-
     }
 }
-

@@ -22,9 +22,8 @@ import { BsThreeDotsVertical } from "react-icons/bs";
 import { Menu, MenuItem, MenuButton } from "@szhsin/react-menu";
 import "@szhsin/react-menu/dist/index.css";
 import { useSelector } from "react-redux";
-
+import "./ExternalAccess.css";
 import CreatableSelect from "react-select/creatable";
-
 import { TfiLayoutGrid4Alt } from "react-icons/tfi";
 import { BsReverseListColumnsReverse } from "react-icons/bs";
 import axios from "axios";

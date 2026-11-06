@@ -16,7 +16,7 @@ const Reports = () => {
   const [sharedLogs, setSharedLogs] = useState([]);
   const [adminLogs, setAdminLogs] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState('userActivity');
+  const [activeTab, setActiveTab] = useState('mailLogs');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const pageSizes = [10, 20, 50];
@@ -24,6 +24,10 @@ const Reports = () => {
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
   const [isLoadingSharedLogs, setIsLoadingSharedLogs] = useState(false);
   const [isLoadingAdminLogs, setIsLoadingAdminLogs] = useState(false);
+  const [mailLogs, setMailLogs] = useState([]);
+  const [isLoadingMailLogs, setIsLoadingMailLogs] = useState(false);
+  const [mailStatus, setMailStatus] = useState('All');
+  const [mailType, setMailType] = useState('All');
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -40,6 +44,18 @@ const Reports = () => {
         console.error('Error fetching users:', error);
       } finally {
         setIsLoadingUsers(false);
+      }
+    };
+
+    const fetchMailLogs = async () => {
+      setIsLoadingMailLogs(true);
+      try {
+        const response = await axios.get(`${config.DDA_API_API_URL}Reports/GetMailLogs`);
+        if (response.data.success) setMailLogs(response.data.data || []);
+      } catch (error) {
+        console.error('Error fetching mail logs:', error);
+      } finally {
+        setIsLoadingMailLogs(false);
       }
     };
 
@@ -95,6 +111,7 @@ const Reports = () => {
     fetchLogs();
     fetchSharedLogs();
     fetchAdminLogs();
+    fetchMailLogs();
   }, []);
 
   const filteredLogs = logs.filter(log => {
@@ -105,6 +122,23 @@ const Reports = () => {
       (!toDate || logDate <= new Date(toDate).setHours(23, 59, 59, 999));
     return matchesUser && matchesDateRange;
   });
+  // derived
+const mailTypes = [...new Set(mailLogs.map(l => l.mailType))].sort();
+
+const filteredMailLogs = mailLogs.filter(log => {
+  const logDate = new Date(log.date);
+  const s = searchTerm.toLowerCase();
+  const matchesSearch =
+    (log.toEmail || '').toLowerCase().includes(s) ||
+    (log.subject || '').toLowerCase().includes(s) ||
+    (log.mailType || '').toLowerCase().includes(s);
+  const matchesStatus = mailStatus === 'All' || log.status === mailStatus;
+  const matchesType = mailType === 'All' || log.mailType === mailType;
+  const matchesDateRange =
+    (!fromDate || new Date(fromDate) <= logDate) &&
+    (!toDate || logDate <= new Date(toDate).setHours(23, 59, 59, 999));
+  return matchesSearch && matchesStatus && matchesType && matchesDateRange;
+});
 
   const filteredSharedLogs = sharedLogs.filter(log => {
     const logDate = new Date(log.date);
@@ -132,12 +166,15 @@ const Reports = () => {
     return matchesSearch && matchesDateRange;
   });
 
+
   const handleCancelFilters = () => {
     setSelectedUser('');
     setFromDate('');
     setToDate('');
     setSearchTerm('');
     setCurrentPage(1);
+    setMailStatus('All');
+setMailType('All');
   };
 
   const handleFromDateChange = (e) => {
@@ -151,31 +188,19 @@ const Reports = () => {
   const exportToExcel = (data, fileName) => {
     const formattedData = data.map(log => {
       if (activeTab === 'userActivity') {
-        return {
-          'Date & Time': new Date(log.date).toLocaleString(),
-          'User Name': log.userName,
-          'Folder Name': log.folderName,
-        };
+        return { 'Date & Time': new Date(log.date).toLocaleString(), 'User Name': log.userName, 'Folder Name': log.folderName };
       } else if (activeTab === 'sharedLogs') {
-        return {
-          'Date & Time': new Date(log.date).toLocaleString(),
-          'Sender Name': log.senderUserName,
-          'Receiver Name': log.receiverUserName,
-          'Folder/File Name': log.folderOrFileName,
-        };
-      } else {
-        return {
-          'Date & Time': new Date(log.date).toLocaleString(),
-          'Admin Name': log.adminName,
-          'Folder Name': log.folderName,
-          'Assigned User Name': log.authorizedUserName,
-        };
+        return { 'Date & Time': new Date(log.date).toLocaleString(), 'Sender Name': log.senderUserName, 'Receiver Name': log.receiverUserName, 'Folder/File Name': log.folderOrFileName };
+      } else if (activeTab === 'mailLogs') {
+        return { 'Date & Time': new Date(log.date).toLocaleString(), 'Mail Type': log.mailType, 'To': log.toEmail, 'Subject': log.subject, 'Status': log.status, 'Error': log.errorMessage || '' };
       }
+      return { 'Date & Time': new Date(log.date).toLocaleString(), 'Admin Name': log.adminName, 'Folder Name': log.folderName, 'Assigned User Name': log.authorizedUserName };
     });
 
     const worksheet = XLSX.utils.json_to_sheet(formattedData);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, activeTab === 'userActivity' ? 'UserActivity' : activeTab === 'sharedLogs' ? 'SharedLogs' : 'UserFoldersByAdmin');
+    XLSX.utils.book_append_sheet(workbook, worksheet,
+      activeTab === 'userActivity' ? 'UserActivity' : activeTab === 'sharedLogs' ? 'SharedLogs' : activeTab === 'mailLogs' ? 'MailLogs' : 'UserFoldersByAdmin');
     XLSX.writeFile(workbook, `${fileName}_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
@@ -274,6 +299,12 @@ const Reports = () => {
             <div className="card card-outline card-primary">
               <div className="report-tabs-container">
                 <div
+                  className={`report-tab ${activeTab === 'mailLogs' ? 'active' : ''}`}
+                  onClick={() => { setActiveTab('mailLogs'); setCurrentPage(1); }}
+                >
+                  Mail Logs
+                </div>
+                <div
                   className={`report-tab ${activeTab === 'userActivity' ? 'active' : ''}`}
                   onClick={() => setActiveTab('userActivity')}
                 >
@@ -333,14 +364,14 @@ const Reports = () => {
                       </button>
                     </div>
                     <div className="d-flex justify-content-between">
-                       <div className="reports-pagination-size">
-          <label>Rows per page: </label>
-          <select value={pageSize} onChange={handlePageSizeChange}>
-            {pageSizes.map(size => (
-              <option key={size} value={size}>{size}</option>
-            ))}
-          </select>
-        </div>
+                      <div className="reports-pagination-size">
+                        <label>Rows per page: </label>
+                        <select value={pageSize} onChange={handlePageSizeChange}>
+                          {pageSizes.map(size => (
+                            <option key={size} value={size}>{size}</option>
+                          ))}
+                        </select>
+                      </div>
                       <button
                         className="reports-export-btn mb-1"
                         onClick={() => exportToExcel(filteredLogs, 'UserActivityLogs')}
@@ -422,14 +453,14 @@ const Reports = () => {
                       </button>
                     </div>
                     <div className="d-flex justify-content-between">
-                       <div className="reports-pagination-size">
-          <label>Rows per page: </label>
-          <select value={pageSize} onChange={handlePageSizeChange}>
-            {pageSizes.map(size => (
-              <option key={size} value={size}>{size}</option>
-            ))}
-          </select>
-        </div>
+                      <div className="reports-pagination-size">
+                        <label>Rows per page: </label>
+                        <select value={pageSize} onChange={handlePageSizeChange}>
+                          {pageSizes.map(size => (
+                            <option key={size} value={size}>{size}</option>
+                          ))}
+                        </select>
+                      </div>
                       <button
                         className="reports-export-btn mb-1"
                         onClick={() => exportToExcel(filteredSharedLogs, 'SharedLogs')}
@@ -513,14 +544,14 @@ const Reports = () => {
                       </button>
                     </div>
                     <div className="d-flex justify-content-between">
-                       <div className="reports-pagination-size">
-          <label>Rows per page: </label>
-          <select value={pageSize} onChange={handlePageSizeChange}>
-            {pageSizes.map(size => (
-              <option key={size} value={size}>{size}</option>
-            ))}
-          </select>
-        </div>
+                      <div className="reports-pagination-size">
+                        <label>Rows per page: </label>
+                        <select value={pageSize} onChange={handlePageSizeChange}>
+                          {pageSizes.map(size => (
+                            <option key={size} value={size}>{size}</option>
+                          ))}
+                        </select>
+                      </div>
                       <button
                         className="reports-export-btn mb-1"
                         onClick={() => exportToExcel(filteredAdminLogs, 'UserFoldersByAdmin')}
@@ -568,6 +599,71 @@ const Reports = () => {
                       </tbody>
                     </table>
                     {!isLoadingAdminLogs && filteredAdminLogs.length > 0 && renderPagination(filteredAdminLogs)}
+                  </>
+                )}
+                {activeTab === 'mailLogs' && (
+                  <>
+                    <div className="d-flex mb-3 align-items-center">
+                      <input type="text" className="form-control form-control-sm mr-3" placeholder="Search by email, subject or mail type"
+                        value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                      <select className="custom-select custom-select-sm mr-3" value={mailType} onChange={(e) => setMailType(e.target.value)}>
+                        <option value="All">All Mail Types</option>
+                        {mailTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                      <select className="custom-select custom-select-sm mr-3" value={mailStatus} onChange={(e) => setMailStatus(e.target.value)}>
+                        <option value="All">All Status</option>
+                        <option value="Sent">Sent</option>
+                        <option value="Failed">Failed</option>
+                      </select>
+                      <input type="date" className="form-control form-control-sm mr-3" value={fromDate} onChange={handleFromDateChange} />
+                      <input type="date" className="form-control form-control-sm mr-3" value={toDate} onChange={(e) => setToDate(e.target.value)} min={fromDate} />
+                      <button className="reports-cancel-btn" onClick={handleCancelFilters} title="Clear Filters"><FaTimes /></button>
+                    </div>
+                    <div className="d-flex justify-content-between">
+                      <div className="reports-pagination-size">
+                        <label>Rows per page: </label>
+                        <select value={pageSize} onChange={handlePageSizeChange}>
+                          {pageSizes.map(size => <option key={size} value={size}>{size}</option>)}
+                        </select>
+                      </div>
+                      <button className="reports-export-btn mb-1" onClick={() => exportToExcel(filteredMailLogs, 'MailLogs')}
+                        disabled={filteredMailLogs.length === 0 || isLoadingMailLogs}>
+                        <i className="fa fa-file-excel mr-2" aria-hidden="true"></i>Export to Excel
+                      </button>
+                    </div>
+                    <table className="table table-bordered table-sm reports-table">
+                      <thead>
+                        <tr>
+                          <th>Date & Time</th><th>Mail Type</th><th>To</th><th>Subject</th><th>Status</th><th>Error</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {isLoadingMailLogs ? (
+                          <tr><td colSpan="6" className="text-center">
+                            <div className="loader-container">
+                              <div className="spinner-border spinner-border-sm text-primary" role="status"><span className="sr-only">Loading...</span></div>
+                              <span className="ml-2">Loading...</span>
+                            </div>
+                          </td></tr>
+                        ) : filteredMailLogs.length === 0 ? (
+                          <tr><td colSpan="6" className="text-center">No mail logs found</td></tr>
+                        ) : (
+                          getPaginatedData(filteredMailLogs).map((log) => (
+                            <tr key={log.mailLogId}>
+                              <td>{new Date(log.date).toLocaleString()}</td>
+                              <td>{log.mailType}</td>
+                              <td>{log.toEmail}</td>
+                              <td>{log.subject}</td>
+                              <td>
+                                <span className={`badge ${log.status === 'Sent' ? 'badge-success' : 'badge-danger'}`}>{log.status}</span>
+                              </td>
+                              <td title={log.errorMessage || ''}>{log.errorMessage ? log.errorMessage.slice(0, 60) : '-'}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                    {!isLoadingMailLogs && filteredMailLogs.length > 0 && renderPagination(filteredMailLogs)}
                   </>
                 )}
               </div>

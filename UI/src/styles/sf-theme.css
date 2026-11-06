@@ -533,3 +533,5 @@ body.sp-theme .sps-refine { top: 12px; }
 @media (prefers-reduced-motion: reduce) {
   body.sp-theme .main-sidebar.sf-side, body.sp-theme .content-wrapper, body.sp-theme .main-header.sp-suitebar { transition: none; }
 }
+
+.sf-brand-logo { flex: none; height: 34px; width: auto; max-width: 46px; object-fit: contain; display: block; }

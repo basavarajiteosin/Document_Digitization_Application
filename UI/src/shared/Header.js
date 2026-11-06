@@ -71,11 +71,11 @@ const PAGE_TITLES = {
   "/search": "Search",
   "/my-reviews": "My Reviews",
   "/all-files": "User All Files",
-  "/reports": "Reports",
+  "/reports": "Logs Reports",
   "/folder-access-report": "Folder Access Report",
-  "/create-user": "User Creation",
+  "/create-user": "Manage Users",
   "/manage-roles": "Manage Roles",
-  "/email-config": "Email Configuration",
+  "/email-config": "Email Settings",
   "/all-masters": "All Masters",
   "/storage-settings": "Storage Settings",
 };
@@ -385,7 +385,7 @@ const Header = () => {
           <div className="sf-crumb">
             <span className="sf-crumb-hint">Workspace</span>
             <span className="sf-crumb-path">
-              Document operations <i>/</i> <strong>{pageTitle}</strong>
+              Document Storage <i>/</i> <strong>{pageTitle}</strong>
             </span>
           </div>
         </div>

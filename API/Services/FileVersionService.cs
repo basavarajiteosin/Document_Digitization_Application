@@ -334,5 +334,16 @@ namespace DDAAPI.Services
             await _report.AddFolderVersionAsync(folder, "FileUpdated", uid, remarks, f.FileName);
             await _report.LogFolderAccessAsync(folder.FolderId, "Folder", folder.FolderName, uid, "Edit");
         }
+
+        // Write access for co-authoring (respects shares and check-out locks).
+        public async Task<bool> CanWriteAsync(string? emp, int fileId)
+        {
+            var (u, ga) = await ResolveAsync(emp);
+            var f = await _db.FileData.AsNoTracking().FirstOrDefaultAsync(x => x.FileId == fileId && x.IsActive)
+                    ?? throw new HubException("File not found.");
+            var (_, write) = await AccessAsync(u, ga, f);
+            if (write && !string.IsNullOrEmpty(f.CheckedOutBy) && !Eq(f.CheckedOutBy, u.UserID.ToString())) return false;
+            return write;
+        }
     }
 }

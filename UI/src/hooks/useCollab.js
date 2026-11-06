@@ -92,3 +92,9 @@ export const useCollab = (fileId, handlers = {}) => {
 
   return { viewers };
 };
+
+// Shared SignalR connection (used by the co-authoring provider).
+export const collabConnection = async () => {
+  await ensure();
+  return connection;
+};

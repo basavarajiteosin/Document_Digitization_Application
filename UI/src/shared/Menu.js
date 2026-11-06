@@ -6,7 +6,7 @@ import {
   FiHome, FiGrid, FiUsers, FiShield, FiMail, FiDatabase, FiHardDrive, FiFileText,
   FiFolder, FiMessageSquare, FiChevronDown, FiSettings, FiLayers, FiPenTool, FiBarChart2,
 } from "react-icons/fi";
-
+import bmswhiteLogoWipro from "../assets/images/wiprologowhite.png";
 const MOBILE_BP = 992;
 
 const ICONS = {
@@ -82,7 +82,7 @@ const Menu = () => {
   // isActive: also highlights nested routes (e.g. /reports/xyz)
   const isActive = useCallback((path, appName) => {
     const sp = new URLSearchParams(location.search);
-    if (appName === "Create Folder" && sp.get("userFilesUserID") && sp.get("userName")) return false;
+    if (appName === "My Workspace" && sp.get("userFilesUserID") && sp.get("userName")) return false;
     return location.pathname === path || location.pathname.startsWith(path + "/");
   }, [location.pathname, location.search]);
 
@@ -103,7 +103,7 @@ const Menu = () => {
       setHasInitialized(true);
       return; // Keeps submenus collapsed on page load
     }
-    
+
     sections.forEach((g) => {
       if (g.collapsible && g.list.some((m) => isActive(m.appRoute, m.appName))) {
         setOpen((p) => (p[g.key] ? p : { ...p, [g.key]: true }));
@@ -139,7 +139,7 @@ const Menu = () => {
     <>
       <aside className="main-sidebar sf-side elevation-0" aria-label="Main navigation">
         <button type="button" className="sf-brand" title="Home" onClick={() => { navigate("/home"); closeSidebar(); }}>
-          <span className="sf-brand-tile"><FiPenTool size={20} /></span>
+          <img className="sf-brand-logo" src={bmswhiteLogoWipro} alt="Wipro" />
           <span className="sf-brand-txt">
             <span className="sf-brand-name">Document Digitization</span>
             <span className="sf-brand-sub">{personalInfo.userRole || "Workspace"}</span>

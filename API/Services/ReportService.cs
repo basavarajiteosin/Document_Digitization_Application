@@ -27,6 +27,8 @@ namespace DDAAPI.Services
 
         // ---- Writes (called from FolderService at existing action points) ----
 
+        Task<IActionResult> GetMailLogsAsync(DateTime? fromDate, DateTime? toDate, string? status, string? mailType);
+
         /// <summary>
         /// Records a View/Download/Edit/Update/Share of a folder or file.
         /// De-duplicated: if the same user already has a log row for the same
@@ -347,5 +349,36 @@ namespace DDAAPI.Services
         }
 
         #endregion
+
+
+        public async Task<IActionResult> GetMailLogsAsync(DateTime? fromDate, DateTime? toDate, string? status, string? mailType)
+        {
+            try
+            {
+                var q = _dbContext.MailLogs.AsNoTracking().AsQueryable();
+                if (fromDate.HasValue) q = q.Where(x => x.CreatedOn >= fromDate.Value.Date);
+                if (toDate.HasValue) q = q.Where(x => x.CreatedOn < toDate.Value.Date.AddDays(1));
+                if (!string.IsNullOrWhiteSpace(status) && status != "All") q = q.Where(x => x.Status == status);
+                if (!string.IsNullOrWhiteSpace(mailType) && mailType != "All") q = q.Where(x => x.MailType == mailType);
+
+                var data = await q.OrderByDescending(x => x.CreatedOn).Take(5000)
+                    .Select(x => new MailLogDTO
+                    {
+                        MailLogId = x.MailLogId,
+                        MailType = x.MailType,
+                        ToEmail = x.ToEmail,
+                        Subject = x.Subject,
+                        Status = x.Status,
+                        ErrorMessage = x.ErrorMessage,
+                        Date = x.CreatedOn
+                    }).ToListAsync();
+
+                return new OkObjectResult(new { success = true, message = "Data fetched successfully", data });
+            }
+            catch (Exception ex)
+            {
+                return new BadRequestObjectResult(new { success = false, message = ex.Message });
+            }
+        }
     }
 }

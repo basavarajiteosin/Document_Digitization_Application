@@ -42,5 +42,14 @@ namespace DDAAPI.Controllers
         {
             return await _reportService.GetOwnershipAccessHistoryAsync(folderOrFileId, docType);
         }
+
+
+        // GET api/Reports/GetMailLogs?fromDate=2026-01-01&toDate=2026-01-31&status=Failed&mailType=MFA OTP
+        [HttpGet("GetMailLogs")]
+        public async Task<IActionResult> GetMailLogs([FromQuery] DateTime? fromDate = null, [FromQuery] DateTime? toDate = null,
+            [FromQuery] string? status = null, [FromQuery] string? mailType = null)
+        {
+            return await _reportService.GetMailLogsAsync(fromDate, toDate, status, mailType);
+        }
     }
 }

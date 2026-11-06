@@ -17,7 +17,7 @@ import {
 } from "../../common/validations";
 import countryCodes from '../../common/countryCodes.json';
 import bmsLogoWipro from "../../assets/images/bmslogowipro.svg";
-import bmswhiteLogoWipro from "../../assets/images/wiprologowhite.png";
+import bmswhiteLogoWipro from "../../assets/images/wiprosecondary_logo.png";
 import { useUpload } from "../../Customhook/UploadContext";
 
 const config = require("../../services/config.json");

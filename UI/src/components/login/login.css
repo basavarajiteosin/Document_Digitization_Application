@@ -35,6 +35,7 @@
 .auth-hero-logo {
   height: clamp(60px, 4vh, 36px);
   width: auto;
+  filter: brightness(0) saturate(100%) invert(100%);
 }
 
 .auth-hero-top .auth-brand-badge {
@@ -78,16 +79,28 @@
 }
 
 .auth-hero-title {
-  font-size: clamp(26px, 4.6vh, 42px);
+  font-size: clamp(26px, 5vw, 46px);
   line-height: 1.12;
   font-weight: 800;
   color: #fff;
   margin: 0 0 clamp(8px, 1.6vh, 14px);
-  letter-spacing: -.02em;
+  letter-spacing: -0.02em;
+}
+
+.auth-hero-content h1.auth-hero-title {
+  color: #ffffff !important;
+  font-size: clamp(26px, 5vw, 46px) !important;
+  line-height: 1.15;
+  font-weight: 800;
+}
+
+.auth-hero-content h1.auth-hero-title span {
+  color: #7db4ff !important;
 }
 
 .auth-hero-title span {
   color: #7db4ff;
+  font-size: clamp(26px, 5vw, 46px);
 }
 
 .auth-hero-desc {

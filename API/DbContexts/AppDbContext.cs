@@ -57,6 +57,9 @@ namespace DDAAPI.DbContexts
         public DbSet<ProjectItem> ProjectItems { get; set; }
         public DbSet<DocMention> DocMentions { get; set; }
 
+        public DbSet<MailLog> MailLogs { get; set; }
+
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<RoleAppMap>(
@@ -111,6 +114,12 @@ namespace DDAAPI.DbContexts
                 entity.HasKey(e => e.MentionId);
                 entity.HasIndex(e => new { e.MentionedUserId, e.IsRead });
                 entity.HasIndex(e => e.CommentId);
+            });
+
+            modelBuilder.Entity<MailLog>(e =>
+            {
+                e.ToTable("MailLogs", "dbo");
+                e.HasIndex(x => x.CreatedOn);
             });
         }
     }

@@ -1,9 +1,8 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import axios from "axios";
 import { toast } from "react-toastify";
-import { FiMail, FiServer, FiEye, FiEyeOff, FiSave, FiX, FiFileText, FiLock, FiUser, FiShield, FiHash, FiMonitor } from "react-icons/fi";
+import { FiMail, FiServer,FiEye, FiEyeOff, FiSave, FiX, FiFileText, FiLock, FiUser, FiShield, FiHash, FiMonitor } from "react-icons/fi";
 import "./emailconfig.css";
-
 const config = require("../../services/config.json");
 const API = `${config.DDA_API_API_URL}EmailCofigureController/`;
 
@@ -148,87 +147,152 @@ const EmailConfiguration = () => {
 
   const tokens = useMemo(() => (selected ? TOKENS[selected.id] || [] : []), [selected]);
 
-  const err = (k) => errors[k] && <small className="ec-err">{errors[k]}</small>;
-  const cls = (k) => `ec-input ${errors[k] ? "invalid" : ""}`;
+const err = (k) => errors[k] && <div className="invalid-feedback d-block">{errors[k]}</div>;
+const cls = (k) => `form-control form-control-sm ${errors[k] ? "is-invalid" : ""}`;
 
-  return (
-    <section className="content scroll-content">
-      <div className="container-fluid ec">
-        <header className="ec-hero">
-          <span className="ec-hero-ico"><FiMail size={22} /></span>
-          <div><h2>Email configuration</h2><p>Manage the outgoing mail server and the content of every system email.</p></div>
-        </header>
-
-        {/* ---------- SMTP ---------- */}
-        <div className="ec-card">
-          <div className="ec-card-h"><span className="ec-badge"><FiServer size={15} /></span><div><h3>Mail server (SMTP)</h3><small>Credentials used to send all notifications</small></div></div>
-          <div className="ec-grid">
-            <div className="ec-f"><label htmlFor="mailID">Email<sup>*</sup></label>
-              <div className="ec-wrap"><FiMail size={14} /><input id="mailID" ref={reg("mailID")} className={cls("mailID")} value={mailID} onChange={(e) => setMailID(e.target.value)} placeholder="Enter your mail ID" /></div>{err("mailID")}</div>
-            <div className="ec-f"><label htmlFor="mailPassword">Password<sup>*</sup></label>
-              <div className="ec-wrap"><FiLock size={14} /><input id="mailPassword" ref={reg("mailPassword")} type={showPwd ? "text" : "password"} className={cls("mailPassword")} value={mailPassword} onChange={(e) => setMailPassword(e.target.value)} placeholder="Enter mail password" autoComplete="new-password" />
-                <button type="button" className="ec-eye" onClick={() => setShowPwd((v) => !v)} aria-label={showPwd ? "Hide password" : "Show password"}>{showPwd ? <FiEyeOff size={15} /> : <FiEye size={15} />}</button></div>{err("mailPassword")}</div>
-            <div className="ec-f"><label htmlFor="smtpServer">SMTP server<sup>*</sup></label>
-              <div className="ec-wrap"><FiServer size={14} /><input id="smtpServer" ref={reg("smtpServer")} className={cls("smtpServer")} value={smtpServer} onChange={(e) => setSmtpServer(e.target.value)} placeholder="smtp.example.com" /></div>{err("smtpServer")}</div>
-            <div className="ec-f"><label htmlFor="smtpPort">SMTP port<sup>*</sup></label>
-              <div className="ec-wrap"><FiHash size={14} /><input id="smtpPort" ref={reg("smtpPort")} className={cls("smtpPort")} value={smtpPort} onChange={(e) => setSmtpPort(e.target.value)} placeholder="587" inputMode="numeric" /></div>{err("smtpPort")}</div>
-            <div className="ec-f"><label htmlFor="userName">Username<sup>*</sup></label>
-              <div className="ec-wrap"><FiUser size={14} /><input id="userName" ref={reg("userName")} className={cls("userName")} value={userName} onChange={(e) => setUserName(e.target.value)} placeholder="Enter username" /></div>{err("userName")}</div>
-            <div className="ec-f"><label htmlFor="isSSL">SSL<sup>*</sup></label>
-              <div className="ec-wrap"><FiShield size={14} /><select id="isSSL" ref={reg("isSSL")} className={cls("isSSL")} value={isSSL} onChange={(e) => setSsl(e.target.value)}>
-                <option value="">Select SSL option</option><option value="true">Yes</option><option value="false">No</option></select></div>{err("isSSL")}</div>
-          </div>
-          <div className="ec-actions">
-            <button type="button" className="ec-btn" onClick={handleCancel} disabled={saving}><FiX size={14} /> Cancel</button>
-            <button type="button" className="ec-btn primary" onClick={handleSave} disabled={saving}><FiSave size={14} /> {saving ? "Saving..." : "Save & submit"}</button>
+return (
+  <section className="content scroll-content">
+    <div className="container-fluid">
+      {/* ---------- SMTP ---------- */}
+      <div className="card card-primary card-outline">
+        <div className="card-header">
+          <h3 className="card-title text-sm">Mail Server (SMTP)</h3>
+        </div>
+        <div className="card-body text-sm">
+          <div className="row">
+            <div className="form-group col-md-4">
+              <label htmlFor="mailID">Email<sup>*</sup></label>
+              <input id="mailID" ref={reg("mailID")} className={cls("mailID")} value={mailID}
+                onChange={(e) => setMailID(e.target.value)} placeholder="Enter your mail ID" />
+              {err("mailID")}
+            </div>
+            <div className="form-group col-md-4">
+              <label htmlFor="mailPassword">Password<sup>*</sup></label>
+              <div className="input-group">
+                <input id="mailPassword" ref={reg("mailPassword")} type={showPwd ? "text" : "password"}
+                  className={cls("mailPassword")} value={mailPassword}
+                  onChange={(e) => setMailPassword(e.target.value)} placeholder="Enter mail password" autoComplete="new-password" />
+                <button type="button" className="btn btn-default btn-sm" onClick={() => setShowPwd((v) => !v)}
+                  aria-label={showPwd ? "Hide password" : "Show password"}>
+                  {showPwd ? <FiEyeOff size={14} /> : <FiEye size={14} />}
+                </button>
+              </div>
+              {err("mailPassword")}
+            </div>
+            <div className="form-group col-md-4">
+              <label htmlFor="userName">Username<sup>*</sup></label>
+              <input id="userName" ref={reg("userName")} className={cls("userName")} value={userName}
+                onChange={(e) => setUserName(e.target.value)} placeholder="Enter username" />
+              {err("userName")}
+            </div>
+            <div className="form-group col-md-4">
+              <label htmlFor="smtpServer">SMTP Server<sup>*</sup></label>
+              <input id="smtpServer" ref={reg("smtpServer")} className={cls("smtpServer")} value={smtpServer}
+                onChange={(e) => setSmtpServer(e.target.value)} placeholder="smtp.example.com" />
+              {err("smtpServer")}
+            </div>
+            <div className="form-group col-md-4">
+              <label htmlFor="smtpPort">SMTP Port<sup>*</sup></label>
+              <input id="smtpPort" ref={reg("smtpPort")} className={cls("smtpPort")} value={smtpPort}
+                onChange={(e) => setSmtpPort(e.target.value)} placeholder="587" inputMode="numeric" />
+              {err("smtpPort")}
+            </div>
+            <div className="form-group col-md-4">
+              <label htmlFor="isSSL">SSL<sup>*</sup></label>
+              <select id="isSSL" ref={reg("isSSL")} className={cls("isSSL")} value={isSSL} onChange={(e) => setSsl(e.target.value)}>
+                <option value="">Select SSL option</option>
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+              </select>
+              {err("isSSL")}
+            </div>
           </div>
         </div>
+        <div className="card-footer text-sm">
+          <button type="button" className="btn btn-primary float-right btn-xs ml-2" onClick={handleSave} disabled={saving}>
+            <FiSave size={13} /> {saving ? "Saving..." : "Save & Submit"}
+          </button>
+          <button type="button" className="btn btn-outline-primary float-right btn-xs" onClick={handleCancel} disabled={saving}>
+            Cancel
+          </button>
+        </div>
+      </div>
 
-        {/* ---------- Templates ---------- */}
-        <div className="ec-card">
-          <div className="ec-card-h"><span className="ec-badge"><FiFileText size={15} /></span><div><h3>Mail content</h3><small>Select a template, edit the subject and body, then save</small></div></div>
+      {/* ---------- Templates ---------- */}
+      <div className="card card-primary card-outline">
+        <div className="card-header">
+          <h3 className="card-title text-sm">Mail Content</h3>
+        </div>
+        <div className="card-body text-sm">
           <div className="ec-pills" role="tablist">
             {templates.map((t) => (
-              <button key={t.id} type="button" role="tab" aria-selected={selected?.id === t.id} className={`ec-pill ${selected?.id === t.id ? "active" : ""}`} onClick={() => openTemplate(t)}>{t.mailType}</button>
+              <button key={t.id} type="button" role="tab" aria-selected={selected?.id === t.id}
+                className={`btn tabs-btn btn-sm ${selected?.id === t.id ? "btn-primary" : "btn-outline-primary"}`}
+                onClick={() => openTemplate(t)}>
+                {t.mailType}
+              </button>
             ))}
           </div>
 
           <div className={`ec-editor ${selected ? "" : "is-idle"}`}>
-            {!selected && <div className="ec-hint"><FiMail size={30} /><p>Choose a template above to start editing.</p></div>}
-            <div className="ec-f"><label htmlFor="mailIDSubject">Mail subject<sup>*</sup></label>
-              <input id="mailIDSubject" ref={subjectRef} className={`ec-input ${subjectErr ? "invalid" : ""}`} value={subject} disabled={!selected || loadingTpl}
-                onChange={(e) => { setSubject(e.target.value); setSubjectErr(false); }} placeholder="Enter mail subject" /></div>
-            {tokens.length > 0 && (
-              <div className="ec-tokens"><span>Placeholders</span>
-                {tokens.map((t) => <button key={t} type="button" className="ec-token" onClick={() => insertToken(t)} title="Insert at cursor">{t}</button>)}
+            {!selected && <div className="ec-hint">Choose a template above to start editing.</div>}
+
+            <div className="row">
+              <div className="form-group col-md-12">
+                <label htmlFor="mailIDSubject">Mail Subject<sup>*</sup></label>
+                <input id="mailIDSubject" ref={subjectRef}
+                  className={`form-control form-control-sm ${subjectErr ? "is-invalid" : ""}`}
+                  value={subject} disabled={!selected || loadingTpl}
+                  onChange={(e) => { setSubject(e.target.value); setSubjectErr(false); }}
+                  placeholder="Enter mail subject" />
               </div>
-            )}
-            <div className="ec-f"><label>Email body message<sup>*</sup></label><textarea id="summernote" /></div>
-            <div className="ec-actions">
-              <button type="button" className="ec-btn" disabled={!selected} onClick={openPreview}><FiEye size={14} /> Preview</button>
-              <button type="button" className="ec-btn primary" disabled={!selected || savingTpl} onClick={handleEmailSubmit}><FiSave size={14} /> {savingTpl ? "Saving..." : "Save email configuration"}</button>
+
+              {tokens.length > 0 && (
+                <div className="form-group col-md-12">
+                  <label>Placeholders</label>
+                  <div className="ec-tokens">
+                    {tokens.map((t) => (
+                      <button key={t} type="button" className="ec-token" onClick={() => insertToken(t)} title="Insert at cursor">{t}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="form-group col-md-12 mb-0">
+                <label>Email Body Message<sup>*</sup></label>
+                <textarea id="summernote" />
+              </div>
             </div>
           </div>
+        </div>
+        <div className="card-footer text-sm">
+          <button type="button" className="btn btn-primary float-right btn-xs ml-2" disabled={!selected || savingTpl} onClick={handleEmailSubmit}>
+            <FiSave size={13} /> {savingTpl ? "Saving..." : "Save Email Configuration"}
+          </button>
+          <button type="button" className="btn btn-outline-primary float-right btn-xs" disabled={!selected} onClick={openPreview}>
+            <FiEye size={13} /> Preview
+          </button>
         </div>
       </div>
+    </div>
 
-      {preview && (
-        <div className="ec-overlay" onMouseDown={(e) => e.target === e.currentTarget && setPreview(null)}>
-          <div className="ec-modal" role="dialog" aria-modal="true" aria-label="Email preview">
-            <div className="ec-modal-h">
-              <h4>Preview - {selected?.mailType}</h4>
-              <div className="ec-seg">
-                <button type="button" className={previewMode === "desktop" ? "active" : ""} onClick={() => setPreviewMode("desktop")}><FiMonitor size={14} /> Desktop</button>
-                <button type="button" className={previewMode === "mobile" ? "active" : ""} onClick={() => setPreviewMode("mobile")}>Mobile</button>
-              </div>
-              <button type="button" className="ec-x" onClick={() => setPreview(null)} aria-label="Close"><FiX size={18} /></button>
+    {preview && (
+      <div className="ec-overlay" onMouseDown={(e) => e.target === e.currentTarget && setPreview(null)}>
+        <div className="ec-modal" role="dialog" aria-modal="true" aria-label="Email preview">
+          <div className="ec-modal-h">
+            <h4>Preview - {selected?.mailType}</h4>
+            <div className="ec-seg">
+              <button type="button" className={previewMode === "desktop" ? "active" : ""} onClick={() => setPreviewMode("desktop")}><FiMonitor size={14} /> Desktop</button>
+              <button type="button" className={previewMode === "mobile" ? "active" : ""} onClick={() => setPreviewMode("mobile")}>Mobile</button>
             </div>
-            <div className="ec-modal-b"><iframe title="Email preview" srcDoc={preview} className={previewMode === "mobile" ? "is-mobile" : ""} /></div>
+            <button type="button" className="ec-x" onClick={() => setPreview(null)} aria-label="Close"><FiX size={18} /></button>
           </div>
+          <div className="ec-modal-b"><iframe title="Email preview" srcDoc={preview} className={previewMode === "mobile" ? "is-mobile" : ""} /></div>
         </div>
-      )}
-    </section>
-  );
+      </div>
+    )}
+  </section>
+);
 };
 
 export default EmailConfiguration;
