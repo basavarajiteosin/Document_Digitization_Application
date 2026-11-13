@@ -18,7 +18,7 @@ document.body.classList.add("sp-theme");
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>
-    <BrowserRouter basename="/dda">
+    <BrowserRouter basename="/dda_qas">
       <App />
     </BrowserRouter>
   </React.StrictMode>

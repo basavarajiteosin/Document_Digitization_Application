@@ -109,12 +109,12 @@ const Login = () => {
     tokenStorage.save(data.token);
 
     localStorage.setItem(
-      "isChangePasswordRequired",
+      "ddaisChangePasswordRequired",
       JSON.stringify(data.isChangePasswordRequired)
     );
-    localStorage.setItem("user_id", data.userID);
-    localStorage.setItem("user_role_id", data.roleID);
-    localStorage.setItem("isUserAuthenticated", "true");
+    localStorage.setItem("dda_user_id", data.userID);
+    localStorage.setItem("dda_user_role_id", data.roleID);
+    localStorage.setItem("ddaisUserAuthenticated", "true");
 
     dispatch(
       setUserPersonalInformation({
@@ -197,18 +197,18 @@ const Login = () => {
           setIsOTPSent(true);
           toast.info("OTP has been sent. Please enter the OTP to proceed.");
 
-          localStorage.setItem("email", responseData.emailAddress);
-          localStorage.setItem("userId", responseData.userID);
+          localStorage.setItem("ddaemail", responseData.emailAddress);
+          localStorage.setItem("ddauserId", responseData.userID);
 
           setIsLoaderActive(false);
         } else {
           localStorage.setItem(
-            "isChangePasswordRequired",
+            "ddaisChangePasswordRequired",
             JSON.stringify(responseData.isChangePasswordRequired)
           );
 
-          localStorage.setItem("user_id", responseData.userID);
-          localStorage.setItem("isUserAuthenticated", "true");
+          localStorage.setItem("dda_user_id", responseData.userID);
+          localStorage.setItem("ddaisUserAuthenticated", "true");
 
           setUploadQueue([]);
           setShowUploadPanel(false);
@@ -313,8 +313,8 @@ const Login = () => {
   };
 
   const handleVerifyOTP = () => {
-    const email = localStorage.getItem("email");
-    const userId = localStorage.getItem("userId");
+    const email = localStorage.getItem("ddaemail");
+    const userId = localStorage.getItem("ddauserId");
 
     if (!email || !userId || !otpCode) {
       toast.error("Missing email, userId, or OTP.");
@@ -335,11 +335,11 @@ const Login = () => {
           toast.success("OTP verified successfully!");
 
           localStorage.setItem(
-            "isChangePasswordRequired",
+            "ddaisChangePasswordRequired",
             JSON.stringify(responseData.isChangePasswordRequired)
           );
-          localStorage.setItem("user_id", responseData.userID);
-          localStorage.setItem("isUserAuthenticated", "true");
+          localStorage.setItem("dda_user_id", responseData.userID);
+          localStorage.setItem("ddaisUserAuthenticated", "true");
 
           setUploadQueue([]);
           setShowUploadPanel(false);
@@ -636,8 +636,8 @@ const Login = () => {
   const handleBackToLogin = () => {
     setIsOTPSent(false);
     setOtpCode("");
-    localStorage.removeItem("email");
-    localStorage.removeItem("userId");
+    localStorage.removeItem("ddaemail");
+    localStorage.removeItem("ddauserId");
   };
 
   const handleClear = () => {

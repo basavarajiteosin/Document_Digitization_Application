@@ -44,8 +44,8 @@ const isAuthEndpoint = (url = '') =>
 ═══════════════════════════════════════════════════════════════════ */
 export const tokenStorage = {
   TOKEN_KEY:    'dda_access_token',
-  AUTH_KEY:     'isUserAuthenticated',
-  USER_ID_KEY:  'user_id',
+  AUTH_KEY:     'ddaisUserAuthenticated',
+  USER_ID_KEY:  'dda_user_id',
 
   /* ── Write ── */
   save(token) {
@@ -83,11 +83,12 @@ export const tokenStorage = {
     localStorage.removeItem(this.AUTH_KEY);
     localStorage.removeItem(this.USER_ID_KEY);
     // Legacy keys written by the original Login.js
-    localStorage.removeItem('email');
-    localStorage.removeItem('userId');
-    localStorage.removeItem('user_id');
-    localStorage.removeItem('user_role_id');
-    localStorage.removeItem('isChangePasswordRequired');
+    localStorage.removeItem('ddaemail');
+    localStorage.removeItem('ddauserId');
+    localStorage.removeItem('dda_user_id');
+    localStorage.removeItem('dda_user_role_id');
+    localStorage.removeItem('ddaisChangePasswordRequired');
+    localStorage.clear();
   },
 };
 
@@ -140,11 +141,11 @@ export function setupAxiosInterceptors() {
          */
         tokenStorage.clear();
 
-        window.dispatchEvent(new CustomEvent('dda:session:expired', {
+        window.dispatchEvent(new CustomEvent('dda_qas:session:expired', {
           detail: { reason: 'unauthorized' },
         }));
 
-        const base = window.location.pathname.startsWith('/dda') ? '/dda' : '';
+        const base = window.location.pathname.startsWith('/dda_qas') ? '/dda_qas' : '';
         if (!window.location.pathname.endsWith('/login')) {
           window.location.href = `${base}/login`;
         }

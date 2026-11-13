@@ -3,7 +3,7 @@
   "host": "localhost",
   "version": 1.1,
   "clientId": "dmsApp",
-  "DDA_API_API_URL": "https://localhost:7002/api/",
+  "DDA_API_API_URL": "https://wipromfgcoe.com/dda_qas_api/api/",
   "deploymentMode": "staging",
   "PoweredBy": "Powered by Wipro",
   "headers1": {

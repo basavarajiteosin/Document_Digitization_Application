@@ -1,6 +1,6 @@
 const MAX_RECENTS = 8;
 
-const keyFor = (userId) => `dda.recentSearches.${String(userId || "anonymous").toLowerCase()}`;
+const keyFor = (userId) => `dda_qas.recentSearches.${String(userId || "anonymous").toLowerCase()}`;
 
 export const getRecents = (userId) => {
   try {

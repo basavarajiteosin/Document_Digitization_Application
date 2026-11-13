@@ -6,7 +6,7 @@ import { Navigate, Outlet } from 'react-router-dom';
 const PublicRoute = () => {
   // Replace this with your actual authentication check
   // (e.g., reading from Redux state, localStorage, or sessionStorage)
-  const isUserAuthenticated = localStorage.getItem("isUserAuthenticated") === "true"; 
+  const isUserAuthenticated = localStorage.getItem("ddaisUserAuthenticated") === "true"; 
   
   // If authenticated, redirect to dashboard. Otherwise, render the public route.
   return isUserAuthenticated ? <Navigate to="/dashboard" replace /> : <Outlet />;

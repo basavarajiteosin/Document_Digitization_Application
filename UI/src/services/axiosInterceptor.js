@@ -40,12 +40,12 @@ axios.interceptors.response.use(
     const isTokenChallenge = res?.status === 401 && !(res?.data && res.data.message);
 
     if (isTokenChallenge) {
-      localStorage.removeItem("isUserAuthenticated");
-      localStorage.removeItem("user_id");
+      localStorage.removeItem("ddaisUserAuthenticated");
+      localStorage.removeItem("dda_user_id");
       localStorage.removeItem("persist:dda_user");
 
       if (!window.location.pathname.endsWith("/login")) {
-        window.location.href = `${window.location.origin}/dda/login`;
+        window.location.href = `${window.location.origin}/dda_qas/login`;
       }
     }
 

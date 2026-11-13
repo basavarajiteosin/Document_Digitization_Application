@@ -135,7 +135,7 @@ const Header = () => {
     } catch { /* silent */ }
   };
 
-  
+
   useEffect(() => {
     if (!personalInfo.userID) return undefined;
     loadMentions();
@@ -177,7 +177,7 @@ const Header = () => {
 
 
   const isChangePasswordRequired = safeParse(
-    localStorage.getItem("isChangePasswordRequired")
+    localStorage.getItem("ddaisChangePasswordRequired")
   );
 
   useEffect(() => {
@@ -264,9 +264,9 @@ const Header = () => {
           toast.success("Password changed successfully!");
           const lastChangedPassword = response.data.data.lastChangedPassword;
           if (lastChangedPassword > 0) {
-            localStorage.setItem("isChangePasswordRequired", JSON.stringify("No"));
+            localStorage.setItem("ddaisChangePasswordRequired", JSON.stringify("No"));
           } else {
-            localStorage.setItem("isChangePasswordRequired", JSON.stringify("Yes"));
+            localStorage.setItem("ddaisChangePasswordRequired", JSON.stringify("Yes"));
           }
           setShowModal(false);
           setCurrentPassword("");
@@ -306,9 +306,10 @@ const Header = () => {
   /* ---------------- logout (unchanged behaviour) ---------------- */
   const handleLogout = () => {
     localStorage.removeItem("persist:dda_user");
-    localStorage.removeItem("isUserAuthenticated");
-    localStorage.removeItem("user_id");
+    localStorage.removeItem("ddaisUserAuthenticated");
+    localStorage.removeItem("dda_user_id");
     localStorage.clear();
+    sessionStorage.clear();
 
     navigate("/");
     toast.success("User logged out");
