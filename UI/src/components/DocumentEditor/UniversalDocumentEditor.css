@@ -1,74 +1,113 @@
-.ude-overlay { position: fixed; inset: 0; z-index: 3000; display: flex; flex-direction: column; background: #0f172a; }
+.ude-overlay { position: fixed; inset: 0; z-index: 3000; display: flex; flex-direction: column; background: #0f172a; font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; }
 .ude-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 16px; height: 56px; flex: none;
-  background: linear-gradient(135deg, #0d3270, #0a2350); color: #fff; box-shadow: 0 4px 18px rgba(0, 0, 0, .35); }
+  background: linear-gradient(135deg, #0d3270, #0a2350); color: #fff; box-shadow: 0 4px 18px rgba(0, 0, 0, .35); position: relative; z-index: 2; }
 .ude-title { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.ude-name { font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 38vw; }
+.ude-name { font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 34vw; }
+
 .ude-badge { flex: none; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 3px 10px; border-radius: 999px; color: #fff; }
-.ude-word { background: #2b579a; } .ude-cell { background: #217346; } .ude-slide { background: #c43e1c; } .ude-pdf { background: #d13438; }
-.ude-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 3px 10px; border-radius: 999px; background: rgba(255, 255, 255, .12); white-space: nowrap; }
-.ude-s-unsaved { background: rgba(245, 158, 11, .25); } .ude-s-saved { background: rgba(34, 197, 94, .25); } .ude-s-error { background: rgba(225, 29, 72, .35); }
-.ude-note { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: #fde68a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 30vw; }
+.ude-badge-word { background: #2b579a; }
+.ude-badge-cell { background: #217346; }
+.ude-badge-slide { background: #c43e1c; }
+.ude-badge-pdf { background: #d13438; }
+
+.ude-status, .ude-live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 3px 10px; border-radius: 999px; background: rgba(255, 255, 255, .12); white-space: nowrap; }
+.ude-s-unsaved { background: rgba(245, 158, 11, .25); }
+.ude-s-saved { background: rgba(34, 197, 94, .25); }
+.ude-s-error { background: rgba(225, 29, 72, .35); }
+.ude-live { background: rgba(37, 99, 235, .35); }
+.ude-note { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: #fde68a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 26vw; }
+
 .ude-actions { display: flex; align-items: center; gap: 8px; flex: none; }
 .ude-btn { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px; border-radius: 10px; border: 1px solid transparent; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s; }
 .ude-btn.primary { background: linear-gradient(135deg, #3b7bff, #2563eb); color: #fff; box-shadow: 0 6px 14px rgba(37, 99, 235, .4); }
 .ude-btn.primary:hover:not(:disabled) { transform: translateY(-1px); }
 .ude-btn.ghost { background: transparent; color: #dbe6fb; border-color: rgba(255, 255, 255, .25); }
-.ude-btn.ghost:hover { background: rgba(255, 255, 255, .1); }
+.ude-btn.ghost:hover:not(:disabled) { background: rgba(255, 255, 255, .1); }
+.ude-btn.ghost-dark { background: #fff; color: #1e293b; border-color: #cbd5e1; }
+.ude-btn.warn { background: #f59e0b; color: #1f2937; }
 .ude-btn.close { background: rgba(255, 255, 255, .12); color: #fff; }
 .ude-btn.close:hover { background: #e11d48; }
 .ude-btn:disabled { opacity: .5; cursor: not-allowed; }
+.ude-mode { height: 34px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .25); background: rgba(255, 255, 255, .08); color: #fff; padding: 0 8px; font-size: 13px; }
+.ude-mode option { color: #0f172a; }
+.ude-presence { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: #dbe6fb; }
+.ude-presence .sp-avatar-sm { border-color: #0a2350; }
+
 .ude-body { position: relative; flex: 1; min-height: 0; background: #e9edf3; }
-.ude-holder, .ude-holder iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
-.ude-loading { position: absolute; inset: 0; z-index: 1; display: flex; align-items: center; justify-content: center; gap: 10px; background: #f5f7fb; color: #475569; font-size: 14px; pointer-events: none; }
+.ude-holder { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.ude-holder.ude-scroll { overflow: auto; padding: 0; background: #e9edf3; -webkit-overflow-scrolling: touch; }
+.ude-holder .x-spreadsheet { background: #fff; }
+.ude-loading { position: absolute; inset: 0; z-index: 3; display: flex; align-items: center; justify-content: center; gap: 10px; background: #f5f7fb; color: #475569; font-size: 14px; pointer-events: none; }
 .ude-error { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #475569; background: #f5f7fb; text-align: center; padding: 24px; }
 .ude-error svg { color: #e11d48; }
+.ude-error-actions { display: flex; gap: 8px; margin-top: 8px; }
 .ude-spin { animation: ude-rot 1s linear infinite; }
 @keyframes ude-rot { to { transform: rotate(360deg); } }
-@media (max-width: 767.98px) { .ude-name { max-width: 30vw; } .ude-note, .ude-badge { display: none; } }
-@media (prefers-reduced-motion: reduce) { .ude-spin { animation: none; } }
 
-.ude-holder.ude-scroll { overflow: auto; padding: 16px; background: #e9edf3; }
-.ude-holder.ude-scroll .docx-wrapper { background: transparent; padding: 0; }
-.ude-holder .x-spreadsheet { background: #fff; }
-
-
-.ude-holder.ude-has-tools { top: 40px; }
-.ude-holder.ude-has-panel { right: 320px; }
-.ude-holder.ude-page-edit { outline: 0; }
-.ude-holder.ude-page-edit { max-width: 860px; margin: 0 auto; background: #fff; padding: 48px 64px; min-height: 100%; box-shadow: 0 2px 12px rgba(15,23,42,.15); left: 0; right: 0; }
-.ude-holder.ude-page-edit table { border-collapse: collapse; } .ude-holder.ude-page-edit td, .ude-holder.ude-page-edit th { border: 1px solid #cbd5e1; padding: 4px 8px; }
-.ude-panel { position: absolute; top: 0; right: 0; bottom: 0; width: 320px; overflow-y: auto; padding: 12px; background: #fff; border-left: 1px solid #dbe3f0; }
-.ude-panel h6 { font-size: 13px; font-weight: 700; margin: 0 0 8px; }
-.ude-slide-group { margin-bottom: 14px; }
-.ude-slide-label { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #2563eb; margin-bottom: 4px; }
-.ude-panel textarea { width: 100%; margin-bottom: 6px; padding: 6px 8px; border: 1px solid #dbe3f0; border-radius: 10px; background: #f8fafc; font-size: 12.5px; resize: vertical; }
-.ude-panel textarea:focus { outline: 0; background: #fff; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,.16); }
-.ude-page { position: relative; margin: 0 auto 16px; background: #fff; box-shadow: 0 2px 12px rgba(15,23,42,.2); }
-.ude-page canvas { display: block; cursor: text; }
-.ude-ann { position: absolute; min-width: 140px; padding: 0; margin: 0; border: 1px dashed #2563eb; background: rgba(255,255,255,.6); color: #000; font-family: Helvetica, Arial, sans-serif; line-height: 1.1; outline: 0; }
-
-
-/* holder = scroll container (spreadsheet / PDF / PPTX) */
-.ude-holder.ude-scroll { overflow-y: auto; overflow-x: auto; padding: 0; background: #e9edf3; scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
-.ude-holder.ude-has-panel { right: 320px; }
-.ude-pdf { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 16px; min-width: max-content; }
-.ude-page { position: relative; flex: none; margin: 0; background: #fff; box-shadow: 0 2px 12px rgba(15,23,42,.2); }
-.ude-page canvas { display: block; cursor: text; }
-
-/* Word (TipTap) */
-.ude-word { position: absolute; inset: 0; display: flex; flex-direction: column; background: #e9edf3; }
-.ude-word .ude-toolbar { position: static; flex: none; }
-.ude-toolbar button.on { background: #2563eb; color: #fff; border-color: #2563eb; }
-.ude-word { position: absolute; inset: 0; display: flex; flex-direction: column; background: #e9edf3; }
+/* Word (SuperDoc) */
+.ude-wordpane { position: absolute; inset: 0; display: flex; flex-direction: column; background: #e9edf3; }
 .ude-sdtoolbar { flex: none; background: #fff; border-bottom: 1px solid #dbe3f0; min-height: 44px; overflow-x: auto; }
-.ude-sdwrap { flex: 1; min-height: 0; overflow: auto; scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
+.ude-sdwrap { flex: 1; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; }
 .ude-sd { min-height: 100%; }
+
+/* PPTX in-place text editing */
 .ude-edt { cursor: text; outline: 1px dashed transparent; transition: outline-color .12s, background .12s; border-radius: 2px; }
 .ude-edt:hover { outline-color: #93b4f5; }
 .ude-edt:focus { outline: 2px solid #2563eb; background: rgba(37, 99, 235, .06); }
 .ude-holder.ude-scroll .pptx-preview-wrapper { margin: 0 auto; }
 .ude-holder.ude-scroll .pptx-preview-slide-wrapper { margin: 16px auto !important; box-shadow: 0 2px 12px rgba(15, 23, 42, .2); }
 
-.ude-presence { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: #dbe6fb; }
-.ude-presence .sp-avatar-sm { border-color: #0a2350; }
+/* PDF editor */
+.ude-pdfv { position: absolute; inset: 0; display: flex; flex-direction: column; background: #e9edf3; }
+.ude-pdfv-toolbar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 12px; background: #fff; border-bottom: 1px solid #dbe3f0; font-size: 12.5px; }
+.ude-pdfv-grp { display: flex; align-items: center; gap: 2px; padding-right: 8px; margin-right: 2px; border-right: 1px solid #e2e8f0; }
+.ude-pdfv-grp:last-of-type { border-right: 0; }
+.ude-pdfv-toolbar button { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 9px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: #1e293b; cursor: pointer; font-size: 12.5px; font-weight: 500; }
+.ude-pdfv-toolbar button:hover:not(:disabled) { background: #eef2ff; }
+.ude-pdfv-toolbar button.on { background: #2563eb; color: #fff; }
+.ude-pdfv-toolbar button:disabled { opacity: .4; cursor: not-allowed; }
+.ude-pdfv-toolbar select { height: 30px; border: 1px solid #dbe3f0; border-radius: 8px; padding: 0 6px; background: #fff; font-size: 12.5px; }
+.ude-pdfv-toolbar input[type="color"] { width: 30px; height: 30px; padding: 2px; border: 1px solid #dbe3f0; border-radius: 8px; background: #fff; cursor: pointer; }
+.ude-pdfv-pageno { min-width: 64px; text-align: center; color: #475569; }
+.ude-pdfv-note { font-size: 12px; color: #b45309; background: #fef3c7; padding: 3px 10px; border-radius: 999px; }
+.ude-pdfv-scroll { position: relative; flex: 1; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; }
+.ude-pdfv-busy { position: sticky; top: 10px; z-index: 2; width: max-content; margin: 0 auto -32px; display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: #0a2350; color: #fff; font-size: 12px; box-shadow: 0 4px 12px rgba(15, 23, 42, .25); }
+.ude-pdfv-list { display: flex; flex-direction: column; align-items: center; gap: 20px; padding: 20px 24px 40px; min-width: max-content; }
+.ude-pdfv-page { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.ude-pdfv-pagebar { display: flex; align-items: center; gap: 4px; font-size: 11.5px; color: #64748b; min-height: 24px; }
+.ude-pdfv-pagebar button { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 7px; border: 1px solid #dbe3f0; border-radius: 6px; background: #fff; color: #334155; cursor: pointer; font-size: 11.5px; }
+.ude-pdfv-pagebar button:hover { background: #eef2ff; }
+.ude-pdfv-outer { position: relative; background: #fff; box-shadow: 0 2px 12px rgba(15, 23, 42, .2); }
+.ude-pdfv-inner { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+.ude-pdfv-inner canvas { position: absolute; inset: 0; display: block; }
+.ude-pdfv-layer { position: absolute; inset: 0; touch-action: none; user-select: none; }
+.ude-pdfv-layer svg { position: absolute; inset: 0; overflow: visible; }
+.ude-pdfv-layer.tool-select [data-id] { cursor: move; }
+.ude-pdfv-layer.tool-text { cursor: text; }
+.ude-pdfv-layer.tool-highlight, .ude-pdfv-layer.tool-rect, .ude-pdfv-layer.tool-whiteout, .ude-pdfv-layer.tool-ink { cursor: crosshair; }
+.ude-pdfv-layer.tool-view { cursor: default; }
+.ude-pdfv-layer .hit { pointer-events: stroke; }
+.ude-pdfv-layer rect.ann-highlight { mix-blend-mode: multiply; }
+.ude-pdfv-selbox { fill: none; stroke: #2563eb; stroke-width: 1.5; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; pointer-events: none; }
+rect.ude-pdfv-handle { fill: #fff; stroke: #2563eb; stroke-width: 1.5; vector-effect: non-scaling-stroke; cursor: nwse-resize; }
+.ude-pdfv-text { position: absolute; margin: 0; padding: 0; border: 0; font-family: Helvetica, Arial, sans-serif; line-height: 1.2; white-space: pre-wrap; word-break: break-word; background: transparent; outline: 1px dashed transparent; }
+.tool-select .ude-pdfv-text:hover, .tool-text .ude-pdfv-text:hover { outline-color: #93b4f5; }
+.ude-pdfv-text.sel { outline: 1.5px dashed #2563eb; }
+textarea.ude-pdfv-text.editing { resize: none; overflow: hidden; outline: 2px solid #2563eb; background: rgba(255, 255, 255, .85); user-select: text; }
+span.ude-pdfv-handle { position: absolute; right: -5px; bottom: -5px; width: 9px; height: 9px; background: #fff; border: 1.5px solid #2563eb; border-radius: 2px; cursor: ew-resize; }
+.ude-pdfv-deleted { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(225, 29, 72, .12); color: #be123c; font-weight: 700; pointer-events: none; }
+.ude-pdfv-page.deleted .ude-pdfv-outer { opacity: .55; }
 
+@media (max-width: 767.98px) {
+  .ude-name { max-width: 28vw; }
+  .ude-note, .ude-badge, .ude-presence span:first-child { display: none; }
+  .ude-pdfv-toolbar button span { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .ude-spin { animation: none; } }
+
+.ude-sdtoolbar:empty { display: none; }
+/* Centre the SuperDoc page (with its ruler) and keep it scrollable when wider than the window. */
+.ude-sdwrap { padding: 20px 24px 40px; }
+.ude-sd-host { min-height: 100%; }
+.ude-sd-host .ude-sd { width: max-content; max-width: none; margin: 0 auto; }
+.ude-sd-host .ude-sd > * { margin-left: auto; margin-right: auto; }

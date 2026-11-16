@@ -117,7 +117,7 @@ namespace DDAAPI.Services
         }
 
         // Pushes a live event to everyone currently viewing the file. Never breaks the main operation.
-        private async Task NotifyAsync(FileData f, string action, string uid, string message)
+        private async Task NotifyAsync(FileData f, string action, string uid, string message, string source = "system")
         {
             try
             {
@@ -126,6 +126,7 @@ namespace DDAAPI.Services
                 {
                     fileId = f.FileId,
                     action,
+                    source,
                     byUserId = uid.ToLower(),
                     byName = NameOf(names, uid),
                     version = f.CurrentVersion,
@@ -236,9 +237,12 @@ namespace DDAAPI.Services
             if (Eq(f.CheckedOutBy, uid)) { f.CheckedOutBy = null; f.CheckedOutOn = null; } // upload = check in
             await _db.SaveChangesAsync();
 
+            var fromEditor = string.Equals(dto.Source, "editor", StringComparison.OrdinalIgnoreCase);
+            if (!fromEditor) CollabHub.ResetDocState(f.FileId); // content replaced outside the editor
+
             await TouchFolderAsync(f, uid, $"File '{f.FileName}' new version v{f.CurrentVersion}");
             Log.DataLog(uid, $"New version v{f.CurrentVersion} uploaded for file '{f.FileName}' (ID {f.FileId})", "File Version Log");
-            await NotifyAsync(f, "uploaded", uid, $"uploaded v{f.CurrentVersion}");
+            await NotifyAsync(f, "uploaded", uid, $"uploaded v{f.CurrentVersion}", fromEditor ? "editor" : "upload");
             return f.CurrentVersion;
         }
 
@@ -266,10 +270,11 @@ namespace DDAAPI.Services
             f.ModifiedOn = DateTime.Now;
             f.ModifiedBy = uid;
             await _db.SaveChangesAsync();
+            CollabHub.ResetDocState(f.FileId);
 
             await TouchFolderAsync(f, uid, $"File '{f.FileName}' restored to v{v.VersionNumber} content (now v{f.CurrentVersion})");
             Log.DataLog(uid, $"File '{f.FileName}' (ID {f.FileId}) restored from v{v.VersionNumber}", "File Version Log");
-            await NotifyAsync(f, "restored", uid, $"restored an older version (now v{f.CurrentVersion})");
+            await NotifyAsync(f, "restored", uid, $"restored an older version (now v{f.CurrentVersion})", "restore");
             return f.CurrentVersion;
         }
 

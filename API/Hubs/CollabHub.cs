@@ -9,33 +9,54 @@ namespace DDAAPI.Hubs
     public class CollabHub : Hub
     {
         private sealed record Viewer(string UserId, string Name);
+        private sealed record DocUpdate(byte[] Data, DateTime At);
         private sealed class DocState
         {
-            public readonly List<byte[]> Updates = new();
+            public readonly List<DocUpdate> Updates = new();
+            public long Bytes;
             public string? ClaimedBy;
+            public DateTime ClaimedOn;
+            public DateTime? CompactRequestedOn;
             public readonly object Gate = new();
         }
 
         private static readonly ConcurrentDictionary<int, ConcurrentDictionary<string, Viewer>> Rooms = new();
-        // In-memory Yjs state per open file (real-time co-authoring). Discarded when the last viewer leaves.
+        // In-memory Yjs state per open file. Discarded when the last viewer leaves or the file is replaced.
         private static readonly ConcurrentDictionary<int, DocState> Docs = new();
+        // Updates newer than this are kept on compaction, so nothing in flight is lost.
+        private static readonly TimeSpan CompactOverlap = TimeSpan.FromSeconds(10);
+        private static readonly TimeSpan CompactRetry = TimeSpan.FromSeconds(60);
 
         private readonly FileVersionService _svc;
-        public CollabHub(FileVersionService svc) { _svc = svc; }
+        private readonly long _maxDocBytes;
+        private readonly int _compactAfterUpdates;
+        private readonly TimeSpan _claimTimeout;
+
+        public CollabHub(FileVersionService svc, IConfiguration cfg)
+        {
+            _svc = svc;
+            _maxDocBytes = cfg.GetValue<long?>("Collab:MaxDocBytes") ?? 64L * 1024 * 1024;
+            _compactAfterUpdates = cfg.GetValue<int?>("Collab:CompactAfterUpdates") ?? 2000;
+            _claimTimeout = TimeSpan.FromSeconds(cfg.GetValue<int?>("Collab:ClaimTimeoutSeconds") ?? 30);
+        }
 
         public static string Group(int fileId) => $"file-{fileId}";
 
-        public async Task JoinFile(int fileId)
+        /// <summary>Drops the live co-authoring state (file replaced by an upload or restore).</summary>
+        public static void ResetDocState(int fileId) => Docs.TryRemove(fileId, out _);
+
+        public async Task<object> JoinFile(int fileId)
         {
             var (uid, name) = await _svc.GetViewerAsync(Context.User?.Identity?.Name, fileId);
             await Groups.AddToGroupAsync(Context.ConnectionId, Group(fileId));
             Rooms.GetOrAdd(fileId, _ => new())[Context.ConnectionId] = new Viewer(uid, name);
-            await Broadcast(fileId);
+            return await Broadcast(fileId);   // the joiner also gets the list directly
         }
 
         public async Task LeaveFile(int fileId)
         {
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, Group(fileId));
+            ReleaseClaim(fileId, Context.ConnectionId);
             if (Rooms.TryGetValue(fileId, out var room))
             {
                 room.TryRemove(Context.ConnectionId, out _);
@@ -56,10 +77,33 @@ namespace DDAAPI.Hubs
             var st = Docs.GetOrAdd(fileId, _ => new DocState());
             lock (st.Gate)
             {
-                var claim = false;
-                if (st.Updates.Count == 0 && write && st.ClaimedBy == null) { st.ClaimedBy = Context.ConnectionId; claim = true; }
-                return new { state = st.Updates.Select(Convert.ToBase64String).ToArray(), canWrite = write, claim };
+                var claim = write && TryClaim(st);
+                return new
+                {
+                    state = st.Updates.Select(u => Convert.ToBase64String(u.Data)).ToArray(),
+                    canWrite = write,
+                    claim,
+                    seeding = !claim && st.Updates.Count == 0 && st.ClaimedBy != null
+                };
             }
+        }
+
+        /// <summary>Asks to become the client that loads the file into an empty shared document.</summary>
+        public bool ClaimDoc(int fileId)
+        {
+            if (!CanWrite(fileId)) return false;
+            var st = Docs.GetOrAdd(fileId, _ => new DocState());
+            lock (st.Gate) return TryClaim(st);
+        }
+
+        private bool TryClaim(DocState st)
+        {
+            if (st.Updates.Count > 0) return false;
+            if (st.ClaimedBy != null && st.ClaimedBy != Context.ConnectionId &&
+                DateTime.UtcNow - st.ClaimedOn <= _claimTimeout) return false;
+            st.ClaimedBy = Context.ConnectionId;
+            st.ClaimedOn = DateTime.UtcNow;
+            return true;
         }
 
         private bool CanWrite(int fileId) =>
@@ -68,16 +112,43 @@ namespace DDAAPI.Hubs
         public async Task SendDocUpdate(int fileId, string update)
         {
             if (!CanWrite(fileId)) throw new HubException("You have read-only access to this file.");
+            var data = Decode(update);
             var st = Docs.GetOrAdd(fileId, _ => new DocState());
-            lock (st.Gate) { st.Updates.Add(Convert.FromBase64String(update)); st.ClaimedBy = null; }
+            var askCompact = false;
+            lock (st.Gate)
+            {
+                if (st.Bytes + data.Length > _maxDocBytes)
+                    throw new HubException("This editing session has grown too large. Save the document and reopen it.");
+                st.Updates.Add(new DocUpdate(data, DateTime.UtcNow));
+                st.Bytes += data.Length;
+                st.ClaimedBy = null;
+                var due = st.Updates.Count > _compactAfterUpdates || st.Bytes > _maxDocBytes / 4;
+                if (due && (st.CompactRequestedOn == null || DateTime.UtcNow - st.CompactRequestedOn > CompactRetry))
+                {
+                    st.CompactRequestedOn = DateTime.UtcNow;
+                    askCompact = true;
+                }
+            }
             await Clients.OthersInGroup(Group(fileId)).SendAsync("DocUpdate", fileId, update);
+            if (askCompact) await Clients.Caller.SendAsync("DocCompactRequest", fileId);
         }
 
         public Task CompactDoc(int fileId, string fullState)
         {
             if (!CanWrite(fileId)) return Task.CompletedTask;
+            var data = Decode(fullState);
             if (Docs.TryGetValue(fileId, out var st))
-                lock (st.Gate) { st.Updates.Clear(); st.Updates.Add(Convert.FromBase64String(fullState)); }
+                lock (st.Gate)
+                {
+                    var cutoff = DateTime.UtcNow - CompactOverlap;
+                    var recent = st.Updates.Where(u => u.At > cutoff).ToList();
+                    st.Updates.Clear();
+                    st.Updates.Add(new DocUpdate(data, DateTime.UtcNow));
+                    st.Updates.AddRange(recent);              // Yjs updates are idempotent
+                    st.Bytes = st.Updates.Sum(u => (long)u.Data.Length);
+                    st.CompactRequestedOn = null;
+                    st.ClaimedBy = null;
+                }
             return Task.CompletedTask;
         }
 
@@ -89,9 +160,7 @@ namespace DDAAPI.Hubs
 
         public override async Task OnDisconnectedAsync(Exception? exception)
         {
-            foreach (var kv in Docs)
-                lock (kv.Value.Gate)
-                    if (kv.Value.ClaimedBy == Context.ConnectionId && kv.Value.Updates.Count == 0) kv.Value.ClaimedBy = null;
+            foreach (var kv in Docs) ReleaseClaim(kv.Key, Context.ConnectionId);
 
             foreach (var kv in Rooms)
             {
@@ -104,13 +173,34 @@ namespace DDAAPI.Hubs
             await base.OnDisconnectedAsync(exception);
         }
 
-        private Task Broadcast(int fileId)
+        private static void ReleaseClaim(int fileId, string connectionId)
+        {
+            if (Docs.TryGetValue(fileId, out var st))
+                lock (st.Gate)
+                    if (st.ClaimedBy == connectionId) st.ClaimedBy = null;
+        }
+
+        private static byte[] Decode(string b64)
+        {
+            if (string.IsNullOrEmpty(b64)) throw new HubException("Empty document update.");
+            try { return Convert.FromBase64String(b64); }
+            catch (FormatException) { throw new HubException("Invalid document update."); }
+        }
+
+        private async Task<object> Broadcast(int fileId)
         {
             var users = new List<object>();
             if (Rooms.TryGetValue(fileId, out var room))
-                users.AddRange(room.Values.GroupBy(v => v.UserId)
-                    .Select(g => (object)new { userId = g.Key, name = g.First().Name }));
-            return Clients.Group(Group(fileId)).SendAsync("PresenceChanged", new { fileId, users });
+                users.AddRange(room.GroupBy(kv => kv.Value.UserId)
+                    .Select(g => (object)new
+                    {
+                        userId = g.Key,
+                        name = g.First().Value.Name,
+                        connections = g.Select(kv => kv.Key).ToArray()
+                    }));
+            var payload = new { fileId, users };
+            await Clients.Group(Group(fileId)).SendAsync("PresenceChanged", payload);
+            return payload;
         }
     }
 }

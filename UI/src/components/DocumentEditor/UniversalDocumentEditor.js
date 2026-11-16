@@ -2,28 +2,25 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useSelector } from "react-redux";
 import { toast } from "react-toastify";
 import * as XLSX from "xlsx";
+import * as Y from "yjs";
 import Spreadsheet from "x-data-spreadsheet";
 import "x-data-spreadsheet/dist/xspreadsheet.css";
 import { init as initPptx } from "pptx-preview";
 import JSZip from "jszip";
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import * as pdfjsLib from "pdfjs-dist";
-import { SuperDoc } from "@harbour-enterprises/superdoc";
-import "@harbour-enterprises/superdoc/style.css";
-import { FiX, FiSave, FiLock, FiCheckCircle, FiLoader, FiAlertCircle } from "react-icons/fi";
+import { FiX, FiSave, FiLock, FiCheckCircle, FiLoader, FiAlertCircle, FiDownload, FiRefreshCw, FiWifi } from "react-icons/fi";
 import { fetchEditorAccess, fetchDocumentBuffer, getEditorKind, getExtension } from "../../services/editorConfigService";
-import { saveDocument, downloadDocument } from "../../services/documentOperationsService";
+import { saveDocument, downloadDocument, downloadBytes, isVersionConflict } from "../../services/documentOperationsService";
 import { createCollabProvider } from "../../services/collabProvider";
 import { useCollab } from "../../hooks/useCollab";
 import { SpFacepile } from "../../shared/SpAvatar";
+import WordEditor from "./WordEditor";
+import PdfEditor from "./PdfEditor";
 import "./UniversalDocumentEditor.css";
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
 
 const KIND_LABEL = { word: "Document", cell: "Spreadsheet", slide: "Presentation", pdf: "PDF" };
 const AUTOSAVE_MS = 45000;
-const PDF_SCALE = 1.4;
-const PDF_FONT = 12;
+const WORD_MODES = [["editing", "Editing"], ["suggesting", "Suggesting"], ["viewing", "Viewing"]];
+const errMsg = (e, fallback) => e?.response?.data?.message || e?.message || fallback;
 
 const sheetsFromWorkbook = (wb) =>
   wb.SheetNames.map((name) => {
@@ -67,86 +64,12 @@ const workbookFromSheets = (sheets) => {
   return wb;
 };
 
-/** Word pane: SuperDoc (native DOCX editor) with Yjs real-time co-authoring. */
-const WordPane = ({ file, buf, provider, canEdit, user, onLocalUpdate, onReady, registerBytes }) => {
-  const tbId = useRef(`sd-tb-${file.id}`).current;
-  const bodyId = useRef(`sd-body-${file.id}`).current;
-
-  useEffect(() => {
-    let sd = null, alive = true;
-    (async () => {
-      if (provider && !provider.claim) await provider.waitForContent(8000); // wait for the seeding writer
-      if (!alive) return;
-      const docFile = new File([buf], file.name, {
-        type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      });
-      sd = new SuperDoc({
-        selector: `#${bodyId}`,
-        document: docFile,
-        documentMode: canEdit ? "editing" : "viewing",
-        user: {
-          name: user.name,
-          email: user.email,
-          color: user.color,
-        },
-        pagination: true,
-        rulers: false,
-        modules: {
-          toolbar: canEdit
-            ? {
-              selector: `#${tbId}`,
-              toolbarGroups: ["left", "center", "right"],
-            }
-            : undefined,
-          collaboration: provider
-            ? {
-              ydoc: provider.ydoc,
-              provider: {
-                awareness: provider.awareness,
-                synced: true,
-                on: () => { },
-                off: () => { },
-                connect: () => { },
-                disconnect: () => { },
-                destroy: () => { },
-              },
-            }
-            : undefined,
-        },
-        onReady: () => alive && onReady(),
-        onEditorUpdate: () => {
-          if (!provider) onLocalUpdate();
-        },
-      });
-      registerBytes(async () => {
-        const out = await sd.export({ exportType: ["docx"], triggerDownload: false });
-        const blob = Array.isArray(out) ? out[0] : out;
-        return blob.arrayBuffer();
-      });
-    })();
-    return () => { alive = false; try { sd && sd.destroy(); } catch (e) { /* ignore */ } };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  return (
-    <div className="ude-word">
-      {canEdit && <div id={tbId} className="ude-sdtoolbar" />}
-      <div className="ude-sdwrap"><div id={bodyId} className="ude-sd" /></div>
-    </div>
-  );
-};
-
 /** file = { id: fileId, name: string } */
 const UniversalDocumentEditor = ({ file, onClose }) => {
   const holderRef = useRef(null);
   const sheetRef = useRef(null);
   const getBytesRef = useRef(null);
   const afterSaveRef = useRef(null);
-  const zipRef = useRef(null);
-  const slideDocsRef = useRef([]);
-  const pdfBytesRef = useRef(null);
-  const annRef = useRef([]);
-  const ioRef = useRef(null);
   const providerRef = useRef(null);
   const saveRef = useRef(null);
   const readyRef = useRef(false);
@@ -155,10 +78,22 @@ const UniversalDocumentEditor = ({ file, onClose }) => {
   const timerRef = useRef(null);
   const savingRef = useRef(false);
   const viewersRef = useRef([]);
+  const collabRef = useRef(false);
+  const canEditRef = useRef(false);
+  const editSeqRef = useRef(0);
+  const peerSaveRef = useRef(null);
+  const savedAnyRef = useRef(false);
+  const lastSyncErrRef = useRef(0);
+
   const [state, setState] = useState("loading"); // loading | ready | unsaved | saving | saved | error
   const [meta, setMeta] = useState({ canEdit: false, reason: null, canDownload: false });
   const [wordCtx, setWordCtx] = useState(null);
+  const [pdfCtx, setPdfCtx] = useState(null);
   const [errorText, setErrorText] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+  const [stale, setStale] = useState(false);
+  const [live, setLive] = useState(false);
+  const [wordMode, setWordMode] = useState("editing");
   const kind = getEditorKind(file.name);
   const ext = getExtension(file.name);
 
@@ -166,19 +101,69 @@ const UniversalDocumentEditor = ({ file, onClose }) => {
   const myId = (me.userID || "").toLowerCase();
   const myName = `${me.firstName || ""} ${me.lastName || ""}`.trim() || "User";
 
+  const notifySyncError = useCallback((e) => {
+    const now = Date.now();
+    if (now - lastSyncErrRef.current < 10000) return;
+    lastSyncErrRef.current = now;
+    toast.warning(`Live sync issue: ${errMsg(e, "connection problem")}`);
+  }, []);
+
   const markDirty = useCallback(() => {
-    if (!readyRef.current) return;
+    if (!readyRef.current || !canEditRef.current) return;
+    editSeqRef.current += 1;
     dirtyRef.current = true;
-    setState("unsaved");
+    setState((s) => (s === "saving" ? s : "unsaved"));
     clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => saveRef.current && saveRef.current(true), AUTOSAVE_MS);
   }, []);
 
+  const cleanup = useCallback(() => {
+    clearTimeout(timerRef.current);
+    sheetRef.current = null;
+    providerRef.current?.destroy();
+    providerRef.current = null;
+    collabRef.current = false;
+    getBytesRef.current = null;
+    afterSaveRef.current = null;
+    readyRef.current = false;
+    if (holderRef.current) {
+      holderRef.current.innerHTML = "";
+      holderRef.current.classList.remove("ude-scroll");
+    }
+  }, []);
+
+  const reload = useCallback(() => {
+    cleanup();
+    dirtyRef.current = false;
+    setWordCtx(null);
+    setPdfCtx(null);
+    setStale(false);
+    setLive(false);
+    setErrorText("");
+    setState("loading");
+    setReloadKey((k) => k + 1);
+  }, [cleanup]);
+
   const { viewers } = useCollab(file.id, {
     onFileChanged: (p) => {
       if (p.byUserId === myId) return;
-      versionRef.current = p.version;
       if (p.action === "uploaded" || p.action === "restored") {
+        versionRef.current = p.version;
+        if (p.source === "editor") peerSaveRef.current = p.version;
+      }
+      // Content replaced outside this live session (upload, restore, or a save from a non-co-authored copy).
+      const replaced = p.action === "restored" || (p.action === "uploaded" && (p.source !== "editor" || !collabRef.current));
+      if (replaced) {
+        if (collabRef.current || !dirtyRef.current) {
+          toast.info(`${p.byName} ${p.message}. Loading the latest version…`);
+          reload();
+        } else {
+          setStale(true);
+          toast.warning(`${p.byName} ${p.message}. Your copy is out of date.`);
+        }
+        return;
+      }
+      if (p.action === "uploaded") {
         dirtyRef.current = false;
         clearTimeout(timerRef.current);
         setState((s) => (s === "loading" || s === "error" ? s : "saved"));
@@ -187,34 +172,47 @@ const UniversalDocumentEditor = ({ file, onClose }) => {
     },
   });
   viewersRef.current = viewers;
-  const others = viewers.filter((v) => v.userId !== myId);
-
-  const cleanup = useCallback(() => {
-    clearTimeout(timerRef.current);
-    ioRef.current?.disconnect();
-    sheetRef.current = null;
-    providerRef.current?.destroy();
-    providerRef.current = null;
-    if (holderRef.current) holderRef.current.innerHTML = "";
-  }, []);
+  const others = viewers.filter((v) => !v.isMe);
 
   const handleSave = useCallback(async (silent = false) => {
-    if (!getBytesRef.current || savingRef.current) return false;
-    if (silent && providerRef.current && !providerRef.current.isLeader()) return false;
+    if (!getBytesRef.current || savingRef.current || !canEditRef.current) return false;
+    if (silent && collabRef.current && providerRef.current && !providerRef.current.isLeader()) return false;
     savingRef.current = true;
     clearTimeout(timerRef.current);
     setState("saving");
+    const seq = editSeqRef.current;
+    const note = silent ? "Auto-saved from editor" : "Edited in document editor";
     try {
       const bytes = await getBytesRef.current();
-      versionRef.current = await saveDocument(file.id, file.name, bytes, versionRef.current,
-        silent ? "Auto-saved from editor" : "Edited in document editor");
-      dirtyRef.current = false;
-      if (afterSaveRef.current) await afterSaveRef.current(bytes);
+      let version;
+      try {
+        version = await saveDocument(file.id, file.name, bytes, versionRef.current, note);
+      } catch (e) {
+        // In a live session the shared state already contains the peer's save, so retrying is safe.
+        if (!collabRef.current || !isVersionConflict(e)) throw e;
+        const access = await fetchEditorAccess(file.id);
+        if (access.currentVersion !== peerSaveRef.current) throw e;
+        versionRef.current = access.currentVersion;
+        version = await saveDocument(file.id, file.name, bytes, versionRef.current, note);
+      }
+      versionRef.current = version;
+      savedAnyRef.current = true;
+      if (afterSaveRef.current) await afterSaveRef.current(bytes, version);
       if (providerRef.current && viewersRef.current.length <= 1) providerRef.current.compact();
-      setState("saved");
+      setStale(false);
+      if (editSeqRef.current !== seq) {
+        dirtyRef.current = true;
+        setState("unsaved");
+        timerRef.current = setTimeout(() => saveRef.current && saveRef.current(true), AUTOSAVE_MS);
+      } else {
+        dirtyRef.current = false;
+        setState("saved");
+      }
       return true;
     } catch (e) {
-      toast.error(e.response?.data?.message || e.message || "Save failed");
+      toast.error(errMsg(e, "Save failed"));
+      if (isVersionConflict(e)) setStale(true);
+      dirtyRef.current = true;
       setState("unsaved");
       return false;
     } finally {
@@ -223,77 +221,40 @@ const UniversalDocumentEditor = ({ file, onClose }) => {
   }, [file.id, file.name]);
   saveRef.current = handleSave;
 
+  const registerApi = useCallback((api) => {
+    getBytesRef.current = api ? api.getBytes : null;
+    afterSaveRef.current = api && api.afterSave ? api.afterSave : null;
+  }, []);
+
+  const onEditorError = useCallback((e) => {
+    const msg = errMsg(e, "The editor reported an error");
+    if (!readyRef.current) { setErrorText(msg); setState("error"); }
+    else toast.error(msg);
+  }, []);
+
+  const onWordReady = useCallback(({ collab, editable }) => {
+    if (!collab && providerRef.current) { providerRef.current.destroy(); providerRef.current = null; }
+    collabRef.current = collab;
+    setLive(collab);
+    canEditRef.current = editable;
+    if (!editable) setMeta((m) => (m.canEdit ? { ...m, canEdit: false, reason: m.reason || "Opened read-only." } : m));
+    if (collab && editable && providerRef.current) providerRef.current.ydoc.on("update", () => markDirty());
+    dirtyRef.current = false;
+    readyRef.current = true;
+    setState("ready");
+  }, [markDirty]);
+
+  const onPdfReady = useCallback(() => {
+    if (readyRef.current) return;
+    dirtyRef.current = false;
+    readyRef.current = true;
+    setState("ready");
+  }, []);
+
   const renderPptx = async (el, buf) => {
     el.innerHTML = "";
     const w = Math.min(el.clientWidth - 48, 1100);
     await initPptx(el, { width: w, height: Math.round((w * 9) / 16) }).preview(buf);
-  };
-
-  // Lazy, virtualised PDF rendering: every page gets a placeholder, the visible ones are drawn on demand.
-  const renderPdf = async (el, bytes, canEdit) => {
-    ioRef.current?.disconnect();
-    el.innerHTML = "";
-    annRef.current = [];
-    pdfBytesRef.current = bytes;
-    const pdf = await pdfjsLib.getDocument({ data: bytes.slice(0) }).promise;
-    const list = document.createElement("div");
-    list.className = "ude-pdf";
-    el.appendChild(list);
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-
-    const draw = async (wrap) => {
-      try {
-        const cv = wrap.querySelector("canvas");
-        const vp = wrap._page.getViewport({ scale: PDF_SCALE * dpr });
-        cv.width = vp.width;
-        cv.height = vp.height;
-        await wrap._page.render({ canvasContext: cv.getContext("2d"), viewport: vp }).promise;
-      } catch (e) { wrap.dataset.done = ""; }
-    };
-    const io = new IntersectionObserver((entries) => entries.forEach((en) => {
-      if (!en.isIntersecting || en.target.dataset.done) return;
-      en.target.dataset.done = "1";
-      draw(en.target);
-    }), { root: el, rootMargin: "1200px 0px" });
-    ioRef.current = io;
-
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const vp = page.getViewport({ scale: PDF_SCALE });
-      const wrap = document.createElement("div");
-      wrap.className = "ude-page";
-      wrap.style.width = `${vp.width}px`;
-      wrap.style.height = `${vp.height}px`;
-      wrap._page = page;
-      const cv = document.createElement("canvas");
-      cv.style.width = `${vp.width}px`;
-      cv.style.height = `${vp.height}px`;
-      wrap.appendChild(cv);
-      if (canEdit) {
-        wrap.onclick = (e) => {
-          if (e.target !== cv) return;
-          const r = cv.getBoundingClientRect();
-          const x = e.clientX - r.left, y = e.clientY - r.top;
-          const input = document.createElement("input");
-          input.className = "ude-ann";
-          input.style.left = `${x}px`;
-          input.style.top = `${y}px`;
-          input.style.fontSize = `${PDF_FONT * PDF_SCALE}px`;
-          input.oninput = markDirty;
-          const ann = { page: i - 1, x, y, input };
-          input.onblur = () => {
-            if (input.value.trim()) return;
-            input.remove();
-            annRef.current = annRef.current.filter((a) => a !== ann);
-          };
-          annRef.current.push(ann);
-          wrap.appendChild(input);
-          input.focus();
-        };
-      }
-      list.appendChild(wrap);
-      io.observe(wrap);
-    }
   };
 
   useEffect(() => {
@@ -304,6 +265,7 @@ const UniversalDocumentEditor = ({ file, onClose }) => {
         if (!alive) return;
         versionRef.current = access.currentVersion;
         const canEdit = !!access.canUpload;
+        canEditRef.current = canEdit;
         const reason = canEdit ? null
           : access.isLocked && !access.lockedByMe ? `Checked out by ${access.lockedByName}. Opened read-only.`
             : "You have read-only access to this file.";
@@ -327,12 +289,21 @@ const UniversalDocumentEditor = ({ file, onClose }) => {
           getBytesRef.current = async () =>
             XLSX.write(workbookFromSheets(sheetRef.current.getData()), { bookType: ext === "xls" ? "biff8" : "xlsx", type: "array" });
         } else if (kind === "word") {
-          const provider = canEdit ? await createCollabProvider(file.id, myName) : null;
+          const provider = await createCollabProvider(file.id, myName, { onError: notifySyncError });
           if (!alive) { provider?.destroy(); return; }
           providerRef.current = provider;
-          if (provider) provider.ydoc.on("update", () => { if (canEdit) markDirty(); });
           setWordCtx({ provider, buf, canEdit: canEdit && (!provider || provider.canWrite) });
-          return; // ready is signalled by WordPane.onReady
+          return; // ready is signalled by WordEditor.onReady
+        } else if (kind === "pdf") {
+          const provider = await createCollabProvider(file.id, myName, { onError: notifySyncError });
+          if (!alive) { provider?.destroy(); return; }
+          providerRef.current = provider;
+          collabRef.current = !!provider;
+          setLive(!!provider);
+          const editable = canEdit && (!provider || provider.canWrite);
+          canEditRef.current = editable;
+          setPdfCtx({ bytes: buf, ydoc: provider ? provider.ydoc : new Y.Doc(), version: access.currentVersion, canEdit: editable });
+          return; // ready is signalled by PdfEditor.onReady
         } else if (kind === "slide") {
           el.classList.add("ude-scroll");
           const zip = await JSZip.loadAsync(buf);
@@ -343,11 +314,11 @@ const UniversalDocumentEditor = ({ file, onClose }) => {
             const doc = new DOMParser().parseFromString(await zip.file(name).async("string"), "application/xml");
             docs.push({ name, doc, nodes: Array.from(doc.getElementsByTagName("a:t")) });
           }
-          zipRef.current = zip;
-          slideDocsRef.current = docs;
-          const provider = canEdit ? await createCollabProvider(file.id, myName) : null;
+          const provider = canEdit ? await createCollabProvider(file.id, myName, { onError: notifySyncError }) : null;
           if (!alive) { provider?.destroy(); return; }
           providerRef.current = provider;
+          collabRef.current = !!provider;
+          setLive(!!provider);
           const map = provider ? provider.ydoc.getMap("slideText") : null;
           const leaves = new Map();
 
@@ -362,7 +333,6 @@ const UniversalDocumentEditor = ({ file, onClose }) => {
           };
           getBytesRef.current = zipNow;
 
-          // Draw the slides, then make each matched text element editable in place.
           const bytes = await zipNow();
           await renderPptx(el, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
           el.querySelectorAll(".pptx-preview-slide-wrapper").forEach((w, si) => {
@@ -408,55 +378,53 @@ const UniversalDocumentEditor = ({ file, onClose }) => {
             });
           }
           readyRef.current = true;
-        } else if (kind === "pdf") {
-          el.classList.add("ude-scroll");
-          readyRef.current = true;
-          await renderPdf(el, new Uint8Array(buf), canEdit);
-          if (canEdit) {
-            getBytesRef.current = async () => {
-              const doc = await PDFDocument.load(pdfBytesRef.current);
-              const font = await doc.embedFont(StandardFonts.Helvetica);
-              annRef.current.forEach((a) => {
-                const t = a.input.value.trim();
-                if (!t) return;
-                const p = doc.getPage(a.page);
-                p.drawText(t, { x: a.x / PDF_SCALE, y: p.getHeight() - a.y / PDF_SCALE - 0.85 * PDF_FONT, size: PDF_FONT, font, color: rgb(0, 0, 0) });
-              });
-              return doc.save();
-            };
-            afterSaveRef.current = (bytes) => renderPdf(holderRef.current, bytes, true);
-          }
         }
         if (alive) setState("ready");
       } catch (e) {
         if (!alive) return;
-        setErrorText(e.response?.data?.message || e.message || "Unable to open this document");
+        setErrorText(errMsg(e, "Unable to open this document"));
         setState("error");
       }
     })();
     return () => { alive = false; cleanup(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [file.id]);
+  }, [file.id, reloadKey]);
 
   const handleClose = async () => {
     const dirty = dirtyRef.current;
-    if (dirty && meta.canEdit) {
+    if (dirty && canEditRef.current) {
       if (window.confirm("Save your changes before closing?\n\nOK = save and close, Cancel = discard.")) {
         if (!(await handleSave())) return;
       }
     }
     cleanup();
-    onClose && onClose(dirty);
+    onClose && onClose(dirty || savedAnyRef.current);
+  };
+
+  const handleDownload = async () => {
+    if (getBytesRef.current && readyRef.current && dirtyRef.current) {
+      try {
+        downloadBytes(await getBytesRef.current(), file.name);
+      } catch (e) {
+        toast.error(errMsg(e, "Could not export the current document"));
+      }
+      return;
+    }
+    downloadDocument(file.id);
   };
 
   useEffect(() => {
-    const onKey = (e) => { if ((e.ctrlKey || e.metaKey) && e.key === "s" && meta.canEdit) { e.preventDefault(); handleSave(); } };
+    const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "S") && canEditRef.current) {
+        e.preventDefault();
+        handleSave();
+      }
+    };
     const onUnload = (e) => { if (dirtyRef.current) { e.preventDefault(); e.returnValue = ""; } };
     window.addEventListener("keydown", onKey);
     window.addEventListener("beforeunload", onUnload);
     return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("beforeunload", onUnload); };
-  }, [meta.canEdit, handleSave]);
-
+  }, [handleSave]);
 
   const statusMap = {
     loading: ["Opening...", <FiLoader className="ude-spin" size={14} />],
@@ -467,27 +435,40 @@ const UniversalDocumentEditor = ({ file, onClose }) => {
     error: ["Error", <FiAlertCircle size={14} />],
   };
   const [label, icon] = statusMap[state];
-  const wordEditable = wordCtx ? wordCtx.canEdit : meta.canEdit;
+  const opened = state !== "loading" && state !== "error";
 
   return (
     <div className="ude-overlay" role="dialog" aria-modal="true" aria-label={`Editing ${file.name}`}>
       <header className="ude-header">
         <div className="ude-title">
-          <span className={`ude-badge ude-${kind || "word"}`}>{KIND_LABEL[kind] || "File"}</span>
+          <span className={`ude-badge ude-badge-${kind || "word"}`}>{KIND_LABEL[kind] || "File"}</span>
           <span className="ude-name" title={file.name}>{file.name}</span>
           <span className={`ude-status ude-s-${state}`}>{icon}{label}</span>
-          {!meta.canEdit && meta.reason && state !== "loading" && state !== "error" && (
+          {opened && live && <span className="ude-live" title="Changes sync live with other editors"><FiWifi size={13} /> Live</span>}
+          {!meta.canEdit && meta.reason && opened && (
             <span className="ude-note" title={meta.reason}><FiLock size={13} /> {meta.reason}</span>
           )}
         </div>
         <div className="ude-actions">
           {others.length > 0 && (
             <span className="ude-presence" title={others.map((v) => v.name).join(", ")}>
-              <span>Also editing</span><SpFacepile names={others.map((v) => v.name)} max={4} />
+              <span>Also here</span><SpFacepile names={others.map((v) => v.name)} max={4} />
             </span>
           )}
+          {stale && (
+            <button type="button" className="ude-btn warn" onClick={reload} title="Discard local changes and load the latest version">
+              <FiRefreshCw size={14} /> Reload latest
+            </button>
+          )}
+          {kind === "word" && meta.canEdit && opened && (
+            <select className="ude-mode" aria-label="Editing mode" value={wordMode} onChange={(e) => setWordMode(e.target.value)}>
+              {WORD_MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          )}
           {meta.canDownload && (
-            <button type="button" className="ude-btn ghost" onClick={() => downloadDocument(file.id)}>Download</button>
+            <button type="button" className="ude-btn ghost" onClick={handleDownload} disabled={state === "loading"}>
+              <FiDownload size={14} /> Download
+            </button>
           )}
           {meta.canEdit && (
             <button type="button" className="ude-btn primary" onClick={() => handleSave()}
@@ -507,24 +488,46 @@ const UniversalDocumentEditor = ({ file, onClose }) => {
             <FiAlertCircle size={36} />
             <h5>Unable to open document</h5>
             <p>{errorText}</p>
-            <button type="button" className="ude-btn primary" onClick={handleClose}>Close</button>
+            <div className="ude-error-actions">
+              <button type="button" className="ude-btn ghost-dark" onClick={reload}><FiRefreshCw size={14} /> Retry</button>
+              <button type="button" className="ude-btn primary" onClick={handleClose}>Close</button>
+            </div>
           </div>
         )}
         {state === "loading" && <div className="ude-loading"><FiLoader className="ude-spin" size={28} /> Preparing editor...</div>}
         {kind === "word" && wordCtx && state !== "error" && (
-          <WordPane
+          <WordEditor
+            key={`w-${reloadKey}`}
             file={file}
             buf={wordCtx.buf}
             provider={wordCtx.provider}
-            canEdit={wordEditable}
-            user={{ name: myName, email: me.emailAddress || "", color: "#2563eb" }}
-            onLocalUpdate={markDirty}
-            registerBytes={(fn) => { getBytesRef.current = fn; }}
-            onReady={() => { readyRef.current = true; dirtyRef.current = false; setState("ready"); }}
+            canEdit={wordCtx.canEdit}
+            mode={wordMode}
+            user={{ name: myName, email: me.emailAddress || "" }}
+            onDirty={markDirty}
+            onReady={onWordReady}
+            onError={onEditorError}
+            onFallback={(role) => { if (role === "standalone" && wordCtx.canEdit) toast.info("Live co-authoring is unavailable right now; you are editing your own copy."); }}
+            registerApi={registerApi}
           />
         )}
-        <div ref={holderRef} className={`ude-holder`}
-          style={{ display: state === "error" || kind === "word" ? "none" : "block" }} />
+        {kind === "pdf" && pdfCtx && state !== "error" && (
+          <PdfEditor
+            key={`p-${reloadKey}`}
+            fileId={file.id}
+            initialBytes={pdfCtx.bytes}
+            baseVersion={pdfCtx.version}
+            ydoc={pdfCtx.ydoc}
+            canEdit={pdfCtx.canEdit}
+            userName={myName}
+            onReady={onPdfReady}
+            onDirty={markDirty}
+            onError={onEditorError}
+            registerApi={registerApi}
+          />
+        )}
+        <div ref={holderRef} className="ude-holder"
+          style={{ display: state === "error" || kind === "word" || kind === "pdf" ? "none" : "block" }} />
       </div>
     </div>
   );

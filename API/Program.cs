@@ -34,7 +34,12 @@ builder.Services.AddScoped<FileVersionService>();
 builder.Services.AddScoped<ProjectService>();
 builder.Services.AddScoped<ItemDetailsService>();
 builder.Services.AddHttpClient();
-builder.Services.AddSignalR();
+builder.Services.AddSignalR(o =>
+{
+    // Yjs document states are far larger than SignalR's 32 KB default message limit.
+    o.MaximumReceiveMessageSize = configuration.GetValue<long?>("Collab:MaxMessageBytes") ?? 16L * 1024 * 1024;
+    o.EnableDetailedErrors = builder.Environment.IsDevelopment();
+});
 // Using this for MSSQL
 builder.Services.AddDbContext<AppDbContext>(item => item.UseSqlServer(configuration.GetConnectionString("myconn")));
 

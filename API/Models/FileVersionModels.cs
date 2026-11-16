@@ -25,6 +25,7 @@ namespace DDAAPI.Models
         public IFormFile File { get; set; } = null!;
         public string? Note { get; set; }
         public int? ExpectedVersion { get; set; }
+        public string? Source { get; set; }   // "editor" = save from the in-browser editor (keeps the live session)
     }
 
     public class FileVersionDTO

@@ -1094,9 +1094,9 @@ const FolderCreation = () => {
   const handleZoomIn = () => setZoom((prev) => Math.min(prev + 0.2, 2.5));
   const handleZoomOut = () => setZoom((prev) => Math.max(prev - 0.2, 0.5));
 
-   const handleViewItem = (item) => {
+  const handleViewItem = (item) => {
     const isDocument = item.docType === "Document" || !!item.fileId;
-    const editorFileId = isDocument ? (item.fileId || item.folderOrFileId) : null;
+    const editorFileId = isDocument ? Number(item.fileId || item.folderOrFileId) : null;
     const editorFileName = item.fileName || item.foldeOrFileName || "";
     if (editorFileId && isEditorSupported(editorFileName)) {
       setEditorFile({ id: editorFileId, name: editorFileName });
@@ -3888,7 +3888,7 @@ const FolderCreation = () => {
           onChanged={() => fetchFolders(currentFolderId)}
         />
       )}
-            {editorFile && (
+      {editorFile && (
         <UniversalDocumentEditor
           file={editorFile}
           onClose={(modified) => {
