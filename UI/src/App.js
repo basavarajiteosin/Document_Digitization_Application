@@ -11,6 +11,7 @@ import Footer from './shared/Footer';
 import { LoaderProvider } from './Customhook/LoaderContext';
 import { UserProvider } from './components/UserContext/UserContext';
 import { UploadProvider } from './Customhook/UploadContext';
+import { ConfirmProvider } from './Customhook/ConfirmContext';
 import UploadStatusPanel from './components/UploadStatus/UploadStatusPanel';
 import { useAppVersionCheck } from "./hooks/useAppVersionCheck";
 
@@ -46,19 +47,32 @@ const App = () => {
   return (
     <Provider store={reduxStore}>
       <LoaderProvider>
-        <UserProvider>
-          <UploadProvider>
-            {!isFullPageLayout ?
-              <div className="wrapper">
+        <ConfirmProvider>
+          <UserProvider>
+            <UploadProvider>
+              {!isFullPageLayout ?
+                <div className="wrapper">
 
-                <Header />
-                <Menu />
-                <div className="content-wrapper">
-                  <AppRoutes />
+                  <Header />
+                  <Menu />
+                  <div className="content-wrapper">
+                    <AppRoutes />
+                  </div>
+                  {/* <Footer /> */}
+                  <ToastContainer
+                    position="top-center"
+                    autoClose={1500}
+                    hideProgressBar={true}
+                    newestOnTop={false}
+                    closeOnClick={true}
+                    rtl={false}
+                    draggable
+                    pauseOnHover={false}
+                    theme="light"
+                    limit={1}
+                  />
                 </div>
-                {/* <Footer /> */}
-                <ToastContainer
-                  position="top-center"
+                : <><AppRoutes /><ToastContainer position="top-center"
                   autoClose={1500}
                   hideProgressBar={true}
                   newestOnTop={false}
@@ -68,25 +82,14 @@ const App = () => {
                   pauseOnHover={false}
                   theme="light"
                   limit={1}
-                />
-              </div>
-              : <><AppRoutes /><ToastContainer position="top-center"
-                autoClose={1500}
-                hideProgressBar={true}
-                newestOnTop={false}
-                closeOnClick={true}
-                rtl={false}
-                draggable
-                pauseOnHover={false}
-                theme="light"
-                limit={1}
-              /></>
-            }
-            {/* Rendered once, outside the routed pages, so background uploads and their
+                /></>
+              }
+              {/* Rendered once, outside the routed pages, so background uploads and their
           progress panel keep running and stay visible across every tab/menu/route. */}
-            {!isFullPageLayout && <UploadStatusPanel />}
-          </UploadProvider>
-        </UserProvider>
+              {!isFullPageLayout && <UploadStatusPanel />}
+            </UploadProvider>
+          </UserProvider>
+        </ConfirmProvider>
       </LoaderProvider>
     </Provider>
   );

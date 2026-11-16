@@ -1,7 +1,7 @@
 {
   "name": "project-management",
   "homepage": "/dda_qas",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "private": true,
   "dependencies": {
     "@azure/msal-browser": "^3.28.1",

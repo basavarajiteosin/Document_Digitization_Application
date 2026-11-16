@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
 import { toast } from "react-toastify";
+import { useConfirm } from "../../Customhook/ConfirmContext";
 import { FiX, FiFolder, FiFile, FiSend, FiMessageSquare } from "react-icons/fi";
 import "./Collaboration.css";
 
@@ -10,6 +11,7 @@ const API = `${config.DDA_API_API_URL}Comments/`;
 const fmt = (d) => (d ? new Date(d).toLocaleString() : "-");
 const errMsg = (e, fb) => e.response?.data?.message || fb;
 const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 
 export const initials = (name = "") =>
   name.split(" ").filter(Boolean).slice(0, 2).map((p) => p[0].toUpperCase()).join("") || "?";
@@ -133,6 +135,7 @@ const CommentsReviewModal = ({ item, initialTab = "comments", onClose }) => {
   const [reviewerId, setReviewerId] = useState("");
   const [requestMsg, setRequestMsg] = useState("");
   const [remarks, setRemarks] = useState({});
+  const confirm = useConfirm();
 
   const get = async (path, set, fb) => {
     try {
@@ -179,8 +182,10 @@ const CommentsReviewModal = ({ item, initialTab = "comments", onClose }) => {
     }
   };
   const deleteComment = async (id) => {
-    if (window.confirm("Delete this comment?") && (await post(`Delete/${id}`, null, "Comment deleted"))) loadComments();
+    if (await confirm({ title: "Delete comment?", message: "Delete this comment?", confirmText: "Yes, delete", variant: "danger" })
+      && (await post(`Delete/${id}`, null, "Comment deleted"))) loadComments();
   };
+
   const toggleResolve = async (c) => {
     if (await post("Resolve", { commentId: c.commentId, isResolved: !c.isResolved })) loadComments();
   };
@@ -197,8 +202,10 @@ const CommentsReviewModal = ({ item, initialTab = "comments", onClose }) => {
       setRemarks((p) => ({ ...p, [r.reviewId]: "" })); loadReviews(); loadComments();
     }
   };
+
   const cancelReview = async (r) => {
-    if (window.confirm("Cancel this review request?") && (await post(`CancelReview/${r.reviewId}`, null, "Review cancelled"))) loadReviews();
+    if (await confirm({ title: "Cancel review?", message: "Cancel this review request?", confirmText: "Yes, cancel", cancelText: "Keep", variant: "warning" })
+      && (await post(`CancelReview/${r.reviewId}`, null, "Review cancelled"))) loadReviews();
   };
 
   const topLevel = comments.filter((c) => !c.parentCommentId);

@@ -36,6 +36,7 @@ import TagsModal from "../Tags/TagsModal";
 import ItemDetailsModal from "../ItemDetails/ItemDetailsModal";
 import UniversalDocumentEditor from "../DocumentEditor/UniversalDocumentEditor";
 import { isEditorSupported } from "../../services/editorConfigService";
+import { useConfirm } from "../../Customhook/ConfirmContext";
 const config = require("../../services/config.json");
 
 // Static, human-readable labels for the Access Type IDs used across the app
@@ -149,6 +150,7 @@ const FolderCreation = () => {
     "linear-gradient(to bottom, #cc53b4, #a73a8c)",
     "linear-gradient(to bottom, #f7aae7, #d68ac0)",
   ];
+  const confirm = useConfirm();
 
   const { showLoader, hideLoader } = useLoader();
 
@@ -572,9 +574,11 @@ const FolderCreation = () => {
 
   // NEW FUNCTION: Delete share access
   const handleDeleteShareAccess = async (sdaId) => {
-    if (!window.confirm("Are you sure you want to delete this shared access?")) {
-      return;
-    }
+    if (!(await confirm({
+      title: "Delete shared access?",
+      message: "Are you sure you want to delete this shared access?",
+      confirmText: "Yes, delete", variant: "danger",
+    }))) return;
 
     try {
       showLoader();
@@ -942,14 +946,14 @@ const FolderCreation = () => {
     } else if (option === "Delete") {
       if (item.docType === "Document" && item.folderOrFileId) {
         console.log("Delete Document:", { fileId: item.fileId, folderOrFileId: item.folderOrFileId });
-        deleteFile(item.folderOrFileId);
+        deleteFile(item.folderOrFileId, item.fileName || item.foldeOrFileName);
       } else if (item.docType === "Folder" && item.folderOrFileId) {
         console.log("Delete Folder:", { folderId: item.folderId, folderOrFileId: item.folderOrFileId });
         deleteFolder(item.folderOrFileId, item.folderName);
       } else {
         console.log("Fallback Delete:", { fileId: item.fileId, folderId: item.folderId });
         if (item.fileId) {
-          deleteFile(item.fileId);
+          deleteFile(item.fileId, item.fileName);
         } else if (item.folderId) {
           deleteFolder(item.folderId, item.folderName);
         }
@@ -1174,6 +1178,12 @@ const FolderCreation = () => {
   };
 
   const deleteFolder = async (folderId, folderName) => {
+    if (!(await confirm({
+      title: "Delete folder?",
+      message: `Delete folder "${folderName || ""}" and everything inside it? This cannot be undone.`,
+      confirmText: "Yes, delete", variant: "danger",
+    }))) return;
+
     try {
       const payload = {
         folderId,
@@ -1197,7 +1207,13 @@ const FolderCreation = () => {
     }
   };
 
-  const deleteFile = async (fileId) => {
+  const deleteFile = async (fileId, fileName) => {
+    if (!(await confirm({
+      title: "Delete file?",
+      message: `Delete ${fileName ? `"${fileName}"` : "this file"}? This cannot be undone.`,
+      confirmText: "Yes, delete", variant: "danger",
+    }))) return;
+
     try {
       const response = await axios.post(
         `${config.DDA_API_API_URL}FolderData/DeleteFile/${fileId}`

@@ -5,6 +5,7 @@ import { toast } from "react-toastify";
 import { FiX, FiDownload, FiRotateCcw, FiLock, FiUnlock, FiUploadCloud, FiFile } from "react-icons/fi";
 import { useCollab } from "../../hooks/useCollab";
 import { SpAvatar, SpFacepile } from "../../shared/SpAvatar";
+import { useConfirm } from "../../Customhook/ConfirmContext";
 
 const config = require("../../services/config.json");
 const API = `${config.DDA_API_API_URL}FileVersion/`;
@@ -28,6 +29,7 @@ const FileVersionsModal = ({ file, onClose, onChanged }) => {
   const [note, setNote] = useState("");
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef(null);
+  const confirm = useConfirm();
 
   const load = useCallback(async () => {
     try {
@@ -85,7 +87,11 @@ const FileVersionsModal = ({ file, onClose, onChanged }) => {
   };
 
   const restore = async (v) => {
-    if (!window.confirm(`Restore v${v.versionNumber}? The current version will be kept in history.`)) return;
+    if (!(await confirm({
+      title: "Restore version?",
+      message: `Restore v${v.versionNumber}? The current version will be kept in history.`,
+      confirmText: "Restore", variant: "primary",
+    }))) return;
     setBusy(true);
     try {
       const res = await axios.post(`${API}Restore/${v.versionId}`);
@@ -113,8 +119,12 @@ const FileVersionsModal = ({ file, onClose, onChanged }) => {
     }
   };
   const checkOut = () => lockAction(`CheckOut/${file.id}`, "File checked out. Others can't upload until you check it in.");
-  const release = () => {
-    if (!window.confirm("Release the check-out without saving a new version?")) return;
+  const release = async () => {
+    if (!(await confirm({
+      title: "Release check-out?",
+      message: "Release the check-out without saving a new version?",
+      confirmText: "Release", variant: "warning",
+    }))) return;
     lockAction(`Release/${file.id}`, "Check-out released");
   };
 
@@ -183,9 +193,9 @@ const FileVersionsModal = ({ file, onClose, onChanged }) => {
                   <span>
                     {data.isLocked
                       ? <>
-                          {data.lockedByMe ? "You have checked out this file" : <>Checked out by <strong>{data.lockedByName}</strong></>}
-                          {data.lockedOn ? ` since ${fmtDate(data.lockedOn)}` : ""}
-                        </>
+                        {data.lockedByMe ? "You have checked out this file" : <>Checked out by <strong>{data.lockedByName}</strong></>}
+                        {data.lockedOn ? ` since ${fmtDate(data.lockedOn)}` : ""}
+                      </>
                       : "Not checked out. Anyone with edit access can check it out."}
                   </span>
                 </span>

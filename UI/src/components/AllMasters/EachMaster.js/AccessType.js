@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
+import { useConfirm } from "../../../Customhook/ConfirmContext";
 import { toast } from "react-toastify";
 import 'react-toastify/dist/ReactToastify.css';
 const config = require("../../../services/config.json");
@@ -10,6 +11,7 @@ const AccessType = () => {
   const [selectedAccessId, setSelectedAccessId] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const inputDescriptionRef = useRef(null);
+  const confirm = useConfirm();
 
   useEffect(() => {
     fetchAccessTypes();
@@ -77,6 +79,7 @@ const AccessType = () => {
   };
 
   const handleDelete = async (accessId) => {
+    if (!(await confirm({ title: "Delete access type?", message: "This access type will be permanently deleted.", confirmText: "Yes, delete", variant: "danger" }))) return;
     try {
       const response = await axios.post(
         `${config.DDA_API_API_URL}FieldMaster/DeleteAccessTypeMaster/${accessId}`,
@@ -106,41 +109,41 @@ const AccessType = () => {
 
   return (
     <div>
-    
+
       <form
-      className="row"
+        className="row"
         onSubmit={(e) => {
           e.preventDefault();
           handleCreateOrUpdate();
         }}
       >
         <div className="col-md-12">
-        <div className="form-group">
-          <label htmlFor="description">Access Type <span className="text-danger">*</span></label>
-          <input
-            type="text"
-            className="form-control form-control-sm mt-2"
-            id="description"
-            ref={inputDescriptionRef}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Enter access type description"
-          />
-        </div>
-        <div className="d-flex align-items-center justify-content-end mb-3">
-          <button type="submit" className="btn btn-sm btn-primary">
-            {isEditing ? "Update" : "Create"}
-          </button>
-          {isEditing && (
-            <button
-              type="button"
-              className="btn btn-sm btn-default ml-2"
-              onClick={resetForm}
-            >
-              Cancel
+          <div className="form-group">
+            <label htmlFor="description">Access Type <span className="text-danger">*</span></label>
+            <input
+              type="text"
+              className="form-control form-control-sm mt-2"
+              id="description"
+              ref={inputDescriptionRef}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Enter access type description"
+            />
+          </div>
+          <div className="d-flex align-items-center justify-content-end mb-3">
+            <button type="submit" className="btn btn-sm btn-primary">
+              {isEditing ? "Update" : "Create"}
             </button>
-          )}
-        </div>
+            {isEditing && (
+              <button
+                type="button"
+                className="btn btn-sm btn-default ml-2"
+                onClick={resetForm}
+              >
+                Cancel
+              </button>
+            )}
+          </div>
         </div>
       </form>
 
@@ -168,7 +171,7 @@ const AccessType = () => {
                   type="button"
                   className="btn bg-gradient-warning btn-xs btn-xs-custom"
                   onClick={() => handleEdit(accessType)}
-                 
+
                 >
                   <i className="fas fa-pen" ></i>
                 </button>
@@ -176,7 +179,7 @@ const AccessType = () => {
                   type="button"
                   className="btn bg-gradient-danger btn-xs ml-2 btn-xs-custom"
                   onClick={() => handleDelete(accessType.accessId)}
-                 
+
                 >
                   <i className="fas fa-trash" ></i>
                 </button>

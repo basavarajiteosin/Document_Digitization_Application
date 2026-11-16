@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { SuperDoc } from "superdoc";
+import JSZip from "jszip";
 import "superdoc/style.css";
 
 const config = require("../../services/config.json");
@@ -38,6 +39,17 @@ export const exportDocx = async (sd) => {
     throw new Error("The editor could not produce a valid .docx file. Your changes were not saved.");
   }
   return ab;
+};
+
+// True when the .docx itself contains text runs (so a blank editor means the shared state is bad).
+const docxHasText = async (buf) => {
+  try {
+    const zip = await JSZip.loadAsync(buf);
+    const xml = await zip.file("word/document.xml").async("string");
+    return /<w:t[\s>]/.test(xml);
+  } catch {
+    return false;
+  }
 };
 
 /** DOCX editor: SuperDoc, with optional Yjs co-authoring over CollabHub. */
@@ -100,11 +112,24 @@ const WordEditor = ({ file, buf, provider, canEdit, mode, user, onReady, onDirty
           user: { name: user.name, email: user.email || "" },
           pagination: true,
           rulers: editable,
-          onReady: () => {
+                   onReady: () => {
             ready = true;
             readyRef.current = true;
             if (pendingDestroy) { teardown(); return; }
-            if (alive) cb.current.onReady?.({ collab, editable });
+            if (!alive) return;
+            cb.current.onReady?.({ collab, editable });
+
+            // Live session shows an empty page although the file has content
+            // (stale/empty shared Yjs state): reopen without the shared state.
+            if (collab) {
+              (async () => {
+                if (!(await docxHasText(buf))) return;
+                await new Promise((r) => setTimeout(r, 2000));
+                if (!alive) return;
+                const txt = sdRef.current?.activeEditor?.state?.doc?.textContent || "";
+                if (!txt.trim()) cb.current.onFallback?.("empty");
+              })();
+            }
           },
           onEditorUpdate: () => { if (alive && ready && !collab) cb.current.onDirty?.(); },
           onContentError: (ev) => alive && cb.current.onError?.(ev?.error || new Error("This document could not be parsed.")),

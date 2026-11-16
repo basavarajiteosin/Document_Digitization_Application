@@ -9,8 +9,10 @@ import {
 import { buildPdf, isEncryptedPdf } from "./pdfFlatten";
 import { fetchDocumentBuffer } from "../../services/editorConfigService";
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
-
+// Stable worker path that works under IIS virtual directory /dda_qas/
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  `${process.env.PUBLIC_URL || ""}/pdf.worker.min.mjs`;
+  
 const LOCAL = "pdf-local";
 const CLEANUP = "pdf-cleanup";
 const FLATTEN = "pdf-flatten";

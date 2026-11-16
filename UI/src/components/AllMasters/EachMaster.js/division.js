@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
+import { useConfirm } from "../../../Customhook/ConfirmContext";
 import { toast } from "react-toastify";
 import 'react-toastify/dist/ReactToastify.css';
 const config = require("../../../services/config.json");
@@ -10,7 +11,7 @@ const Division = () => {
   const [selectedDivisionId, setSelectedDivisionId] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const inputDescriptionRef = useRef(null);
-
+  const confirm = useConfirm();
   useEffect(() => {
     fetchDivisions();
   }, []);
@@ -81,6 +82,7 @@ const Division = () => {
   };
 
   const handleDelete = async (divisionId) => {
+    if (!(await confirm({ title: "Delete division?", message: "This division will be permanently deleted.", confirmText: "Yes, delete", variant: "danger" }))) return;
     try {
       const response = await axios.post(
         `${config.DDA_API_API_URL}FieldMaster/DeleteDivisionMaster/${divisionId}`,
@@ -110,41 +112,41 @@ const Division = () => {
 
   return (
     <div>
-    
+
       <form
-      className="row"
+        className="row"
         onSubmit={(e) => {
           e.preventDefault();
           handleCreateOrUpdate();
         }}
-      > 
+      >
         <div className="col-md-12">
-        <div className="form-group ">
-          <label htmlFor="description" className="form-label">Division <span className="text-danger">*</span></label>
-          <input
-            type="text"
-            className="form-control form-control-sm mt-2"
-            id="description"
-            ref={inputDescriptionRef}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Enter division "
-          />
-        </div>
-        <div className="d-flex align-items-center justify-content-end mb-3">
-          <button type="submit" className=" btn btn-sm  btn-primary">
-            {isEditing ? "Update" : "Create"}
-          </button>
-          {isEditing && (
-            <button
-              type="button"
-              className="btn btn-xs btn-outline-primary ml-2"
-              onClick={resetForm}
-            >
-              Cancel
+          <div className="form-group ">
+            <label htmlFor="description" className="form-label">Division <span className="text-danger">*</span></label>
+            <input
+              type="text"
+              className="form-control form-control-sm mt-2"
+              id="description"
+              ref={inputDescriptionRef}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Enter division "
+            />
+          </div>
+          <div className="d-flex align-items-center justify-content-end mb-3">
+            <button type="submit" className=" btn btn-sm  btn-primary">
+              {isEditing ? "Update" : "Create"}
             </button>
-          )}
-        </div>
+            {isEditing && (
+              <button
+                type="button"
+                className="btn btn-xs btn-outline-primary ml-2"
+                onClick={resetForm}
+              >
+                Cancel
+              </button>
+            )}
+          </div>
         </div>
 
       </form>
@@ -184,20 +186,20 @@ const Division = () => {
                   fontSize: "smaller",
                 }}
               >
-              <button
-  type="button"
-  className="btn bg-gradient-warning btn-xs btn-xs-custom"
-  onClick={() => handleEdit(division)}
->
-  <i className="fas fa-pen"></i>
-</button>
-<button
-  type="button"
-  className="btn bg-gradient-danger btn-xs btn-xs-custom ml-2"
-  onClick={() => handleDelete(division.divisionId)}
->
-  <i className="fas fa-trash"></i>
-</button>
+                <button
+                  type="button"
+                  className="btn bg-gradient-warning btn-xs btn-xs-custom"
+                  onClick={() => handleEdit(division)}
+                >
+                  <i className="fas fa-pen"></i>
+                </button>
+                <button
+                  type="button"
+                  className="btn bg-gradient-danger btn-xs btn-xs-custom ml-2"
+                  onClick={() => handleDelete(division.divisionId)}
+                >
+                  <i className="fas fa-trash"></i>
+                </button>
 
               </td>
             </tr>

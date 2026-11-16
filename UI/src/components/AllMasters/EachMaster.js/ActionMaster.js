@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
+import { useConfirm } from "../../../Customhook/ConfirmContext";
 import { toast } from "react-toastify";
 import 'react-toastify/dist/ReactToastify.css';
 const config = require("../../../services/config.json");
@@ -10,6 +11,7 @@ const ActionMaster = () => {
   const [selectedActionId, setSelectedActionId] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const inputDescriptionRef = useRef(null);
+const confirm = useConfirm();
 
   useEffect(() => {
     fetchActions();
@@ -77,7 +79,8 @@ const ActionMaster = () => {
   };
 
   const handleDelete = async (actionId) => {
-    try {
+  if (!(await confirm({ title: "Delete action?", message: "This action will be permanently deleted.", confirmText: "Yes, delete", variant: "danger" }))) return;
+   try {
       const response = await axios.post(
         `${config.DDA_API_API_URL}FieldMaster/DeleteActionMaster/${actionId}`,
         null,

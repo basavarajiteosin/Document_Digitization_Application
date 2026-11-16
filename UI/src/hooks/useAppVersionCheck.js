@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback } from "react";
+import { confirmDialog } from "../Customhook/ConfirmContext";
 
 /**
  * Namespaces the localStorage key by the app's own base path, so multiple
@@ -51,10 +52,15 @@ export function useAppVersionCheck({ intervalMs = 10 * 60 * 1000 } = {}) {
       if (currentVersion !== serverVersion) {
         promptShown.current = true;
 
-        const proceed = window.confirm(
-          `A new version of this app is available (v${serverVersion}).\n\n` +
-            `Click OK to update now and get the latest changes.\nClick Cancel to update later.`
-        );
+        const proceed = await confirmDialog({
+          title: "Update available",
+          message:
+            `A new version of this app is available (v${serverVersion}).\n\n` +
+            `Click Update to get the latest changes, or Later to update afterwards.`,
+          confirmText: "Update",
+          cancelText: "Later",
+          variant: "primary",
+        });
 
         if (!proceed) {
           promptShown.current = false;

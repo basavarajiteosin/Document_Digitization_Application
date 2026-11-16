@@ -5,6 +5,7 @@ import {
   FiX, FiFolder, FiFile, FiDownload, FiTrash2, FiSearch, FiUsers, FiUserCheck, FiUserX, FiClock,
   FiInfo, FiShield, FiChevronDown, FiChevronUp,
 } from "react-icons/fi";
+import { useConfirm } from "../../Customhook/ConfirmContext";
 import "./itemDetails.css";
 
 const config = require("../../services/config.json");
@@ -41,6 +42,7 @@ const ItemDetailsModal = ({ item, initialTab = "details", onClose, onChanged }) 
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState(null);
+  const confirm = useConfirm();
 
   const loadDetails = useCallback(async () => {
     try {
@@ -67,7 +69,11 @@ const ItemDetailsModal = ({ item, initialTab = "details", onClose, onChanged }) 
   const refresh = async () => { await Promise.all([loadAccess(), loadDetails()]); onChanged && onChanged(); };
 
   const remove = async (e) => {
-    if (!window.confirm(`Remove ${e.AccessLabel || e.accessLabel} access for ${e.userName}?`)) return;
+    if (!(await confirm({
+      title: "Remove access?",
+      message: `Remove ${e.accessLabel} access for ${e.userName}?`,
+      confirmText: "Yes, remove", variant: "danger",
+    }))) return;
     setBusy(true);
     try {
       const r = await axios.post(`${API}Revoke`, { docType: item.docType, id: item.id, kind: e.kind, entryId: e.entryId });

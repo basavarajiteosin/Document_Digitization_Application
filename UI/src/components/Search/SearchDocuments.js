@@ -5,6 +5,7 @@ import axios from "axios";
 import { toast } from "react-toastify";
 import { Menu, MenuItem, MenuButton, MenuDivider } from "@szhsin/react-menu";
 import "@szhsin/react-menu/dist/index.css";
+import { useConfirm } from "../../Customhook/ConfirmContext";
 import {
   FiFolder, FiFile, FiSearch, FiX, FiFilter, FiMoreVertical, FiExternalLink, FiMapPin, FiDownload,
   FiInfo, FiShield, FiTag, FiClock, FiMessageSquare, FiLink, FiTrash2, FiBriefcase, FiArrowUp, FiArrowDown,
@@ -83,6 +84,7 @@ const SearchDocuments = () => {
   const [detailsItem, setDetailsItem] = useState(null);
   const [collabItem, setCollabItem] = useState(null);
   const [assignItem, setAssignItem] = useState(null);
+  const confirm = useConfirm();
 
   useEffect(() => { setApplied((p) => ({ ...p, q: urlQuery, page: 1 })); }, [urlQuery]);
 
@@ -193,7 +195,11 @@ const SearchDocuments = () => {
   };
 
   const deleteItem = async (i) => {
-    if (!window.confirm(`Delete ${i.docType === "Folder" ? "folder" : "file"} "${i.name}"? This cannot be undone.`)) return;
+    if (!(await confirm({
+      title: `Delete ${i.docType === "Folder" ? "folder" : "file"}?`,
+      message: `Delete ${i.docType === "Folder" ? "folder" : "file"} "${i.name}"? This cannot be undone.`,
+      confirmText: "Yes, delete", variant: "danger",
+    }))) return;
     try {
       const res = i.docType === "Folder"
         ? await axios.post(`${config.DDA_API_API_URL}FolderData/DeleteFolder`, { folderId: i.id, folderName: i.name, deletedBy: me.userID })

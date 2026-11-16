@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
+import { useConfirm } from "../../../Customhook/ConfirmContext";
 import { toast } from "react-toastify";
 import 'react-toastify/dist/ReactToastify.css';
 const config = require("../../../services/config.json");
@@ -10,6 +11,7 @@ const DocumentExtension = () => {
   const [selectedExtensionId, setSelectedExtensionId] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const inputExtensionTypeRef = useRef(null);
+  const confirm = useConfirm();
 
   useEffect(() => {
     fetchDocumentExtensions();
@@ -77,6 +79,7 @@ const DocumentExtension = () => {
   };
 
   const handleDelete = async (extensionId) => {
+    if (!(await confirm({ title: "Delete extension?", message: "This document extension will be permanently deleted.", confirmText: "Yes, delete", variant: "danger" }))) return;
     try {
       const response = await axios.post(
         `${config.DDA_API_API_URL}FieldMaster/DeleteDocExt/${extensionId}`,
@@ -106,42 +109,42 @@ const DocumentExtension = () => {
 
   return (
     <div>
-     
+
       <form
-      className="row"
+        className="row"
         onSubmit={(e) => {
           e.preventDefault();
           handleCreateOrUpdate();
         }}
       >
-      <div className="col-md-12">
-      <div className="form-group">
-          <label htmlFor="extensionType">Document Ext. Type <span className="text-danger">*</span></label>
-          <input
-            type="text"
-            className="form-control form-control-sm mt-2"
-            id="extensionType"
-            ref={inputExtensionTypeRef}
-            value={extensionType}
-            onChange={(e) => setExtensionType(e.target.value)}
-            placeholder="Enter document extension type"
-          />
-        </div>
-        <div className="d-flex align-items-center justify-content-end mb-3">
-          <button type="submit" className="btn btn-sm btn-primary">
-            {isEditing ? "Update" : "Create"}
-          </button>
-          {isEditing && (
-            <button
-              type="button"
-              className="btn btn-xs btn-outline-primary ml-2"
-              onClick={resetForm}
-            >
-              Cancel
+        <div className="col-md-12">
+          <div className="form-group">
+            <label htmlFor="extensionType">Document Ext. Type <span className="text-danger">*</span></label>
+            <input
+              type="text"
+              className="form-control form-control-sm mt-2"
+              id="extensionType"
+              ref={inputExtensionTypeRef}
+              value={extensionType}
+              onChange={(e) => setExtensionType(e.target.value)}
+              placeholder="Enter document extension type"
+            />
+          </div>
+          <div className="d-flex align-items-center justify-content-end mb-3">
+            <button type="submit" className="btn btn-sm btn-primary">
+              {isEditing ? "Update" : "Create"}
             </button>
-          )}
+            {isEditing && (
+              <button
+                type="button"
+                className="btn btn-xs btn-outline-primary ml-2"
+                onClick={resetForm}
+              >
+                Cancel
+              </button>
+            )}
+          </div>
         </div>
-      </div>
       </form>
 
       <table id="example1" className="table table-bordered table-sm mt-3">
@@ -168,7 +171,7 @@ const DocumentExtension = () => {
                   type="button"
                   className="btn bg-gradient-warning btn-xs btn-xs-custom"
                   onClick={() => handleEdit(docExtension)}
-                  
+
                 >
                   <i className="fas fa-pen" ></i>
                 </button>
@@ -176,7 +179,7 @@ const DocumentExtension = () => {
                   type="button"
                   className="btn bg-gradient-danger btn-xs ml-2 btn-xs-custom"
                   onClick={() => handleDelete(docExtension.deId)}
-                  
+
                 >
                   <i className="fas fa-trash" ></i>
                 </button>

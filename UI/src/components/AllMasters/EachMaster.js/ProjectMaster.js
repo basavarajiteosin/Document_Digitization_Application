@@ -4,7 +4,7 @@ import Select from "react-select";
 import { toast } from "react-toastify";
 import { FiEdit2, FiTrash2, FiX, FiFolder, FiFile, FiUsers } from "react-icons/fi";
 import { SpFacepile } from "../../../shared/SpAvatar";
-
+import { useConfirm } from "../../../Customhook/ConfirmContext";
 const config = require("../../../services/config.json");
 const API = `${config.DDA_API_API_URL}Projects/`;
 const ACCESS = { 1: "Read-only", 2: "Read/Write", 3: "Read/Write/Download" };
@@ -36,6 +36,7 @@ const ProjectMaster = () => {
   const [selectedDepts, setSelectedDepts] = useState([]); // [{value: divisionId, label}]
   const [isActive, setIsActive] = useState(true);
   const [selected, setSelected] = useState([]);
+  const confirm = useConfirm();
 
   const load = async () => {
     setLoading(true);
@@ -55,11 +56,11 @@ const ProjectMaster = () => {
     axios
       .get(`${config.DDA_API_API_URL}AuthMasterController/GetAllUsers?ClientId=dmsApp`)
       .then((r) => setUsers((r.data.data || []).filter((u) => u.isActive)))
-      .catch(() => {});
+      .catch(() => { });
     axios
       .get(`${config.DDA_API_API_URL}FieldMaster/GetAllDivisionMasters`)
       .then((r) => setDivisions((r.data.data || []).sort((a, b) => a.description.localeCompare(b.description))))
-      .catch(() => {});
+      .catch(() => { });
     axios
       .get(`${config.DDA_API_API_URL}FieldMaster/GetDepartmentWiseUsers`)
       .then((r) => {
@@ -67,7 +68,7 @@ const ProjectMaster = () => {
         (r.data.data || []).forEach((d) => { map[d.divisionId] = (d.userIds || []).map((x) => x.toLowerCase()); });
         setDeptUsers(map);
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const deptOptions = divisions.map((d) => ({ value: d.divisionId, label: d.description }));
@@ -152,7 +153,12 @@ const ProjectMaster = () => {
   };
 
   const handleDelete = async (p) => {
-    if (!window.confirm(`Delete project "${p.projectName}"? Access granted through it will be removed.`)) return;
+    if (!(await confirm({
+      title: "Delete project?",
+      message: `Delete project "${p.projectName}"? Access granted through it will be removed.`,
+      confirmText: "Yes, delete", variant: "danger",
+    }))) return;
+
     try {
       const res = await axios.post(`${API}Delete/${p.projectId}`);
       if (res.data.success) {
@@ -166,7 +172,12 @@ const ProjectMaster = () => {
   };
 
   const handleUnassign = async (item) => {
-    if (!window.confirm(`Remove "${item.name}" from this project? Members will lose the access granted through it.`)) return;
+    if (!(await confirm({
+      title: "Remove from project?",
+      message: `Remove "${item.name}" from this project? Members will lose the access granted through it.`,
+      confirmText: "Yes, remove", variant: "danger",
+    }))) return;
+
     try {
       const res = await axios.post(`${API}UnassignItem/${item.piId}`);
       if (res.data.success) { toast.success("Removed from project"); load(); }

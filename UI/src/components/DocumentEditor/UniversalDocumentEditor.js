@@ -13,6 +13,7 @@ import { saveDocument, downloadDocument, downloadBytes, isVersionConflict } from
 import { createCollabProvider } from "../../services/collabProvider";
 import { useCollab } from "../../hooks/useCollab";
 import { SpFacepile } from "../../shared/SpAvatar";
+import { useConfirm } from "../../Customhook/ConfirmContext";
 import WordEditor from "./WordEditor";
 import PdfEditor from "./PdfEditor";
 import "./UniversalDocumentEditor.css";
@@ -84,7 +85,7 @@ const UniversalDocumentEditor = ({ file, onClose }) => {
   const peerSaveRef = useRef(null);
   const savedAnyRef = useRef(false);
   const lastSyncErrRef = useRef(0);
-
+  const [wordKey, setWordKey] = useState(0);
   const [state, setState] = useState("loading"); // loading | ready | unsaved | saving | saved | error
   const [meta, setMeta] = useState({ canEdit: false, reason: null, canDownload: false });
   const [wordCtx, setWordCtx] = useState(null);
@@ -96,7 +97,7 @@ const UniversalDocumentEditor = ({ file, onClose }) => {
   const [wordMode, setWordMode] = useState("editing");
   const kind = getEditorKind(file.name);
   const ext = getExtension(file.name);
-
+  const confirm = useConfirm();
   const me = useSelector((s) => s.personalInformationReducer);
   const myId = (me.userID || "").toLowerCase();
   const myName = `${me.firstName || ""} ${me.lastName || ""}`.trim() || "User";
@@ -392,13 +393,19 @@ const UniversalDocumentEditor = ({ file, onClose }) => {
 
   const handleClose = async () => {
     const dirty = dirtyRef.current;
-    if (dirty && canEditRef.current) {
-      if (window.confirm("Save your changes before closing?\n\nOK = save and close, Cancel = discard.")) {
-        if (!(await handleSave())) return;
-      }
+    if (dirty && meta.canEdit) {
+      const save = await confirm({
+        title: "Unsaved changes",
+        message: "Save your changes before closing?",
+        confirmText: "Save & close",
+        cancelText: "Discard",
+        variant: "primary",
+        dismissable: false,
+      });
+      if (save && !(await handleSave())) return;
     }
     cleanup();
-    onClose && onClose(dirty || savedAnyRef.current);
+    onClose && onClose(dirty);
   };
 
   const handleDownload = async () => {
@@ -497,7 +504,7 @@ const UniversalDocumentEditor = ({ file, onClose }) => {
         {state === "loading" && <div className="ude-loading"><FiLoader className="ude-spin" size={28} /> Preparing editor...</div>}
         {kind === "word" && wordCtx && state !== "error" && (
           <WordEditor
-            key={`w-${reloadKey}`}
+            key={`w-${reloadKey}-${wordKey}`}
             file={file}
             buf={wordCtx.buf}
             provider={wordCtx.provider}
@@ -507,7 +514,20 @@ const UniversalDocumentEditor = ({ file, onClose }) => {
             onDirty={markDirty}
             onReady={onWordReady}
             onError={onEditorError}
-            onFallback={(role) => { if (role === "standalone" && wordCtx.canEdit) toast.info("Live co-authoring is unavailable right now; you are editing your own copy."); }}
+            onFallback={(role) => {
+              if (role === "empty") {
+                providerRef.current?.destroy();
+                providerRef.current = null;
+                collabRef.current = false;
+                readyRef.current = false;
+                setLive(false);
+                setWordCtx((c) => (c ? { ...c, provider: null } : c));
+                setWordKey((k) => k + 1);
+                toast.info("Live session state was empty; opened the document directly.");
+                return;
+              }
+              if (role === "standalone" && wordCtx.canEdit) toast.info("Live co-authoring is unavailable right now; you are editing your own copy.");
+            }}
             registerApi={registerApi}
           />
         )}
