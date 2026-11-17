@@ -12,3 +12,9 @@
 .cfm-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 22px; border-top: 1px solid #eef2f7; }
 @media (max-width: 575.98px) { .cfm-body { padding-left: 22px; } }
 @media (prefers-reduced-motion: reduce) { .cfm-dialog { animation: none; } }
+
+
+.cfm-field { display: block; margin-top: 10px; }
+.cfm-field span { display: block; margin-bottom: 4px; font-size: 12px; font-weight: 600; color: #334155; }
+.cfm-input { width: 100%; height: 38px; padding: 0 12px; border: 1px solid #dbe3f0; border-radius: 12px; background: #f8fafc; font-size: 13.5px; color: #0f172a; }
+.cfm-input:focus { outline: 0; background: #fff; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, .16); }

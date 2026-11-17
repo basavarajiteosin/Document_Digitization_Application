@@ -3,9 +3,10 @@ import axios from "axios";
 const config = require("./config.json");
 
 const TYPE_MAP = {
-  docx: "word", xlsx: "cell", xls: "cell", pptx: "slide", pdf: "pdf",
+  docx: "word", xlsx: "cell", xls: "cell", xlsb: "cell", pptx: "slide", pdf: "pdf",
   txt: "text", log: "text", md: "text", json: "text", xml: "text",
-  zip: "zip",
+  zip: "zip", rar: "rar", rtf: "rtf", eml: "email", msg: "email",
+  mp4: "video", webm: "video", m4v: "video",
 };
 
 export const getExtension = (name = "") =>

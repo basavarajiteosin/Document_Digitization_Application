@@ -1028,3 +1028,39 @@ span.ude-pdfv-handle {
     display: none;
   }
 }
+
+
+.ude-badge-rtf { background: #2b579a; }
+.ude-badge-email { background: #0f766e; }
+.ude-badge-video { background: #7c3aed; }
+.ude-badge-rar { background: #8a6d00; }
+
+/* RTF */
+.ude-rtf, .ude-mail, .ude-video, .ude-rar { position: absolute; inset: 0; display: flex; flex-direction: column; background: #fff; }
+.ude-rtf-view { flex: 1; min-height: 0; overflow: auto; background: #e9edf3; padding: 20px 24px 40px; }
+.ude-rtf-page { max-width: 860px; margin: 0 auto; padding: 40px 56px; background: #fff; box-shadow: 0 2px 12px rgba(15, 23, 42, .2); min-height: 600px; }
+.ude-rtf-src { flex: 1; min-height: 0; position: relative; }
+.ude-tx-zoom { min-width: 44px; text-align: center; color: #475569; font-size: 12.5px; }
+
+/* Email */
+.ude-mail-body { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; background: #f8fafc; }
+.ude-mail-head { flex: none; padding: 16px 22px 10px; background: #fff; border-bottom: 1px solid #e2e8f0; }
+.ude-mail-head h3 { margin: 0 0 8px; font-size: 18px; font-weight: 700; color: #0f172a; }
+.ude-mail-head dl { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 2px 10px; margin: 0; font-size: 12.5px; }
+.ude-mail-head dt { color: #64748b; font-weight: 600; }
+.ude-mail-head dd { margin: 0; color: #0f172a; word-break: break-word; }
+.ude-mail-att { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.ude-mail-att button { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid #dbe3f0; border-radius: 999px; background: #f8fafc; font-size: 12px; color: #1e293b; cursor: pointer; }
+.ude-mail-att button:hover { background: #eaf1ff; border-color: #bfd3ff; }
+.ude-mail-att small { color: #64748b; }
+.ude-mail-frame { flex: 1; min-height: 300px; width: 100%; border: 0; background: #fff; }
+.ude-mail-headers { margin: 0; padding: 16px 22px; white-space: pre-wrap; word-break: break-all; font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; color: #334155; }
+
+/* Video */
+.ude-video-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; background: #0f172a; }
+.ude-video-stage .plyr { width: 100%; max-height: 100%; }
+.ude-video-stage video { max-height: calc(100vh - 150px); }
+.ude-video-info { margin-left: auto; font-size: 12px; color: #64748b; }
+
+/* RAR */
+.ude-rar-body { flex: 1; min-height: 0; position: relative; }

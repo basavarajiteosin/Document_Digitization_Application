@@ -19,8 +19,15 @@ import PdfEditor from "./PdfEditor";
 import "./UniversalDocumentEditor.css";
 import TextEditor from "./TextEditor";
 import ZipEditor from "./ZipEditor";
+import RtfEditor from "./RtfEditor";
+import EmailViewer from "./EmailViewer";
+import VideoViewer from "./VideoViewer";
+import RarViewer from "./RarViewer";
 
-const KIND_LABEL = { word: "Document", cell: "Spreadsheet", slide: "Presentation", pdf: "PDF", text: "Text", zip: "Archive" };
+const KIND_LABEL = {
+  word: "Document", cell: "Spreadsheet", slide: "Presentation", pdf: "PDF", text: "Text", zip: "Archive",
+  rar: "Archive", rtf: "RTF", email: "Email", video: "Video",
+};
 const AUTOSAVE_MS = 45000;
 const WORD_MODES = [["editing", "Editing"], ["suggesting", "Suggesting"], ["viewing", "Viewing"]];
 const errMsg = (e, fallback) => e?.response?.data?.message || e?.message || fallback;
@@ -269,11 +276,13 @@ const UniversalDocumentEditor = ({ file, onClose }) => {
         const access = await fetchEditorAccess(file.id);
         if (!alive) return;
         versionRef.current = access.currentVersion;
-        const canEdit = !!access.canUpload;
+        const viewOnly = ext === "msg" || kind === "rar" || kind === "video";
+        const canEdit = !!access.canUpload && !viewOnly;
         canEditRef.current = canEdit;
         const reason = canEdit ? null
-          : access.isLocked && !access.lockedByMe ? `Checked out by ${access.lockedByName}. Opened read-only.`
-            : "You have read-only access to this file.";
+          : viewOnly ? "This format is view-only. Use Download to keep a copy."
+            : access.isLocked && !access.lockedByMe ? `Checked out by ${access.lockedByName}. Opened read-only.`
+              : "You have read-only access to this file.";
         setMeta({ canEdit, reason, canDownload: !!access.canUpload });
 
         const buf = await fetchDocumentBuffer(file.id);
@@ -292,7 +301,9 @@ const UniversalDocumentEditor = ({ file, onClose }) => {
           readyRef.current = true;
           if (canEdit) sheet.change(markDirty);
           getBytesRef.current = async () =>
-            XLSX.write(workbookFromSheets(sheetRef.current.getData()), { bookType: ext === "xls" ? "biff8" : "xlsx", type: "array" });
+            XLSX.write(workbookFromSheets(sheetRef.current.getData()), {
+              bookType: ext === "xls" ? "biff8" : ext === "xlsb" ? "xlsb" : "xlsx", type: "array",
+            });
         } else if (kind === "word") {
           const provider = await createCollabProvider(file.id, myName, { onError: notifySyncError });
           if (!alive) { provider?.destroy(); return; }
@@ -309,9 +320,9 @@ const UniversalDocumentEditor = ({ file, onClose }) => {
           canEditRef.current = editable;
           setPdfCtx({ bytes: buf, ydoc: provider ? provider.ydoc : new Y.Doc(), version: access.currentVersion, canEdit: editable });
           return; // ready is signalled by PdfEditor.onReady
-        } else if (kind === "text" || kind === "zip") {
+        } else if (["text", "zip", "rtf", "email", "rar", "video"].includes(kind)) {
           setPlainCtx({ buf, canEdit });
-          return; // ready is signalled by TextEditor / ZipEditor onReady
+          return; // ready is signalled by the editor's onReady
         }
         else if (kind === "slide") {
           el.classList.add("ude-scroll");
@@ -579,8 +590,22 @@ const UniversalDocumentEditor = ({ file, onClose }) => {
             registerApi={registerApi}
           />
         )}
+        {kind === "rtf" && plainCtx && state !== "error" && (
+          <RtfEditor key={`r-${reloadKey}`} file={file} buf={plainCtx.buf} canEdit={plainCtx.canEdit}
+            onReady={onPdfReady} onDirty={markDirty} onError={onEditorError} registerApi={registerApi} />
+        )}
+        {kind === "email" && plainCtx && state !== "error" && (
+          <EmailViewer key={`m-${reloadKey}`} file={file} buf={plainCtx.buf} canEdit={plainCtx.canEdit}
+            onReady={onPdfReady} onDirty={markDirty} onError={onEditorError} registerApi={registerApi} />
+        )}
+        {kind === "rar" && plainCtx && state !== "error" && (
+          <RarViewer key={`ra-${reloadKey}`} file={file} buf={plainCtx.buf} onReady={onPdfReady} onError={onEditorError} />
+        )}
+        {kind === "video" && plainCtx && state !== "error" && (
+          <VideoViewer key={`v-${reloadKey}`} file={file} buf={plainCtx.buf} onReady={onPdfReady} onError={onEditorError} />
+        )}
         <div ref={holderRef} className="ude-holder"
-          style={{ display: state === "error" || ["word", "pdf", "text", "zip"].includes(kind) ? "none" : "block" }} />
+          style={{ display: state === "error" || ["word", "pdf", "text", "zip", "rtf", "email", "rar", "video"].includes(kind) ? "none" : "block" }} />
       </div>
     </div>
   );

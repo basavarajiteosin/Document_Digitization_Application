@@ -8,16 +8,23 @@ let globalConfirm = null;
 export const confirmDialog = (opts) => (globalConfirm ? globalConfirm(opts) : Promise.resolve(false));
 
 /**
- * confirm({ title, message, confirmText, cancelText, variant: "danger" | "warning" | "primary", dismissable })
+ * confirm({ title, message, confirmText, cancelText, variant: "danger" | "warning" | "primary", dismissable,
+ *           input: { label, defaultValue, placeholder } })
  * or confirm("message") -> Promise<boolean>
+ * With `input`, resolves to the trimmed string on confirm, or false on cancel.
  */
 export const ConfirmProvider = ({ children }) => {
   const [dlg, setDlg] = useState(null);
+  const [value, setValue] = useState("");
   const resolver = useRef(null);
+  const valueRef = useRef("");
 
   const confirm = useCallback((opts) => new Promise((resolve) => {
-    resolver.current = resolve;
     const o = typeof opts === "string" ? { message: opts } : opts || {};
+    const initial = o.input?.defaultValue || "";
+    valueRef.current = initial;
+    setValue(initial);
+    resolver.current = (ok) => resolve(ok ? (o.input ? valueRef.current.trim() : true) : false);
     setDlg({
       title: o.title || "Are you sure?",
       message: o.message || "",
@@ -25,6 +32,7 @@ export const ConfirmProvider = ({ children }) => {
       cancelText: o.cancelText || "Cancel",
       variant: o.variant || "warning",
       dismissable: o.dismissable !== false,
+      input: o.input || null,
     });
   }), []);
 
@@ -55,10 +63,26 @@ export const ConfirmProvider = ({ children }) => {
               <span className={`cfm-icon ${dlg.variant}`}><i className={`fas ${dlg.variant === "danger" ? "fa-trash" : dlg.variant === "primary" ? "fa-question" : "fa-exclamation"}`} /></span>
               <h2 id="cfm-title">{dlg.title}</h2>
             </div>
-            <div className="cfm-body" id="cfm-msg">{dlg.message}</div>
+            <div className="cfm-body" id="cfm-msg">
+              {dlg.message}
+              {dlg.input && (
+                <label className="cfm-field">
+                  {dlg.input.label && <span>{dlg.input.label}</span>}
+                  <input
+                    type="text"
+                    className="cfm-input"
+                    autoFocus
+                    value={value}
+                    placeholder={dlg.input.placeholder || ""}
+                    onChange={(e) => { valueRef.current = e.target.value; setValue(e.target.value); }}
+                    onFocus={(e) => e.target.select()}
+                  />
+                </label>
+              )}
+            </div>
             <div className="cfm-foot">
               <button type="button" className="btn btn-default btn-sm" onClick={() => close(false)}>{dlg.cancelText}</button>
-              <button type="button" autoFocus className={`btn btn-sm ${dlg.variant === "danger" ? "btn-danger" : dlg.variant === "primary" ? "btn-primary" : "btn-warning"}`} onClick={() => close(true)}>
+              <button type="button" autoFocus={!dlg.input} className={`btn btn-sm ${dlg.variant === "danger" ? "btn-danger" : dlg.variant === "primary" ? "btn-primary" : "btn-warning"}`} onClick={() => close(true)}>
                 {dlg.confirmText}
               </button>
             </div>
