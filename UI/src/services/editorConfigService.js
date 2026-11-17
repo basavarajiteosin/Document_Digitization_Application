@@ -2,7 +2,11 @@ import axios from "axios";
 
 const config = require("./config.json");
 
-const TYPE_MAP = { docx: "word", xlsx: "cell", xls: "cell", pptx: "slide", pdf: "pdf" };
+const TYPE_MAP = {
+  docx: "word", xlsx: "cell", xls: "cell", pptx: "slide", pdf: "pdf",
+  txt: "text", log: "text", md: "text", json: "text", xml: "text",
+  zip: "zip",
+};
 
 export const getExtension = (name = "") =>
   name.includes(".") ? name.split(".").pop().toLowerCase() : "";

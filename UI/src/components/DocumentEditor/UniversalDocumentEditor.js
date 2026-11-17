@@ -17,8 +17,10 @@ import { useConfirm } from "../../Customhook/ConfirmContext";
 import WordEditor from "./WordEditor";
 import PdfEditor from "./PdfEditor";
 import "./UniversalDocumentEditor.css";
+import TextEditor from "./TextEditor";
+import ZipEditor from "./ZipEditor";
 
-const KIND_LABEL = { word: "Document", cell: "Spreadsheet", slide: "Presentation", pdf: "PDF" };
+const KIND_LABEL = { word: "Document", cell: "Spreadsheet", slide: "Presentation", pdf: "PDF", text: "Text", zip: "Archive" };
 const AUTOSAVE_MS = 45000;
 const WORD_MODES = [["editing", "Editing"], ["suggesting", "Suggesting"], ["viewing", "Viewing"]];
 const errMsg = (e, fallback) => e?.response?.data?.message || e?.message || fallback;
@@ -90,6 +92,7 @@ const UniversalDocumentEditor = ({ file, onClose }) => {
   const [meta, setMeta] = useState({ canEdit: false, reason: null, canDownload: false });
   const [wordCtx, setWordCtx] = useState(null);
   const [pdfCtx, setPdfCtx] = useState(null);
+  const [plainCtx, setPlainCtx] = useState(null);
   const [errorText, setErrorText] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
   const [stale, setStale] = useState(false);
@@ -138,6 +141,7 @@ const UniversalDocumentEditor = ({ file, onClose }) => {
     dirtyRef.current = false;
     setWordCtx(null);
     setPdfCtx(null);
+    setPlainCtx(null);
     setStale(false);
     setLive(false);
     setErrorText("");
@@ -305,7 +309,11 @@ const UniversalDocumentEditor = ({ file, onClose }) => {
           canEditRef.current = editable;
           setPdfCtx({ bytes: buf, ydoc: provider ? provider.ydoc : new Y.Doc(), version: access.currentVersion, canEdit: editable });
           return; // ready is signalled by PdfEditor.onReady
-        } else if (kind === "slide") {
+        } else if (kind === "text" || kind === "zip") {
+          setPlainCtx({ buf, canEdit });
+          return; // ready is signalled by TextEditor / ZipEditor onReady
+        }
+        else if (kind === "slide") {
           el.classList.add("ude-scroll");
           const zip = await JSZip.loadAsync(buf);
           const num = (n) => +n.match(/slide(\d+)\.xml$/)[1];
@@ -380,6 +388,7 @@ const UniversalDocumentEditor = ({ file, onClose }) => {
           }
           readyRef.current = true;
         }
+
         if (alive) setState("ready");
       } catch (e) {
         if (!alive) return;
@@ -546,8 +555,32 @@ const UniversalDocumentEditor = ({ file, onClose }) => {
             registerApi={registerApi}
           />
         )}
+        {kind === "text" && plainCtx && state !== "error" && (
+          <TextEditor
+            key={`t-${reloadKey}`}
+            file={file}
+            buf={plainCtx.buf}
+            canEdit={plainCtx.canEdit}
+            onReady={onPdfReady}
+            onDirty={markDirty}
+            onError={onEditorError}
+            registerApi={registerApi}
+          />
+        )}
+        {kind === "zip" && plainCtx && state !== "error" && (
+          <ZipEditor
+            key={`z-${reloadKey}`}
+            file={file}
+            buf={plainCtx.buf}
+            canEdit={plainCtx.canEdit}
+            onReady={onPdfReady}
+            onDirty={markDirty}
+            onError={onEditorError}
+            registerApi={registerApi}
+          />
+        )}
         <div ref={holderRef} className="ude-holder"
-          style={{ display: state === "error" || kind === "word" || kind === "pdf" ? "none" : "block" }} />
+          style={{ display: state === "error" || ["word", "pdf", "text", "zip"].includes(kind) ? "none" : "block" }} />
       </div>
     </div>
   );
