@@ -23,10 +23,13 @@ import RtfEditor from "./RtfEditor";
 import EmailViewer from "./EmailViewer";
 import VideoViewer from "./VideoViewer";
 import RarViewer from "./RarViewer";
+import CsvEditor from "./CsvEditor";
+import PstViewer from "./PstViewer";
+import ImageViewer from "./ImageViewer";
 
 const KIND_LABEL = {
   word: "Document", cell: "Spreadsheet", slide: "Presentation", pdf: "PDF", text: "Text", zip: "Archive",
-  rar: "Archive", rtf: "RTF", email: "Email", video: "Video",
+  rar: "Archive", rtf: "RTF", email: "Email", video: "Video", csv: "CSV", pst: "Mailbox", image: "Image", audio: "Audio",
 };
 const AUTOSAVE_MS = 45000;
 const WORD_MODES = [["editing", "Editing"], ["suggesting", "Suggesting"], ["viewing", "Viewing"]];
@@ -276,7 +279,7 @@ const UniversalDocumentEditor = ({ file, onClose }) => {
         const access = await fetchEditorAccess(file.id);
         if (!alive) return;
         versionRef.current = access.currentVersion;
-        const viewOnly = ext === "msg" || kind === "rar" || kind === "video";
+        const viewOnly = ext === "msg" || ["rar", "video", "audio", "pst", "image"].includes(kind);
         const canEdit = !!access.canUpload && !viewOnly;
         canEditRef.current = canEdit;
         const reason = canEdit ? null
@@ -302,7 +305,7 @@ const UniversalDocumentEditor = ({ file, onClose }) => {
           if (canEdit) sheet.change(markDirty);
           getBytesRef.current = async () =>
             XLSX.write(workbookFromSheets(sheetRef.current.getData()), {
-              bookType: ext === "xls" ? "biff8" : ext === "xlsb" ? "xlsb" : "xlsx", type: "array",
+              bookType: ext === "xls" ? "biff8" : ext === "xlsb" ? "xlsb" : ext === "ods" ? "ods" : "xlsx", type: "array",
             });
         } else if (kind === "word") {
           const provider = await createCollabProvider(file.id, myName, { onError: notifySyncError });
@@ -320,7 +323,7 @@ const UniversalDocumentEditor = ({ file, onClose }) => {
           canEditRef.current = editable;
           setPdfCtx({ bytes: buf, ydoc: provider ? provider.ydoc : new Y.Doc(), version: access.currentVersion, canEdit: editable });
           return; // ready is signalled by PdfEditor.onReady
-        } else if (["text", "zip", "rtf", "email", "rar", "video"].includes(kind)) {
+        } else if (["text", "zip", "rtf", "email", "rar", "video", "audio", "csv", "pst", "image"].includes(kind)) {
           setPlainCtx({ buf, canEdit });
           return; // ready is signalled by the editor's onReady
         }
@@ -601,11 +604,21 @@ const UniversalDocumentEditor = ({ file, onClose }) => {
         {kind === "rar" && plainCtx && state !== "error" && (
           <RarViewer key={`ra-${reloadKey}`} file={file} buf={plainCtx.buf} onReady={onPdfReady} onError={onEditorError} />
         )}
-        {kind === "video" && plainCtx && state !== "error" && (
+       {(kind === "video" || kind === "audio") && plainCtx && state !== "error" && (
           <VideoViewer key={`v-${reloadKey}`} file={file} buf={plainCtx.buf} onReady={onPdfReady} onError={onEditorError} />
         )}
+                {kind === "csv" && plainCtx && state !== "error" && (
+          <CsvEditor key={`c-${reloadKey}`} file={file} buf={plainCtx.buf} canEdit={plainCtx.canEdit}
+            onReady={onPdfReady} onDirty={markDirty} onError={onEditorError} registerApi={registerApi} />
+        )}
+        {kind === "pst" && plainCtx && state !== "error" && (
+          <PstViewer key={`pst-${reloadKey}`} file={file} buf={plainCtx.buf} onReady={onPdfReady} onError={onEditorError} />
+        )}
+        {kind === "image" && plainCtx && state !== "error" && (
+          <ImageViewer key={`i-${reloadKey}`} file={file} buf={plainCtx.buf} onReady={onPdfReady} onError={onEditorError} />
+        )}
         <div ref={holderRef} className="ude-holder"
-          style={{ display: state === "error" || ["word", "pdf", "text", "zip", "rtf", "email", "rar", "video"].includes(kind) ? "none" : "block" }} />
+          style={{ display: state === "error" || ["word", "pdf", "text", "zip", "rtf", "email", "rar", "video", "audio", "csv", "pst", "image"].includes(kind) ? "none" : "block" }} />
       </div>
     </div>
   );

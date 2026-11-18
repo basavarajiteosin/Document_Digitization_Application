@@ -3,10 +3,15 @@ import axios from "axios";
 const config = require("./config.json");
 
 const TYPE_MAP = {
-  docx: "word", xlsx: "cell", xls: "cell", xlsb: "cell", pptx: "slide", pdf: "pdf",
-  txt: "text", log: "text", md: "text", json: "text", xml: "text",
-  zip: "zip", rar: "rar", rtf: "rtf", eml: "email", msg: "email",
+  docx: "word", xlsx: "cell", xls: "cell", xlsb: "cell", ods: "cell", pptx: "slide", pdf: "pdf",
+  txt: "text", log: "text", md: "text", json: "text", xml: "text", yml: "text", yaml: "text",
+  ini: "text", cfg: "text", conf: "text", properties: "text", sql: "text", sh: "text", bat: "text",
+  py: "text", js: "text", jsx: "text", ts: "text", css: "text", html: "text", htm: "text", java: "text", cs: "text",
+  csv: "csv", tsv: "csv",
+  zip: "zip", rar: "rar", rtf: "rtf", eml: "email", msg: "email", pst: "pst",
   mp4: "video", webm: "video", m4v: "video",
+  mp3: "audio", wav: "audio", ogg: "audio", m4a: "audio", aac: "audio",
+  png: "image", jpg: "image", jpeg: "image", gif: "image", webp: "image", svg: "image", bmp: "image",
 };
 
 export const getExtension = (name = "") =>

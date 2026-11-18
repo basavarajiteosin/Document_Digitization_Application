@@ -9,6 +9,12 @@ import { syntaxHighlighting, defaultHighlightStyle, bracketMatching } from "@cod
 import { json } from "@codemirror/lang-json";
 import { markdown } from "@codemirror/lang-markdown";
 import { xml } from "@codemirror/lang-xml";
+import { javascript } from "@codemirror/lang-javascript";
+import { css } from "@codemirror/lang-css";
+import { html } from "@codemirror/lang-html";
+import { sql } from "@codemirror/lang-sql";
+import { yaml } from "@codemirror/lang-yaml";
+import { python } from "@codemirror/lang-python";
 import { FiCornerUpLeft, FiCornerUpRight, FiSearch } from "react-icons/fi";
 
 const SETTINGS_KEY = "ude.text.settings";
@@ -21,19 +27,19 @@ const loadSettings = () => {
   try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") }; } catch { return DEFAULTS; }
 };
 
-const detectEncoding = (buf) => {
+export const detectEncoding = (buf) => {
   const u = new Uint8Array(buf);
   if (u[0] === 0xef && u[1] === 0xbb && u[2] === 0xbf) return "utf-8-bom";
   if (u[0] === 0xff && u[1] === 0xfe) return "utf-16le";
   try { new TextDecoder("utf-8", { fatal: true }).decode(u); return "utf-8"; } catch { return "latin1"; }
 };
 
-const decode = (buf, enc) => {
+export const decode = (buf, enc) => {
   const label = enc === "utf-16le" ? "utf-16le" : enc === "latin1" ? "windows-1252" : "utf-8";
   return new TextDecoder(label).decode(new Uint8Array(buf)); // strips BOM
 };
 
-const encode = (text, enc) => {
+export const encode = (text, enc) => {
   if (enc === "utf-16le") {
     const out = new Uint8Array(2 + text.length * 2);
     out[0] = 0xff; out[1] = 0xfe;
@@ -61,7 +67,14 @@ const langFor = (name = "") => {
   const e = name.split(".").pop().toLowerCase();
   if (e === "json") return json();
   if (e === "md") return markdown();
-  if (e === "xml" || e === "html") return xml();
+  if (e === "xml") return xml();
+  if (e === "html" || e === "htm") return html();
+  if (e === "js" || e === "jsx") return javascript({ jsx: true });
+  if (e === "ts") return javascript({ typescript: true });
+  if (e === "css") return css();
+  if (e === "sql") return sql();
+  if (e === "yml" || e === "yaml") return yaml();
+  if (e === "py") return python();
   return [];
 };
 
