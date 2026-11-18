@@ -202,5 +202,16 @@ namespace DDAAPI.Hubs
             await Clients.Group(Group(fileId)).SendAsync("PresenceChanged", payload);
             return payload;
         }
+
+        /// <summary>Clears stale/blank shared state so the next writer re-seeds it from the file.</summary>
+        public Task ResetDoc(int fileId)
+        {
+            if (!CanWrite(fileId)) return Task.CompletedTask;
+            if (Rooms.TryGetValue(fileId, out var room) &&
+                room.Values.Select(v => v.UserId).Distinct().Count() > 1)
+                return Task.CompletedTask;   // others are editing: never wipe a live session
+            Docs.TryRemove(fileId, out _);
+            return Task.CompletedTask;
+        }
     }
 }

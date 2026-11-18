@@ -112,24 +112,31 @@ const WordEditor = ({ file, buf, provider, canEdit, mode, user, onReady, onDirty
           user: { name: user.name, email: user.email || "" },
           pagination: true,
           rulers: editable,
-                   onReady: () => {
+          onReady: () => {
             ready = true;
             readyRef.current = true;
             if (pendingDestroy) { teardown(); return; }
             if (!alive) return;
-            cb.current.onReady?.({ collab, editable });
 
-            // Live session shows an empty page although the file has content
-            // (stale/empty shared Yjs state): reopen without the shared state.
-            if (collab) {
-              (async () => {
-                if (!(await docxHasText(buf))) return;
-                await new Promise((r) => setTimeout(r, 2000));
+            // Solo mode: ready immediately.
+            if (!collab) { cb.current.onReady?.({ collab, editable }); return; }
+
+            // Live mode: keep the loading overlay up until the shared document really
+            // contains the file's text; otherwise fall back silently (no blank flash).
+            (async () => {
+              if (await docxHasText(buf)) {
+                const deadline = Date.now() + 6000;
+                let ok = false;
+                while (alive && Date.now() < deadline) {
+                  const txt = sd?.activeEditor?.state?.doc?.textContent || "";
+                  if (txt.trim()) { ok = true; break; }
+                  await new Promise((r) => setTimeout(r, 250));
+                }
                 if (!alive) return;
-                const txt = sdRef.current?.activeEditor?.state?.doc?.textContent || "";
-                if (!txt.trim()) cb.current.onFallback?.("empty");
-              })();
-            }
+                if (!ok) { cb.current.onFallback?.("empty"); return; }
+              }
+              cb.current.onReady?.({ collab, editable });
+            })();
           },
           onEditorUpdate: () => { if (alive && ready && !collab) cb.current.onDirty?.(); },
           onContentError: (ev) => alive && cb.current.onError?.(ev?.error || new Error("This document could not be parsed.")),

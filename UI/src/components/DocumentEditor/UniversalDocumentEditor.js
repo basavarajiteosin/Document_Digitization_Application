@@ -539,6 +539,7 @@ const UniversalDocumentEditor = ({ file, onClose }) => {
             onError={onEditorError}
             onFallback={(role) => {
               if (role === "empty") {
+                providerRef.current?.reset?.();
                 providerRef.current?.destroy();
                 providerRef.current = null;
                 collabRef.current = false;
@@ -546,7 +547,6 @@ const UniversalDocumentEditor = ({ file, onClose }) => {
                 setLive(false);
                 setWordCtx((c) => (c ? { ...c, provider: null } : c));
                 setWordKey((k) => k + 1);
-                toast.info("Live session state was empty; opened the document directly.");
                 return;
               }
               if (role === "standalone" && wordCtx.canEdit) toast.info("Live co-authoring is unavailable right now; you are editing your own copy.");
@@ -604,10 +604,10 @@ const UniversalDocumentEditor = ({ file, onClose }) => {
         {kind === "rar" && plainCtx && state !== "error" && (
           <RarViewer key={`ra-${reloadKey}`} file={file} buf={plainCtx.buf} onReady={onPdfReady} onError={onEditorError} />
         )}
-       {(kind === "video" || kind === "audio") && plainCtx && state !== "error" && (
+        {(kind === "video" || kind === "audio") && plainCtx && state !== "error" && (
           <VideoViewer key={`v-${reloadKey}`} file={file} buf={plainCtx.buf} onReady={onPdfReady} onError={onEditorError} />
         )}
-                {kind === "csv" && plainCtx && state !== "error" && (
+        {kind === "csv" && plainCtx && state !== "error" && (
           <CsvEditor key={`c-${reloadKey}`} file={file} buf={plainCtx.buf} canEdit={plainCtx.canEdit}
             onReady={onPdfReady} onDirty={markDirty} onError={onEditorError} registerApi={registerApi} />
         )}

@@ -40,7 +40,7 @@ export const createCollabProvider = async (rawFileId, userName, { onError } = {}
   // The hub always sends numeric ids; normalise so string ids from the UI still match.
   const fileId = Number(rawFileId);
   if (!fileId) return null;
-  let detach = () => {};
+  let detach = () => { };
   try {
     const conn = await collabConnection();
     if (!conn || conn.state !== "Connected") return null;
@@ -65,7 +65,7 @@ export const createCollabProvider = async (rawFileId, userName, { onError } = {}
       waiters.clear();
     };
     const apply = (b64) => Y.applyUpdate(ydoc, fromB64(b64), REMOTE);
-    const sendQuiet = (method, ...args) => conn.send(method, fileId, ...args).catch(() => {});
+    const sendQuiet = (method, ...args) => conn.send(method, fileId, ...args).catch(() => { });
     const send = (method, ...args) => conn.send(method, fileId, ...args).catch(fail);
 
     const onDoc = (fid, b64) => {
@@ -160,9 +160,9 @@ export const createCollabProvider = async (rawFileId, userName, { onError } = {}
       document: ydoc,
       synced: false,
       isSynced: false,
-      connect() {},
-      disconnect() {},
-      destroy() {},
+      connect() { },
+      disconnect() { },
+      destroy() { },
     });
     const markSynced = () => {
       adapter.synced = true;
@@ -183,6 +183,7 @@ export const createCollabProvider = async (rawFileId, userName, { onError } = {}
       markSynced,
       waitForContent,
       compact,
+      reset: () => conn.invoke("ResetDoc", fileId).catch(() => { }),
       rejoin: async () => {
         if (destroyed) return;
         try {
