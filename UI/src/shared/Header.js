@@ -556,69 +556,6 @@ const Header = () => {
                 </button>
               </div>
             )}
-            {recentUploads.length === 0 ? (
-              <div className="sp-dd-empty">You&apos;re all caught up.</div>
-            ) : (
-              <div className="sp-dd-list">
-                {recentUploads.map((file) => (
-                  <div className="sp-notif-item" key={file.id}>
-                    <span
-                      className={
-                        file.status === "completed"
-                          ? "sp-ok"
-                          : file.status === "failed"
-                            ? "sp-err"
-                            : ""
-                      }
-                    >
-                      {file.status === "completed" ? (
-                        <FiCheckCircle size={18} />
-                      ) : file.status === "failed" ? (
-                        <FiAlertCircle size={18} />
-                      ) : (
-                        <FiUploadCloud size={18} />
-                      )}
-                    </span>
-                    <div className="sp-notif-body">
-                      <div className="sp-notif-name" title={file.name}>
-                        {file.name}
-                      </div>
-                      <div className="sp-notif-sub">
-                        {file.status === "completed"
-                          ? "Upload complete"
-                          : file.status === "failed"
-                            ? "Upload failed"
-                            : file.status === "cancelled"
-                              ? "Cancelled"
-                              : file.status === "queued"
-                                ? "Waiting…"
-                                : `Uploading… ${Math.round(file.progress)}%`}
-                      </div>
-                      {file.status === "uploading" && (
-                        <div className="sp-progress">
-                          <span style={{ width: `${file.progress}%` }} />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            {uploadQueue.length > 0 && (
-              <div className="sp-dd-foot">
-                <button type="button" className="sp-link-btn" onClick={openUploadPanel}>
-                  View upload panel
-                </button>
-                <button
-                  type="button"
-                  className="sp-link-btn"
-                  onClick={clearCompletedUploads}
-                  disabled={uploadingCount > 0 && uploadQueue.length === uploadingCount}
-                >
-                  Clear completed
-                </button>
-              </div>
-            )}
           </DropdownWrap>
 
           {/* Profile */}

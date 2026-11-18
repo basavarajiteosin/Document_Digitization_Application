@@ -1169,83 +1169,6 @@ const ExternalUserAccess = () => {
     localStorage.getItem("activeTab") || "shared"
   );
 
-
-  // const fetchFolders = async (parentId) => {
-  //     // Retrieve accessType and token from localStorage
-  //     const accessType = Number(localStorage.getItem("accessType"));
-  //     const tokenExists = sessionStorage.getItem('token');
-  //     const storedToken = tokenExists || null; // Get the token value for filtering
-  //     let url;
-
-  //     console.log("=== Inside fetchFolders ===");
-  //     console.log("Parent ID:", parentId);
-  //     console.log("Access Type (inside fetchFolders):", accessType);
-
-  //     try {
-  //         // Determine the URL based on the existence of parentId
-  //         if (tokenExists) {
-  //             url = `${config.DDA_API_API_URL}FolderData/GetShareAccessByEmailId/${emailId}`; // Call the external user API
-  //         }
-
-  //         // If a parentId is provided, fetch files and folders by parentId
-  //         if (parentId !== null && parentId !== undefined && parentId !== 0) {
-  //             url = `${config.DDA_API_API_URL}FolderData/GetAllFilesAndFoldersByParentId/${parentId}`;
-  //         }
-
-  //         console.log("Fetching from URL:", url); // Log the URL to check correctness
-
-  //         // Make the API call
-  //         const response = await axios.get(url);
-
-  //         console.log("API Response:", response.data); // Log the response for validation
-
-  //         // Check if the response is successful
-  //         if (response.data.success) {
-  //             const usersResponse = await axios.get(
-  //                 `${config.DDA_API_API_URL}AuthMasterController/GetAllUsers?ClientId=DmsApp`
-  //             );
-
-  //             // Create a map of userID to full name
-  //             const userMap = {};
-  //             usersResponse.data.data.forEach(user => {
-  //                 userMap[user.userID] = `${user.firstName} ${user.lastName}`;
-  //             });
-
-  //             // Map through the fetched data to include accessType and username
-  //             const foldersWithAccessType = response.data.data
-  //                 .filter(item => {
-  //                     // Apply token match filtering only when parentId is zero
-  //                     if (parentId === 0) {
-  //                         return item.token === storedToken; // Filter based on token match
-  //                     }
-  //                     return true; // Include all items when parentId is valid
-  //                 })
-  //                 .map(item => {
-  //                     // Determine the username based on createdBy
-  //                     const username = userMap[item.createdBy] || "Unknown User"; // Default to "Unknown User" if not found
-
-  //                     return {
-  //                         ...item,
-  //                         accessType: (parentId !== null && parentId !== undefined && parentId !== 0)
-  //                             ? accessType // Set accessType from localStorage
-  //                             : item.accessType !== undefined ? item.accessType : null, // Default to fetched accessType
-  //                         username: username // Add username to the folder data
-  //                     };
-  //                 });
-
-  //             setFolders(foldersWithAccessType);
-  //             console.log(foldersWithAccessType, "data of folders with access type and username");
-  //         } else {
-  //             toast.error("Failed to fetch folders or files");
-  //         }
-  //     } catch (error) {
-  //         console.error("Error fetching folders or files:", error);
-  //         toast.error("Error fetching folders or files");
-  //     } finally {
-  //         // hideLoader(); // Hide loader after the API call is done
-  //     }
-  // };
-
   const fetchFolders = async (parentId) => {
     const accessType = Number(localStorage.getItem("accessType"));
     const tokenExists = sessionStorage.getItem("token");
@@ -1357,7 +1280,6 @@ const ExternalUserAccess = () => {
     <>
       <section className="content ">
         <div className="container-fluid">
-          <div className="">
 
 
             <div className="card-body-custom text-sm scroll-content-sub">
@@ -1383,7 +1305,7 @@ const ExternalUserAccess = () => {
 
                     <div className="email-container mr-3">
                       <button className="btn custom-green text-white btn-sm rounded-circle text-sm mr-2" style={{ width: "30px" }}>
-                        {/* {firstLetter} */}T
+                        {firstLetter}
                       </button>
                       {/* <span className="email-id-text text-sm text-bold">{emailId}</span> */}
                       <span className="email-id-text text-sm ">{emailId}</span>
@@ -1632,7 +1554,6 @@ const ExternalUserAccess = () => {
                 )}
               </div>
             </div>
-          </div>
         </div>
       </section>
 
