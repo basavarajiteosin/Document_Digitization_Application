@@ -131,7 +131,7 @@ const FileVersionsModal = ({ file, onClose, onChanged }) => {
   const download = async (v) => {
     if (v.isCurrent) {
       const a = document.createElement("a");
-      a.href = `${config.DDA_API_API_URL}FolderData/DownloadFile?fileId=${file.id}`;
+      a.href = `${config.DDA_API_API_URL}FolderData/DownloadFile?fileId=${file.id}&userId=${encodeURIComponent(myId)}`;
       a.target = "_self";
       a.download = "";
       document.body.appendChild(a);

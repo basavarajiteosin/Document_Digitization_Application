@@ -464,67 +464,69 @@ const FolderAccessReport = () => {
   };
 
   return (
-    <div className="far-container">
-      <div className="far-header">
-        <h4 className="far-title">Employee-wise Folder Access Report</h4>
-        <p className="far-subtitle">
-          Pick one or more users (optionally narrowed by email domain) to see exactly which
-          folders and files they've viewed, downloaded, edited, updated, or shared.
-        </p>
-      </div>
-
-      {/* ---------- Email Domain (multi) + User (multi) selectors ---------- */}
-      <div className="far-user-select-row far-user-select-row--multi">
-        <div className="far-select-col">
-          <label className="far-select-label">Email Domain(s)</label>
-          <Select
-            isMulti
-            options={domainOptions}
-            value={selectedDomains}
-            onChange={handleDomainChange}
-            isLoading={isLoadingDomains}
-            placeholder="All domains"
-            styles={multiSelectStyles}
-            classNamePrefix="far-select"
-          />
+    <section className="content">
+      <div className="container-fluid">
+        <div className="far-header">
+          <h4 className="far-title">Employee-wise Folder Access Report</h4>
+          <p className="far-subtitle">
+            Pick one or more users (optionally narrowed by email domain) to see exactly which
+            folders and files they've viewed, downloaded, edited, updated, or shared.
+          </p>
         </div>
 
-        <div className="far-select-col far-select-col--wide">
-          <label className="far-select-label">Select User(s)</label>
-          <Select
-            isMulti
-            options={userOptions}
-            value={selectedUserOptions}
-            onChange={handleUserChange}
-            isLoading={isLoadingUsers}
-            placeholder={
-              userOptions.length === 0 ? "No users found for this domain" : "Search and select users..."
-            }
-            styles={multiSelectStyles}
-            classNamePrefix="far-select"
-          />
-        </div>
-      </div>
-
-      {/* ---------- Per-user expansion panels ---------- */}
-      {selectedUserOptions.length === 0 ? (
-        <div className="far-empty-state">
-          <FiUser size={40} />
-          <p>Select one or more users above to view their folder access report.</p>
-        </div>
-      ) : (
-        <div className="far-user-panel-list">
-          {selectedUserOptions.map((opt) => (
-            <UserAccessPanel
-              key={opt.value}
-              user={opt.user}
-              isOpen={!!openPanels[opt.value]}
-              onToggle={() => togglePanel(opt.value)}
+        {/* ---------- Email Domain (multi) + User (multi) selectors ---------- */}
+        <div className="far-user-select-row far-user-select-row--multi">
+          <div className="far-select-col">
+            <label className="far-select-label">Email Domain(s)</label>
+            <Select
+              isMulti
+              options={domainOptions}
+              value={selectedDomains}
+              onChange={handleDomainChange}
+              isLoading={isLoadingDomains}
+              placeholder="All domains"
+              styles={multiSelectStyles}
+              classNamePrefix="far-select"
             />
-          ))}
+          </div>
+
+          <div className="far-select-col far-select-col--wide">
+            <label className="far-select-label">Select User(s)</label>
+            <Select
+              isMulti
+              options={userOptions}
+              value={selectedUserOptions}
+              onChange={handleUserChange}
+              isLoading={isLoadingUsers}
+              placeholder={
+                userOptions.length === 0 ? "No users found for this domain" : "Search and select users..."
+              }
+              styles={multiSelectStyles}
+              classNamePrefix="far-select"
+            />
+          </div>
         </div>
-      )}
-    </div>
+
+        {/* ---------- Per-user expansion panels ---------- */}
+        {selectedUserOptions.length === 0 ? (
+          <div className="far-empty-state">
+            <FiUser size={40} />
+            <p>Select one or more users above to view their folder access report.</p>
+          </div>
+        ) : (
+          <div className="far-user-panel-list">
+            {selectedUserOptions.map((opt) => (
+              <UserAccessPanel
+                key={opt.value}
+                user={opt.user}
+                isOpen={!!openPanels[opt.value]}
+                onToggle={() => togglePanel(opt.value)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
   );
 };
 

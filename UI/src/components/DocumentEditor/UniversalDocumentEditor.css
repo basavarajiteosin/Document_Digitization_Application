@@ -1124,7 +1124,7 @@ span.ude-pdfv-handle {
 .ude-img-info dt { color: #64748b; font-weight: 600; }
 .ude-img-info dd { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #0f172a; }
 .ude-img-info ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
-.ude-img-info kbd { padding: 0 5px; border: 1px solid #cbd5e1; border-bottom-width: 2px; border-radius: 4px; background: #fff; font: 11px ui-monospace, Menlo, Consolas, monospace; }
+.ude-img-info kbd { padding: 0 5px; border: 1px solid #cbd5e1; border-bottom-width: 2px; border-radius: 4px; background: #fff; font: 11px ui-monospace, Menlo, Consolas, monospace; color: #000;}
 .ude-img.is-full { background: #0f172a; }
 .ude-img.is-full .ude-tx-bar, .ude-img.is-full .ude-tx-status, .ude-img.is-full .ude-img-info { background: #fff; }
 @media (max-width: 767.98px) { .ude-img-info { display: none; } .ude-img-hint { display: none; } }

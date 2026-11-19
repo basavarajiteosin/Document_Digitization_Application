@@ -349,7 +349,7 @@ namespace DDAAPI.Services
             }
         }
 
-        public async Task<IEnumerable<object>> GetAllFilesAndFoldersByParentId(int parentFolderId)
+        public async Task<IEnumerable<object>> GetAllFilesAndFoldersByParentId(int parentFolderId, string? actingUserId = null)
         {
             try
             {
@@ -367,27 +367,21 @@ namespace DDAAPI.Services
                 var allfiles = await _dbContext.FileData.AsNoTracking().ToListAsync();
 
                 var foldername = allfolders.Where(x => x.FolderId == parentFolderId).FirstOrDefault();
-                if (foldername != null)
+                if (foldername != null && !string.IsNullOrWhiteSpace(actingUserId))
                 {
-                    var checkempinfo = await _dbContext.EmpInfos.AsNoTracking().Where(x => x.EmpId.ToString().ToLower() == foldername.CreatedBy.ToLower()).FirstOrDefaultAsync();
-                    if (checkempinfo != null)
+                    // Log the person who OPENED the folder, not the folder's creator.
+                    EmpInfo? actorEmp = Guid.TryParse(actingUserId, out var actorGuid)
+                        ? await _dbContext.EmpInfos.AsNoTracking().FirstOrDefaultAsync(x => x.EmpId == actorGuid)
+                        : null;
+
+                    if (actorEmp != null)
                     {
-                        Log.DataLog($"{checkempinfo.EmpId} and UserName : {checkempinfo.FirstName} {checkempinfo.LastName}", $"Accessed Folder {foldername.FolderName}", "Accessed Folder Log");
-
-                        // NEW (this change): mirror the existing text-file "Accessed Folder" log into the
-                        // FolderAccessLog table so it can be queried by the Employee-wise Folder Access
-                        // report (api/Reports/GetEmployeeWiseFolderAccess). Uses the same identity this
-                        // endpoint already resolves above; does not alter the response or existing log file.
-                        await _reportService.LogFolderAccessAsync(foldername.FolderId, "Folder", foldername.FolderName,
-                            checkempinfo.EmpId.ToString(), "View");
+                        Log.DataLog($"{actorEmp.EmpId} and UserName : {actorEmp.FirstName} {actorEmp.LastName}",
+                            $"Accessed Folder {foldername.FolderName}", "Accessed Folder Log");
                     }
-                    //else
-                    //{
-                    //    //Log.DataLog($"{accessUserEmailId} and UserName : {accessUserEmailId}", $"Accessed Folder {folder.FolderName}", "Accessed Folder Log");
 
-                    //    Log.DataLog(accessUserEmailId, $"Accessed Folder {folder.FolderName}", "Accessed Folder Log");
-                    //}
-
+                    await _reportService.LogFolderAccessAsync(foldername.FolderId, "Folder", foldername.FolderName,
+                        actingUserId, "View");
                 }
 
                 //var allSubFoldersCount = 0;
@@ -1622,7 +1616,8 @@ namespace DDAAPI.Services
         // catches per-file errors internally and skips the bad file (logging it)
         // instead of aborting the whole download over one unreadable file.
         // =====================================================================
-        public async Task<FolderData> GetFolderForDownloadAsync(int folderId)
+        // CHANGED: attribute the download to the acting user (previously folder.CreatedBy)
+        public async Task<FolderData> GetFolderForDownloadAsync(int folderId, string? actingUserId = null)
         {
             var folder = await _dbContext.FolderData.AsNoTracking()
                 .FirstOrDefaultAsync(f => f.FolderId == folderId);
@@ -1637,10 +1632,7 @@ namespace DDAAPI.Services
                 throw new Exception("Folder does not exist on the server.");
             }
 
-            // Record the download for the Employee-wise Folder Access report. Same
-            // CreatedBy-attribution note as before: this endpoint doesn't take a
-            // caller/user id today.
-            await _reportService.LogFolderAccessAsync(folder.FolderId, "Folder", folder.FolderName, folder.CreatedBy, "Download");
+            await _reportService.LogFolderAccessAsync(folder.FolderId, "Folder", folder.FolderName, actingUserId, "Download");
 
             return folder;
         }
@@ -2478,6 +2470,7 @@ namespace DDAAPI.Services
                 // NEW (this change): bump the owning folder's version, saved together with the update above.
                 await _reportService.AddFolderVersionAsync(folder, "FileRenamed", input.CreatedBy,
                     $"File renamed to '{input.FileName}'", input.FileName, saveChanges: false);
+                await _reportService.LogFolderAccessAsync(input.FolderId, "Document", existingFile.FileName, input.CreatedBy, "FileRenamed");
 
                 await _dbContext.SaveChangesAsync();
 
@@ -2493,30 +2486,26 @@ namespace DDAAPI.Services
             }
         }
 
-        public async Task<IActionResult> DownloadFile(int fileId)
+        // CHANGED: attribute the download to the acting user (previously fileData.CreatedBy)
+        public async Task<IActionResult> DownloadFile(int fileId, string? actingUserId = null)
         {
             try
             {
-                // Retrieve the file data from the database
                 var fileData = await _dbContext.FileData.AsNoTracking()
                     .FirstOrDefaultAsync(f => f.FileId == fileId);
 
                 if (fileData == null)
                 {
-                    return new NotFoundResult(); // File not found
+                    return new NotFoundResult();
                 }
 
-                // Check if the file exists on the server
                 if (!System.IO.File.Exists(fileData.FilePath))
                 {
-                    return new NotFoundResult(); // File does not exist on the server
+                    return new NotFoundResult();
                 }
 
-                // NEW (this change): record the download for the Employee-wise Folder Access report.
-                // Same CreatedBy-attribution note as GetFolderForDownloadAsync above.
-                await _reportService.LogFolderAccessAsync(fileData.FileId, "Document", fileData.FileName, fileData.CreatedBy, "Download");
+                await _reportService.LogFolderAccessAsync(fileData.FileId, "Document", fileData.FileName, actingUserId, "Download");
 
-                // Stream the file instead of buffering the whole thing in memory first.
                 var fileStream = new FileStream(fileData.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920, options: FileOptions.Asynchronous);
                 return new FileStreamResult(fileStream, "application/octet-stream")
                 {
@@ -2527,7 +2516,6 @@ namespace DDAAPI.Services
             {
                 throw new Exception(ex.Message ?? "Network Error");
             }
-
         }
 
         public async Task<string> DeleteFile(int fileId)
@@ -3718,29 +3706,19 @@ namespace DDAAPI.Services
             }
         }
 
-        public async Task<string> DeleteShareAccess(DocumentAccessDeleteDTO dto)
+        // CHANGED: revoke logs use the real actor instead of "Admin"
+        public async Task<string> DeleteShareAccess(DocumentAccessDeleteDTO dto, string? actingUserId = null)
         {
             try
             {
-                // Validate DocType
                 if (dto.DocType != "Folder" && dto.DocType != "Document")
                 {
                     throw new ArgumentException("DocType must be either 'Folder' or 'Document'.");
                 }
 
-                // Build the query based on DocType
-                IQueryable<ShareDocAccess> query = _dbContext.ShareDocAccess;
+                IQueryable<ShareDocAccess> query = _dbContext.ShareDocAccess
+                    .Where(s => s.FolderOrFileId == dto.FolderOrFileId && s.FileExistFolId == dto.FileExistFolId);
 
-                if (dto.DocType == "Folder")
-                {
-                    query = query.Where(s => s.FolderOrFileId == dto.FolderOrFileId && s.FileExistFolId == dto.FileExistFolId);
-                }
-                else if (dto.DocType == "Document")
-                {
-                    query = query.Where(s => s.FolderOrFileId == dto.FolderOrFileId && s.FileExistFolId == dto.FileExistFolId);
-                }
-
-                // Retrieve the records to delete
                 var recordsToDelete = await query.ToListAsync();
 
                 if (!recordsToDelete.Any())
@@ -3748,49 +3726,40 @@ namespace DDAAPI.Services
                     throw new Exception("No matching share access records found for deletion.");
                 }
 
-                // Remove the records from the database
+                var actor = actingUserId ?? "System";
                 _dbContext.ShareDocAccess.RemoveRange(recordsToDelete);
-                if (recordsToDelete != null)
+                foreach (var a in recordsToDelete)
                 {
-                    foreach (var a in recordsToDelete)
-                    {
-                        Log.DataLog("Admin", $"Successfully deleted ShareAccess id : {a.SDAId} data", "Delete ShareAccess Log");
-                    }
+                    Log.DataLog(actor, $"Successfully deleted ShareAccess id : {a.SDAId} data", "Delete ShareAccess Log");
                 }
 
-                // NEW (this change): Ownership + Access History log for the revoked access.
                 foreach (var removed in recordsToDelete)
                 {
                     await _reportService.LogOwnershipOrAccessAsync(removed.FolderOrFileId, removed.DocType, "AccessRevoked",
-                        null, null, removed.AccessUserId, removed.PermissionLevel, "Admin", saveChanges: false);
+                        null, null, removed.AccessUserId, removed.PermissionLevel, actor, saveChanges: false);
                 }
 
-                // Save changes to the database
                 await _dbContext.SaveChangesAsync();
 
-                // NEW (this change): record each revoke as a "Share" for the Employee-wise
-                // Folder Access report (revocation is still a share-management action).
                 foreach (var removed in recordsToDelete)
                 {
                     await _reportService.LogFolderAccessAsync(removed.FolderOrFileId, removed.DocType,
-                        removed.FolderOrFileName, "Admin", "Share");
+                        removed.FolderOrFileName, actingUserId, "Share");
                 }
 
                 return "ShareAccess Deleted Successfully";
             }
             catch (Exception ex)
             {
-                Log.Error("System", $"DeleteShareAccess failed for FolderOrFileId: {dto.FolderOrFileId}, FileExistFolId: {dto.FileExistFolId}. Error: {ex.Message}", "Delete ShareAccess Log");
+                Log.Error(actingUserId ?? "System", $"DeleteShareAccess failed for FolderOrFileId: {dto.FolderOrFileId}, FileExistFolId: {dto.FileExistFolId}. Error: {ex.Message}", "Delete ShareAccess Log");
                 throw new Exception(ex.Message ?? "Network Error");
             }
         }
 
-        public async Task<string> DeleteShareAccessBySdaID(int sdaId)
+        public async Task<string> DeleteShareAccessBySdaID(int sdaId, string? actingUserId = null)
         {
             try
             {
-
-                // Find the ShareDocAccess entry by SDAId
                 var shareAccess = await _dbContext.ShareDocAccess
                     .FirstOrDefaultAsync(s => s.SDAId == sdaId);
 
@@ -3799,27 +3768,23 @@ namespace DDAAPI.Services
                     throw new Exception($"Share access with ID '{sdaId}' not found.");
                 }
 
-                // Remove the entry from the database
+                var actor = actingUserId ?? "System";
                 _dbContext.ShareDocAccess.Remove(shareAccess);
-                Log.DataLog("Admin", $"Successfully deleted ShareAccess id : {sdaId} data", "Delete ShareAccess Log");
+                Log.DataLog(actor, $"Successfully deleted ShareAccess id : {sdaId} data", "Delete ShareAccess Log");
 
-                // NEW (this change): Ownership + Access History log for the revoked access.
                 await _reportService.LogOwnershipOrAccessAsync(shareAccess.FolderOrFileId, shareAccess.DocType, "AccessRevoked",
-                    null, null, shareAccess.AccessUserId, shareAccess.PermissionLevel, "Admin", saveChanges: false);
+                    null, null, shareAccess.AccessUserId, shareAccess.PermissionLevel, actor, saveChanges: false);
 
                 await _dbContext.SaveChangesAsync();
 
-                // NEW (this change): record this as a "Share" for the Employee-wise Folder Access report.
                 await _reportService.LogFolderAccessAsync(shareAccess.FolderOrFileId, shareAccess.DocType,
-                    shareAccess.FolderOrFileName, "Admin", "Share");
+                    shareAccess.FolderOrFileName, actingUserId, "Share");
 
                 return "ShareAccess Deleted Successfully.";
             }
             catch (Exception ex)
             {
-                Log.Error("System", $"DeleteShareAccess failed for share accessid : {sdaId}. Error: {ex.Message}", "Delete ShareAccess Log");
-
-
+                Log.Error(actingUserId ?? "System", $"DeleteShareAccess failed for share accessid : {sdaId}. Error: {ex.Message}", "Delete ShareAccess Log");
                 throw new Exception(ex.Message ?? "Network Error");
             }
         }

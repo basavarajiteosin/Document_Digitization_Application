@@ -152,6 +152,8 @@ const ExternalUserAccess = () => {
   const [currentFolderId, setCurrentFolderId] = useState(0);
   const [isGridView, setIsGridView] = useState(true);
   const personalInfo = useSelector((state) => state.personalInformationReducer);
+  
+  const actorParam = `userId=${encodeURIComponent(personalInfo.userID || emailId || "")}`;
   const [actionMasters, setActionMasters] = useState([]);
   const gradients = [
     "linear-gradient(to bottom, #ffeb75, #ffce3c)",
@@ -726,7 +728,7 @@ const ExternalUserAccess = () => {
   const handleDownloadFile = async (fileId, folderOrFileId) => {
     const finalFileId = fileId || folderOrFileId; // Use folderOrFileId as fallback if fileId is undefined
     console.log("Downloading file with ID:", finalFileId);
-    const url = `${config.DDA_API_API_URL}FolderData/DownloadFile?fileId=${finalFileId}`;
+    const url = `${config.DDA_API_API_URL}FolderData/DownloadFile?fileId=${finalFileId}&${actorParam}`;
     const anchor = document.createElement("a");
     anchor.href = url;
     anchor.target = "_self";
@@ -739,7 +741,7 @@ const ExternalUserAccess = () => {
   const handleDownloadFolder = async (folderId, folderOrFileId) => {
     const finalFolderId = folderId || folderOrFileId;
     console.log("Downloading folder with ID:", finalFolderId);
-    const url = `${config.DDA_API_API_URL}FolderData/DownloadFolder?folderId=${finalFolderId}`;
+    const url = `${config.DDA_API_API_URL}FolderData/DownloadFolder?folderId=${finalFolderId}&${actorParam}`;
     const anchor = document.createElement("a");
     anchor.href = url;
     anchor.target = "_self";
@@ -845,7 +847,7 @@ const ExternalUserAccess = () => {
   // Kicks off background, non-blocking uploads - the external user can keep
   // browsing shared folders/files while these run. Progress shows in the same
   // small floating panel used across the app (see App.js / UploadStatusPanel).
-    const handleFileUpload = () => {
+  const handleFileUpload = () => {
     if (files.length === 0) return;
     setShowFileModal(false);
 
@@ -1282,278 +1284,278 @@ const ExternalUserAccess = () => {
         <div className="container-fluid">
 
 
-            <div className="card-body-custom text-sm scroll-content-sub">
-              <div className="folder-mainpath d-flex justify-content-between align-items-center external-page rounded-sm">
-                <div className="ml-2">
-                  <a
-                    href="#"
-                    className="brand-link d-flex flex-coloumn "
-                  // onClick={headerLogoClickHandler}
-                  >
-                    <img src={bmsLogoWipro} alt="Iteos Logo" className="img-fluid" style={{ width: "50px", height: "40px" }} />
-                    {/* <span className="mt-1">WEL MASTER REPOSITORY</span> */}
-                  </a>
+          <div className="card-body-custom text-sm scroll-content-sub">
+            <div className="folder-mainpath d-flex justify-content-between align-items-center external-page rounded-sm">
+              <div className="ml-2">
+                <a
+                  href="#"
+                  className="brand-link d-flex flex-coloumn "
+                // onClick={headerLogoClickHandler}
+                >
+                  <img src={bmsLogoWipro} alt="Iteos Logo" className="img-fluid" style={{ width: "50px", height: "40px" }} />
+                  {/* <span className="mt-1">WEL MASTER REPOSITORY</span> */}
+                </a>
 
-                </div>
+              </div>
 
-                <div className="folder-customise-buttons d-flex p-2">
-
-
+              <div className="folder-customise-buttons d-flex p-2">
 
 
-                  <div className="d-flex mr-2">
-
-                    <div className="email-container mr-3">
-                      <button className="btn custom-green text-white btn-sm rounded-circle text-sm mr-2" style={{ width: "30px" }}>
-                        {firstLetter}
-                      </button>
-                      {/* <span className="email-id-text text-sm text-bold">{emailId}</span> */}
-                      <span className="email-id-text text-sm ">{emailId}</span>
-                    </div>
 
 
-                    <button
-                      className="btn text-white btn-sm border-white rounded-circle"
-                      style={{ width: "32px" }}
-                      onClick={handleLogout}
-                      title="Logout" // This will show the tooltip on hover
-                    >
-                      <IoIosLogOut className="me-1 " /> {/* Add icon with margin on the right */}
+                <div className="d-flex mr-2">
+
+                  <div className="email-container mr-3">
+                    <button className="btn custom-green text-white btn-sm rounded-circle text-sm mr-2" style={{ width: "30px" }}>
+                      {firstLetter}
                     </button>
-
+                    {/* <span className="email-id-text text-sm text-bold">{emailId}</span> */}
+                    <span className="email-id-text text-sm ">{emailId}</span>
                   </div>
 
 
+                  <button
+                    className="btn text-white btn-sm border-white rounded-circle"
+                    style={{ width: "32px" }}
+                    onClick={handleLogout}
+                    title="Logout" // This will show the tooltip on hover
+                  >
+                    <IoIosLogOut className="me-1 " /> {/* Add icon with margin on the right */}
+                  </button>
+
                 </div>
 
 
-
               </div>
-              <div className="d-flex align-items-center justify-content-between mt-2">
-                <ol className="folder-listofpath d-flex align-items-center ">
-                  <li className="folder-item-back">
-                    {currentPath.length > 0 && (
-                      <i
-                        className="fas fa-arrow-left ml-2"
-                        onClick={handleBack}
-                        style={{ cursor: "pointer" }}
-                      ></i>
-                    )}
-                  </li>
 
-                  <li className="folder-item" onClick={handleHomeClick}>
+
+
+            </div>
+            <div className="d-flex align-items-center justify-content-between mt-2">
+              <ol className="folder-listofpath d-flex align-items-center ">
+                <li className="folder-item-back">
+                  {currentPath.length > 0 && (
                     <i
-                      className="fas fa-home"
-                      style={{ marginRight: "5px" }}
-                    ></i>{" "}
-                    Home
+                      className="fas fa-arrow-left ml-2"
+                      onClick={handleBack}
+                      style={{ cursor: "pointer" }}
+                    ></i>
+                  )}
+                </li>
+
+                <li className="folder-item" onClick={handleHomeClick}>
+                  <i
+                    className="fas fa-home"
+                    style={{ marginRight: "5px" }}
+                  ></i>{" "}
+                  Home
+                </li>
+                {currentPath.map((crumb, index) => (
+                  <li
+                    key={crumb.folderId}
+                    className={`folder-item ${crumb.folderId === currentFolderId
+                      ? "breadcrumb-item-current"
+                      : ""
+                      }`}
+                    onClick={() => handleBreadcrumbClick(crumb.folderId)}
+                  >
+                    {crumb.folderName}
                   </li>
-                  {currentPath.map((crumb, index) => (
-                    <li
-                      key={crumb.folderId}
-                      className={`folder-item ${crumb.folderId === currentFolderId
-                        ? "breadcrumb-item-current"
-                        : ""
-                        }`}
-                      onClick={() => handleBreadcrumbClick(crumb.folderId)}
-                    >
-                      {crumb.folderName}
-                    </li>
-                  ))}
-                </ol>
-                <div className="view-toggle-buttons">
-                  <button
-                    className={`btn btn-sm ${isGridView ? "btn-primary" : "btn-outline-primary"} mr-1`}
-                    onClick={() => handleToggleView("grid")}
-                    title="Grid View"
-                  >
-                    <HiViewGrid size={20} />
-                  </button>
-                  <button
-                    className={`btn btn-sm ${!isGridView ? "btn-primary" : "btn-outline-primary"}`}
-                    onClick={() => handleToggleView("list")}
-                    title="List View"
-                  >
-                    <HiViewList size={20} />
-                  </button>
-                </div>
-              </div>
-
-              <div className="d-flex justify-content-between mb-3"></div>
-              <div className={`folder-container card-body-custom ${isGridView ? "grid-view" : "list-view"}`}>
-                {folders.length > 0 ? (
-                  folders.map((item) => (
-                    <div
-                      key={item.folderOrFileId || item.fileId || item.folderId}
-                      className="folder"
-                      onClick={() => {
-                        if (item.docType === "Document" ? item.folderOrFileId : item.fileId) {
-                          handleViewItem(item);
-                        } else if (item.docType === "Folder" ? item.folderOrFileId : item.folderId) {
-                          handleNavigateToFolder(item);
-                        } else {
-                          console.warn("No valid docType found", item.docType);
-                        }
-                      }}
-                    >
-                      {item.isView === false && (
-                        // Only show "New" tag for top-level items
-                        (
-                          (item.docType === "Folder" && item.fileExistFolId === 0) ||
-                          (item.docType === "Document" && item.fileExistFolId === 0)
-                        ) ? (
-                          <span className="new-label">New</span>
-                        ) : null
-                      )}
-
-                      {item.docType === "Document" && item.folderOrFileId ? (
-                        <div className="file-icon">{getFileIcon(item.foldeOrFileName)}</div>
-                      ) : item.docType === "Folder" && item.folderOrFileId ? (
-                        <div className="folder-icon">
-                          <div className="top" style={{ background: item.folderColor }}></div>
-                          <div className="bottom" style={{ background: item.folderColor }}></div>
-                        </div>
-                      ) : item.fileId ? (
-                        <div className="file-icon">{getFileIcon(item.fileName)}</div>
-                      ) : item.folderId ? (
-                        <div className="folder-icon">
-                          <div className="top" style={{ background: item.folderColor }}></div>
-                          <div className="bottom" style={{ background: item.folderColor }}></div>
-                        </div>
-                      ) : (
-                        <span>Not Found</span>
-                      )}
-
-                      <div
-                        className="title"
-                        title={[
-                          item.fileId || item.docType === "Document"
-                            ? item.foldeOrFileName || item.fileName
-                            : item.foldeOrFileName || item.folderName || "Unknown",
-                          `Shared by: ${item.username || "Unknown"}`,
-                          `Shared on: ${formatDate(item.createdOn) || "Unknown"}`,
-                          item.docType === "Document" || item.fileId
-                            ? `Size: ${formatStorage(item.size)}`
-                            : [
-                              item.subFolderCount > 0
-                                ? `${item.subFolderCount} Subfolder${item.subFolderCount !== 1 ? "s" : ""}`
-                                : null,
-                              item.fileCount > 0
-                                ? `${item.fileCount} File${item.fileCount !== 1 ? "s" : ""}`
-                                : null,
-                              `Size: ${formatStorage(item.size)}`,
-                            ]
-                              .filter(Boolean)
-                              .join(", "),
-                        ]
-                          .filter(Boolean)
-                          .join(" | ")}
-                      >
-                        {item.fileId || item.docType === "Document"
-                          ? item.foldeOrFileName || item.fileName
-                          : isGridView
-                            ? truncateText(item.foldeOrFileName || item.folderName || "Unknown", 8)
-                            : item.foldeOrFileName || item.folderName || "Unknown"}
-
-                        <div
-                          className="item-details text-muted"
-                          style={{
-                            fontSize: "0.8rem",
-                            display: "flex",
-                            flexDirection: isGridView ? "column" : "row",
-                            gap: isGridView ? "2px" : "8px",
-                          }}
-                        >
-                          {item.docType === "Document" || item.fileId ? (
-                            <span>Size: {formatStorage(item.size)}</span>
-                          ) : (item.docType === "Folder" || item.folderId) ? (
-                            <>
-                              {item.subFolderCount > 0 && (
-                                <span>
-                                  {`${item.subFolderCount} Subfolder${item.subFolderCount !== 1 ? "s" : ""}`}
-                                </span>
-                              )}
-                              {isGridView ? null : item.subFolderCount > 0 && item.fileCount > 0 && <span>|</span>}
-                              {item.fileCount > 0 && (
-                                <span>
-                                  {`${item.fileCount} File${item.fileCount !== 1 ? "s" : ""}`}
-                                </span>
-                              )}
-                              {isGridView ? null : (item.subFolderCount > 0 || item.fileCount > 0) && <span>|</span>}
-                              <span>Size: {formatStorage(item.size)}</span>
-                            </>
-                          ) : (
-                            <span>No details available</span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className={`folder-options ${!isGridView ? "mr-5" : ""}`}>
-                        <Menu
-                          portal
-                          menuButton={
-                            <MenuButton
-                              className="btn btn-link text-secondary p-0"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                              }}
-                            >
-                              {!isGridView ? <BsThreeDots /> : <BsThreeDotsVertical />}
-                            </MenuButton>
-                          }
-                        >
-                          {actionMasters.length > 0 ? (
-                            actionMasters.map((action) => {
-                              if (hideActions(action.actionDesc, item.accessType)) {
-                                return null;
-                              }
-                              return (
-                                <MenuItem key={action.aId}>
-                                  <button
-                                    className="dropdown-item"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleOptionSelect(action.actionDesc, item);
-                                      setTimeout(() => {
-                                        document.activeElement.blur();
-                                      }, 0);
-                                    }}
-                                  >
-                                    {action.actionDesc === "Share" ? "Share" : action.actionDesc}
-                                  </button>
-                                </MenuItem>
-                              );
-                            })
-                          ) : (
-                            <MenuItem disabled>No actions available</MenuItem>
-                          )}
-                        </Menu>
-                      </div>
-
-                      <div className="mr-5">
-                        {!isGridView ? (
-                          <span>
-                            <span className="heading-shared">Shared By :</span>
-                            <span className="list-heading-shared">{" "}{item.username}</span>
-                          </span>
-                        ) : null}
-                      </div>
-
-                      <div>
-                        {!isGridView ? (
-                          <span>
-                            <span className="heading-shared">Shared on :</span>
-                            <span className="list-heading-shared">{" "}{formatDate(item.createdOn)}</span>
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div>No files or folders.</div>
-                )}
+                ))}
+              </ol>
+              <div className="view-toggle-buttons">
+                <button
+                  className={`btn btn-sm ${isGridView ? "btn-primary" : "btn-outline-primary"} mr-1`}
+                  onClick={() => handleToggleView("grid")}
+                  title="Grid View"
+                >
+                  <HiViewGrid size={20} />
+                </button>
+                <button
+                  className={`btn btn-sm ${!isGridView ? "btn-primary" : "btn-outline-primary"}`}
+                  onClick={() => handleToggleView("list")}
+                  title="List View"
+                >
+                  <HiViewList size={20} />
+                </button>
               </div>
             </div>
+
+            <div className="d-flex justify-content-between mb-3"></div>
+            <div className={`folder-container card-body-custom ${isGridView ? "grid-view" : "list-view"}`}>
+              {folders.length > 0 ? (
+                folders.map((item) => (
+                  <div
+                    key={item.folderOrFileId || item.fileId || item.folderId}
+                    className="folder"
+                    onClick={() => {
+                      if (item.docType === "Document" ? item.folderOrFileId : item.fileId) {
+                        handleViewItem(item);
+                      } else if (item.docType === "Folder" ? item.folderOrFileId : item.folderId) {
+                        handleNavigateToFolder(item);
+                      } else {
+                        console.warn("No valid docType found", item.docType);
+                      }
+                    }}
+                  >
+                    {item.isView === false && (
+                      // Only show "New" tag for top-level items
+                      (
+                        (item.docType === "Folder" && item.fileExistFolId === 0) ||
+                        (item.docType === "Document" && item.fileExistFolId === 0)
+                      ) ? (
+                        <span className="new-label">New</span>
+                      ) : null
+                    )}
+
+                    {item.docType === "Document" && item.folderOrFileId ? (
+                      <div className="file-icon">{getFileIcon(item.foldeOrFileName)}</div>
+                    ) : item.docType === "Folder" && item.folderOrFileId ? (
+                      <div className="folder-icon">
+                        <div className="top" style={{ background: item.folderColor }}></div>
+                        <div className="bottom" style={{ background: item.folderColor }}></div>
+                      </div>
+                    ) : item.fileId ? (
+                      <div className="file-icon">{getFileIcon(item.fileName)}</div>
+                    ) : item.folderId ? (
+                      <div className="folder-icon">
+                        <div className="top" style={{ background: item.folderColor }}></div>
+                        <div className="bottom" style={{ background: item.folderColor }}></div>
+                      </div>
+                    ) : (
+                      <span>Not Found</span>
+                    )}
+
+                    <div
+                      className="title"
+                      title={[
+                        item.fileId || item.docType === "Document"
+                          ? item.foldeOrFileName || item.fileName
+                          : item.foldeOrFileName || item.folderName || "Unknown",
+                        `Shared by: ${item.username || "Unknown"}`,
+                        `Shared on: ${formatDate(item.createdOn) || "Unknown"}`,
+                        item.docType === "Document" || item.fileId
+                          ? `Size: ${formatStorage(item.size)}`
+                          : [
+                            item.subFolderCount > 0
+                              ? `${item.subFolderCount} Subfolder${item.subFolderCount !== 1 ? "s" : ""}`
+                              : null,
+                            item.fileCount > 0
+                              ? `${item.fileCount} File${item.fileCount !== 1 ? "s" : ""}`
+                              : null,
+                            `Size: ${formatStorage(item.size)}`,
+                          ]
+                            .filter(Boolean)
+                            .join(", "),
+                      ]
+                        .filter(Boolean)
+                        .join(" | ")}
+                    >
+                      {item.fileId || item.docType === "Document"
+                        ? item.foldeOrFileName || item.fileName
+                        : isGridView
+                          ? truncateText(item.foldeOrFileName || item.folderName || "Unknown", 8)
+                          : item.foldeOrFileName || item.folderName || "Unknown"}
+
+                      <div
+                        className="item-details text-muted"
+                        style={{
+                          fontSize: "0.8rem",
+                          display: "flex",
+                          flexDirection: isGridView ? "column" : "row",
+                          gap: isGridView ? "2px" : "8px",
+                        }}
+                      >
+                        {item.docType === "Document" || item.fileId ? (
+                          <span>Size: {formatStorage(item.size)}</span>
+                        ) : (item.docType === "Folder" || item.folderId) ? (
+                          <>
+                            {item.subFolderCount > 0 && (
+                              <span>
+                                {`${item.subFolderCount} Subfolder${item.subFolderCount !== 1 ? "s" : ""}`}
+                              </span>
+                            )}
+                            {isGridView ? null : item.subFolderCount > 0 && item.fileCount > 0 && <span>|</span>}
+                            {item.fileCount > 0 && (
+                              <span>
+                                {`${item.fileCount} File${item.fileCount !== 1 ? "s" : ""}`}
+                              </span>
+                            )}
+                            {isGridView ? null : (item.subFolderCount > 0 || item.fileCount > 0) && <span>|</span>}
+                            <span>Size: {formatStorage(item.size)}</span>
+                          </>
+                        ) : (
+                          <span>No details available</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className={`folder-options ${!isGridView ? "mr-5" : ""}`}>
+                      <Menu
+                        portal
+                        menuButton={
+                          <MenuButton
+                            className="btn btn-link text-secondary p-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                            }}
+                          >
+                            {!isGridView ? <BsThreeDots /> : <BsThreeDotsVertical />}
+                          </MenuButton>
+                        }
+                      >
+                        {actionMasters.length > 0 ? (
+                          actionMasters.map((action) => {
+                            if (hideActions(action.actionDesc, item.accessType)) {
+                              return null;
+                            }
+                            return (
+                              <MenuItem key={action.aId}>
+                                <button
+                                  className="dropdown-item"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOptionSelect(action.actionDesc, item);
+                                    setTimeout(() => {
+                                      document.activeElement.blur();
+                                    }, 0);
+                                  }}
+                                >
+                                  {action.actionDesc === "Share" ? "Share" : action.actionDesc}
+                                </button>
+                              </MenuItem>
+                            );
+                          })
+                        ) : (
+                          <MenuItem disabled>No actions available</MenuItem>
+                        )}
+                      </Menu>
+                    </div>
+
+                    <div className="mr-5">
+                      {!isGridView ? (
+                        <span>
+                          <span className="heading-shared">Shared By :</span>
+                          <span className="list-heading-shared">{" "}{item.username}</span>
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <div>
+                      {!isGridView ? (
+                        <span>
+                          <span className="heading-shared">Shared on :</span>
+                          <span className="list-heading-shared">{" "}{formatDate(item.createdOn)}</span>
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div>No files or folders.</div>
+              )}
+            </div>
+          </div>
         </div>
       </section>
 

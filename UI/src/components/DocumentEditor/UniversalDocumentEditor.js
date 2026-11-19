@@ -440,7 +440,7 @@ const UniversalDocumentEditor = ({ file, onClose }) => {
       }
       return;
     }
-    downloadDocument(file.id);
+    downloadDocument(file.id, me.userID);
   };
 
   useEffect(() => {

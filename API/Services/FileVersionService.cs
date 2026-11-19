@@ -350,5 +350,23 @@ namespace DDAAPI.Services
             if (write && !string.IsNullOrEmpty(f.CheckedOutBy) && !Eq(f.CheckedOutBy, u.UserID.ToString())) return false;
             return write;
         }
+
+        // ADD: separate content fetch for the editor/viewer. Authorizes, then logs a "View" by the actual user.
+        public async Task<(string Path, string Name)> GetContentAsync(string? emp, int fileId, bool track = true)
+        {
+            var (u, ga) = await ResolveAsync(emp);
+            var f = await _db.FileData.AsNoTracking().FirstOrDefaultAsync(x => x.FileId == fileId && x.IsActive)
+                    ?? throw new KeyNotFoundException("File not found.");
+            var (view, _) = await AccessAsync(u, ga, f);
+            if (!view) throw new FileVersionForbiddenException("You do not have access to this file.");
+            if (!File.Exists(f.FilePath)) throw new KeyNotFoundException("File does not exist on the server.");
+
+            if (track)
+            {
+                await _report.LogFolderAccessAsync(f.FileId, "Document", f.FileName,
+                    u.UserID.ToString().ToLower(), "View");
+            }
+            return (f.FilePath, f.FileName);
+        }
     }
 }

@@ -12,7 +12,7 @@ import { fetchDocumentBuffer } from "../../services/editorConfigService";
 // Stable worker path that works under IIS virtual directory /dda_qas/
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   `${process.env.PUBLIC_URL || ""}/pdf.worker.min.mjs`;
-  
+
 const LOCAL = "pdf-local";
 const CLEANUP = "pdf-cleanup";
 const FLATTEN = "pdf-flatten";
@@ -327,7 +327,7 @@ const PdfEditor = ({ fileId, initialBytes, baseVersion, ydoc, canEdit: canEditPr
             if (!v || v <= baseRef.current.version) return;
             try {
                 setBusy(true);
-                const bytes = await fetchDocumentBuffer(fileId);
+                const bytes = await fetchDocumentBuffer(fileId, false);
                 undo.clear();
                 setSelected(null);
                 setEditing(null);

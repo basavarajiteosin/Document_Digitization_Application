@@ -1,7 +1,5 @@
 ﻿using System;
 using DDAAPI.Models;
-using DDAAPI.Models;
-using DDAAPI.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace DDAAPI.DbContexts

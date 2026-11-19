@@ -160,13 +160,15 @@ const SearchDocuments = () => {
   /* ---------- actions ---------- */
   const handleView = (i) => (i.serverPath ? window.open(i.serverPath, "_blank", "noopener") : toast.error("No file path available"));
 
-  const handleDownload = (i) => {
-    const url = i.docType === "Folder"
-      ? `${config.DDA_API_API_URL}FolderData/DownloadFolder?folderId=${i.id}`
-      : `${config.DDA_API_API_URL}FolderData/DownloadFile?fileId=${i.id}`;
-    const a = document.createElement("a"); a.href = url; a.target = "_self"; a.download = "";
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  };
+ // CHANGED
+const handleDownload = (i) => {
+  const uid = encodeURIComponent(me.userID || "");
+  const url = i.docType === "Folder"
+    ? `${config.DDA_API_API_URL}FolderData/DownloadFolder?folderId=${i.id}&userId=${uid}`
+    : `${config.DDA_API_API_URL}FolderData/DownloadFile?fileId=${i.id}&userId=${uid}`;
+  const a = document.createElement("a"); a.href = url; a.target = "_self"; a.download = "";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+};
 
   const openLocation = (i, { parent = false } = {}) => {
     let path = i.path || [];

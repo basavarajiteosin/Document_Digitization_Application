@@ -108,12 +108,14 @@ namespace DDAAPI.Controllers
             }
         }
 
+        // CHANGED
         [HttpGet("GetAllFilesAndFoldersByParentId/{parentFolderId}")]
-        public async Task<IActionResult> GetAllFilesAndFoldersByParentId(int parentFolderId)
+        public async Task<IActionResult> GetAllFilesAndFoldersByParentId(int parentFolderId, [FromQuery] string? userId = null)
         {
             try
             {
-                var items = await _folderDataServices.GetAllFilesAndFoldersByParentId(parentFolderId);
+                var actor = await ResolveActorAsync(userId);
+                var items = await _folderDataServices.GetAllFilesAndFoldersByParentId(parentFolderId, actor);
                 return Ok(new { success = true, data = items });
             }
             catch (Exception ex)
@@ -276,12 +278,13 @@ namespace DDAAPI.Controllers
         // starts, the response is already committed (200 OK) - that's an inherent
         // trade-off of streaming vs. build-then-send, see the chat writeup for details.
         [HttpGet("DownloadFolder")]
-        public async Task<IActionResult> DownloadFolder([FromQuery] int folderId)
+        public async Task<IActionResult> DownloadFolder([FromQuery] int folderId, [FromQuery] string? userId = null)
         {
             DDAAPI.Models.FolderData folder;
             try
             {
-                folder = await _folderDataServices.GetFolderForDownloadAsync(folderId);
+                var actor = await ResolveActorAsync(userId);
+                folder = await _folderDataServices.GetFolderForDownloadAsync(folderId, actor);
             }
             catch (Exception ex)
             {
@@ -473,10 +476,12 @@ namespace DDAAPI.Controllers
             }
         }
 
+        // CHANGED
         [HttpGet("DownloadFile")]
-        public async Task<IActionResult> DownloadFile([FromQuery] int fileId)
+        public async Task<IActionResult> DownloadFile([FromQuery] int fileId, [FromQuery] string? userId = null)
         {
-            return await _folderDataServices.DownloadFile(fileId);
+            var actor = await ResolveActorAsync(userId);
+            return await _folderDataServices.DownloadFile(fileId, actor);
         }
 
         [HttpPost("DeleteFile/{fileId}")]
@@ -705,13 +710,14 @@ namespace DDAAPI.Controllers
             }
         }
 
-        // DELETE api/shareaccess/delete
+        // CHANGED
         [HttpPost("DeleteShareAccess")]
         public async Task<IActionResult> DeleteShareAccess([FromBody] DocumentAccessDeleteDTO dto)
         {
             try
             {
-                var result = await _folderDataServices.DeleteShareAccess(dto);
+                var actor = await ResolveActorAsync();
+                var result = await _folderDataServices.DeleteShareAccess(dto, actor);
                 return Ok(new { success = true, message = result });
             }
             catch (Exception ex)
@@ -720,13 +726,13 @@ namespace DDAAPI.Controllers
             }
         }
 
-        // DELETE api/shareaccess/delete/{sdaId}
         [HttpPost("DeleteShareAccessBySdaID/{sdaId}")]
         public async Task<IActionResult> DeleteShareAccessBySdaID(int sdaId)
         {
             try
             {
-                var result = await _folderDataServices.DeleteShareAccessBySdaID(sdaId);
+                var actor = await ResolveActorAsync();
+                var result = await _folderDataServices.DeleteShareAccessBySdaID(sdaId, actor);
                 return Ok(new { success = true, message = result });
             }
             catch (Exception ex)
@@ -1052,6 +1058,23 @@ namespace DDAAPI.Controllers
             }
         }
 
-        #endregion 
+        #endregion
+
+        // ADD (helper): trusted JWT identity first, then the optional userId from the caller
+        private async Task<string?> ResolveActorAsync(string? userId = null)
+        {
+            var emp = User.Identity?.Name;
+            if (!string.IsNullOrWhiteSpace(emp))
+            {
+                var id = await _dbContext.Users.AsNoTracking()
+                    .Where(u => u.EmployeeId == emp)
+                    .Select(u => (Guid?)u.UserID)
+                    .FirstOrDefaultAsync();
+                if (id.HasValue) return id.Value.ToString().ToLower();
+            }
+            if (!string.IsNullOrWhiteSpace(userId) && (Guid.TryParse(userId, out _) || userId.Contains('@')))
+                return userId.Trim().ToLower();
+            return null;
+        }
     }
 }

@@ -1151,31 +1151,30 @@ const FolderCreation = () => {
     }
   };
 
-  const handleDownloadFile = async (fileId, folderOrFileId) => {
-    const finalFileId = fileId || folderOrFileId;
-    console.log("Downloading file with ID:", finalFileId);
-    const url = `${config.DDA_API_API_URL}FolderData/DownloadFile?fileId=${finalFileId}`;
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.target = "_self";
-    anchor.download = "";
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-  };
+  // CHANGED
+const handleDownloadFile = async (fileId, folderOrFileId) => {
+  const finalFileId = fileId || folderOrFileId;
+  const url = `${config.DDA_API_API_URL}FolderData/DownloadFile?fileId=${finalFileId}&userId=${encodeURIComponent(personalInfo.userID)}`;
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.target = "_self";
+  anchor.download = "";
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+};
 
-  const handleDownloadFolder = async (folderId, folderOrFileId) => {
-    const finalFolderId = folderId || folderOrFileId;
-    console.log("Downloading folder with ID:", finalFolderId);
-    const url = `${config.DDA_API_API_URL}FolderData/DownloadFolder?folderId=${finalFolderId}`;
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.target = "_self";
-    anchor.download = "";
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-  };
+const handleDownloadFolder = async (folderId, folderOrFileId) => {
+  const finalFolderId = folderId || folderOrFileId;
+  const url = `${config.DDA_API_API_URL}FolderData/DownloadFolder?folderId=${finalFolderId}&userId=${encodeURIComponent(personalInfo.userID)}`;
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.target = "_self";
+  anchor.download = "";
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+};
 
   const deleteFolder = async (folderId, folderName) => {
     if (!(await confirm({

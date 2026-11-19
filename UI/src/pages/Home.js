@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 import {
   FiFolderPlus, FiFolder, FiUsers, FiFile, FiChevronRight, FiEye, FiDownload,
-  FiEdit2, FiRefreshCw, FiShare2, FiHardDrive, FiActivity,
+  FiEdit2, FiRefreshCw, FiShare2, FiHardDrive, FiActivity, FiUploadCloud
 } from "react-icons/fi";
 
 const config = require("../services/config.json");
@@ -43,6 +43,8 @@ const ACT = {
   Download: { icon: FiDownload, verb: "Downloaded", cls: "download" },
   Edit: { icon: FiEdit2, verb: "Edited", cls: "edit" },
   Update: { icon: FiRefreshCw, verb: "Updated", cls: "update" },
+  FileUploaded: { icon: FiUploadCloud, verb: "FileUploaded", cls: "fileuploaded" },
+  FileRenamed: { icon: FiEdit2, verb: "Renamed", cls: "filerenamed" },
   Share: { icon: FiShare2, verb: "Shared", cls: "share" },
 };
 
@@ -164,7 +166,7 @@ const Home = () => {
     if (it.docType === "Folder") {
       navigate(
         `/dashboard?openFolderId=${it.folderOrFileId}&tab=shared&accessType=${it.accessType}` +
-          `&ownerId=${it.createdBy || ""}&folderName=${encodeURIComponent(it.foldeOrFileName || "Folder")}`
+        `&ownerId=${it.createdBy || ""}&folderName=${encodeURIComponent(it.foldeOrFileName || "Folder")}`
       );
     } else goDashboard("shared");
   };

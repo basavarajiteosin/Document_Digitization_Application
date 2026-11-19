@@ -50,6 +50,21 @@ namespace DDAAPI.Controllers
             catch (Exception ex) { return BadRequest(new { success = false, message = ex.Message }); }
         }
 
+        [HttpGet("Content")]
+        public async Task<IActionResult> Content([FromQuery] int fileId, [FromQuery] bool track = true)
+        {
+            try
+            {
+                var (path, name) = await _svc.GetContentAsync(Emp, fileId, track);
+                var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.Asynchronous);
+                return new FileStreamResult(stream, "application/octet-stream") { FileDownloadName = name };
+            }
+            catch (FileVersionForbiddenException ex) { return StatusCode(403, new { success = false, message = ex.Message }); }
+            catch (UnauthorizedAccessException ex) { return Unauthorized(new { success = false, message = ex.Message }); }
+            catch (KeyNotFoundException ex) { return NotFound(new { success = false, message = ex.Message }); }
+            catch (Exception ex) { return BadRequest(new { success = false, message = ex.Message }); }
+        }
+
         [HttpPost("CheckOut/{fileId}")]
         public Task<IActionResult> CheckOut(int fileId) =>
     Run(() => _svc.CheckOutAsync(Emp, fileId), "File checked out");

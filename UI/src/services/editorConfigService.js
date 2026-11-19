@@ -29,9 +29,10 @@ export const fetchEditorAccess = async (fileId) => {
 };
 
 // Reuses the existing download endpoint (same repository file, same bearer token).
-export const fetchDocumentBuffer = async (fileId) => {
-  const res = await axios.get(`${config.DDA_API_API_URL}FolderData/DownloadFile`, {
-    params: { fileId },
+// CHANGED: editor/viewer content comes from its own endpoint, logged as "View" (not "Download")
+export const fetchDocumentBuffer = async (fileId, track = true) => {
+  const res = await axios.get(`${config.DDA_API_API_URL}FileVersion/Content`, {
+    params: { fileId, track },
     responseType: "arraybuffer",
   });
   return res.data;
